@@ -453,6 +453,22 @@ class PositionManager:
         except Exception:
             return 0.0
 
+    def _move_sl_on_chain(self, coin, state, new_sl_px, current_sz) -> bool:
+        """Moves the on-chain SL trigger order to new_sl_px without closing position size."""
+        side = state.get("side", "SHORT")
+        state["current_sl_px"] = new_sl_px
+        try:
+            open_orders = self.trader.get_open_orders()
+            from src.trader import categorize_trigger_order
+            for o in open_orders:
+                if o.get("coin") == coin and o.get("isTrigger"):
+                    if categorize_trigger_order(o, position_side=side, entry_px=state["entry_px"]) == "STOP_LOSS":
+                        self.trader.cancel_order_by_oid(coin, o["oid"])
+        except Exception:
+            pass
+        res = self.trader.set_stop_loss_trigger(coin, current_sz, new_sl_px, side=side)
+        return res.get("success", False)
+
     # ------------------------------------------------------------------
     # STREAM 1: SWING
     # ------------------------------------------------------------------
@@ -462,23 +478,28 @@ class PositionManager:
         initial_sz = state["initial_sz"]
         side = state.get("side", "SHORT")
         sz_dec = self.trader.get_asset_precision(coin)
+        fee_buf = prof.get("fee_roundtrip_pct", 0.09) / 100.0
 
         if side == "LONG":
             profit_pct = ((current_px - entry_px) / entry_px) * 100
             adverse_pct = ((entry_px - current_px) / entry_px) * 100
+            early_be_hit = profit_pct >= prof.get("early_be_pct", 5.0)
             tp1_hit = profit_pct >= prof["trim_pct"]
             tp2_hit = profit_pct >= prof["tp2_pct"]
             runner_hit = bool(prof.get("runner_pct") and profit_pct >= prof["runner_pct"])
             sl_hit = current_px <= state["current_sl_px"]
-            trailing_sl_px = self.trader.round_price(coin, entry_px * 1.10)
+            be_px = self.trader.round_price(coin, entry_px * (1 + fee_buf))
+            trailing_sl_px = self.trader.round_price(coin, entry_px * (1 + prof["trim_pct"] / 100.0))
         else:  # SHORT
             profit_pct = ((entry_px - current_px) / entry_px) * 100
             adverse_pct = ((current_px - entry_px) / entry_px) * 100
+            early_be_hit = profit_pct >= prof.get("early_be_pct", 5.0)
             tp1_hit = profit_pct >= prof["trim_pct"]
             tp2_hit = profit_pct >= prof["tp2_pct"]
             runner_hit = bool(prof.get("runner_pct") and profit_pct >= prof["runner_pct"])
             sl_hit = current_px >= state["current_sl_px"]
-            trailing_sl_px = self.trader.round_price(coin, entry_px * 0.90)
+            be_px = self.trader.round_price(coin, entry_px * (1 - fee_buf))
+            trailing_sl_px = self.trader.round_price(coin, entry_px * (1 - prof["trim_pct"] / 100.0))
 
         max_hold = state.get("max_hold_hours", prof["max_hold_hours"])
 
@@ -488,40 +509,51 @@ class PositionManager:
             if self._close_full(coin, state, pos_info, current_px, f"SWING_TIME_STOP_{max_hold}H", msg, "TIME_EXIT", actions):
                 return
 
-        # RULE 1: Trimming 1 (±10%)
+        # RULE 0.5: Early Breakeven Shield (±5.0% gerak / ±10% ROE)
+        if early_be_hit and not state.get("early_be_shield") and not state.get("trimmed_10pct"):
+            current_sz = float(pos_info.get("size", initial_sz))
+            ok = self._move_sl_on_chain(coin, state, be_px, current_sz)
+            if ok:
+                state["early_be_shield"] = True
+                state["current_sl_px"] = be_px
+                msg = f"🛡️ SWING EARLY BREAKEVEN SHIELD (+{profit_pct:.1f}% gerak / +{profit_pct*2:.1f}% ROE): SL digeser ke Breakeven (${be_px}) di Hyperliquid! 0% Risiko!"
+                self.log_event(msg, "SWING")
+                actions.append({"type": "EARLY_BREAKEVEN", "coin": coin, "strategy": "SWING", "msg": msg})
+
+        # RULE 1: Trimming 1 (±7.0% gerak / ±14% ROE)
         if tp1_hit and not state.get("trimmed_10pct"):
             trim_sz = initial_sz * 0.50
             trim_sz = round(trim_sz, sz_dec) if sz_dec > 0 else int(trim_sz)
-            be_px = self.trader.round_price(coin, entry_px)
             ok, remaining = self._partial_close_and_move_sl(coin, state, trim_sz, be_px)
             if ok:
                 state["trimmed_10pct"] = True
-                msg = f"✂️ TRIMMING 1 SUKSES ({profit_pct:.1f}%): 50% posisi ({trim_sz} {coin} {side}) ditutup! SL digeser ke Breakeven (${be_px}) di bursa. 0% Risiko!"
+                state["early_be_shield"] = True
+                msg = f"✂️ TRIMMING 1 SUKSES (+{profit_pct:.1f}% gerak): 50% posisi ({trim_sz} {coin} {side}) diamankan! SL dikunci di Breakeven (${be_px})."
                 self.log_event(msg, "SWING")
                 self._ft_update(coin, state, pos_info, current_px, size=remaining, note=msg)
                 actions.append({"type": "TRIMMING_1", "coin": coin, "strategy": "SWING", "msg": msg})
 
-        # RULE 2: Target 2 (±20%)
+        # RULE 2: Target 2 (±18.0% gerak / ±36% ROE)
         elif tp2_hit and not state.get("tp_20pct"):
             tp2_sz = initial_sz * 0.30
             tp2_sz = round(tp2_sz, sz_dec) if sz_dec > 0 else int(tp2_sz)
             ok, remaining = self._partial_close_and_move_sl(coin, state, tp2_sz, trailing_sl_px)
             if ok:
                 state["tp_20pct"] = True
-                msg = f"🎯 TARGET 2 SUKSES ({profit_pct:.1f}%): 30% posisi ({tp2_sz} {coin} {side}) diamankan! Trailing SL dikunci di profit +10% (${trailing_sl_px})."
+                msg = f"🎯 TARGET 2 SUKSES (+{profit_pct:.1f}% gerak): 30% posisi ({tp2_sz} {coin} {side}) diamankan! Trailing SL dikunci di profit (${trailing_sl_px})."
                 self.log_event(msg, "SWING")
                 self._ft_update(coin, state, pos_info, current_px, size=remaining, note=msg)
                 actions.append({"type": "TARGET_2", "coin": coin, "strategy": "SWING", "msg": msg})
 
-        # RULE 3: Runner (±35%)
+        # RULE 3: Runner (±30.0% gerak / ±60% ROE)
         elif runner_hit and not state.get("runner_35pct"):
-            msg = f"🚀 RUNNER SUKSES ({profit_pct:.1f}%): Sisa posisi {coin} ({side}) ditutup dengan profit maksimal!"
-            if self._close_full(coin, state, pos_info, current_px, "RUNNER_35_MAX_PROFIT", msg, "RUNNER_35", actions):
+            msg = f"🚀 RUNNER SUKSES (+{profit_pct:.1f}% gerak): Sisa posisi {coin} ({side}) ditutup dengan profit maksimal!"
+            if self._close_full(coin, state, pos_info, current_px, "RUNNER_MAX_PROFIT", msg, "RUNNER", actions):
                 state["runner_35pct"] = True
 
         # RULE 4: Local SL check (backup dari SL on-chain)
         elif sl_hit:
-            is_be = state.get("trimmed_10pct", False)
+            is_be = state.get("trimmed_10pct", False) or state.get("early_be_shield", False)
             msg = (f"🛡️ BREAKEVEN DEFENSE: Harga kembali ke modal (${entry_px}). Sisa {coin} ({side}) ditutup tanpa rugi!"
                    if is_be else f"🛑 STOP LOSS HIT (-{adverse_pct:.1f}%): Cut loss {coin} ({side}) otomatis dieksekusi.")
             self._close_full(coin, state, pos_info, current_px,

@@ -201,9 +201,11 @@ def print_header():
                     elif side == "LONG" and not t1_done and float(sl_px) > entry:
                         sl_px = life.get("initial_sl_px", round(plan["sl_px"], 5))
 
-                    sl_badge = "🟢" if is_on_chain_sl else "🟡"
+                    early_be = life.get("early_be_shield", False)
                     if t1_done:
                         sl_label = f"${fmt_price(float(sl_px))} [BE {sl_badge}]"
+                    elif early_be:
+                        sl_label = f"${fmt_price(float(sl_px))} [🛡️BE {sl_badge}]"
                     else:
                         sl_sign = "-" if is_long else "+"
                         sl_label = f"${fmt_price(float(sl_px))} [{sl_sign}{sl_p:.1f}% {sl_badge}]"
@@ -213,7 +215,7 @@ def print_header():
                     pos_badge = f"{side_icon} {st_icon}"
 
                     sz_fmt = f"{sz:,.4f}".rstrip('0').rstrip('.') if sz < 1 else f"{sz:,.1f}"
-                    margin_str = f"${margin:,.2f} ({sz_fmt})"
+                    margin_str = f"${margin:,.2f} 🧹DUST" if margin < 3.0 else f"${margin:,.2f} ({sz_fmt})"
 
                     e_str = fmt_price(entry)
                     c_str = fmt_price(cur_px)
@@ -1472,6 +1474,12 @@ def menu_execute_short():
     risk_factors = sanity_res.get("risk_factors", [])
     advice = sanity_res.get("actionable_advice", "")
 
+    # Dynamic Leverage: Boost to 3x for Grade A / A+ Intraday setups
+    dynamic_lev_note = ""
+    if chosen_strategy == "DAYTRADE" and str(grade).upper() in ["A", "A+"]:
+        lev = 3
+        dynamic_lev_note = " ➔ ⚡ Boosted 3x (Grade A/A+ Precision Edge)"
+
     # Calculate dynamic AI recommended margin using conviction multiplier
     ai_risk = trader.calculate_risk_margin(equity=equity, risk_pct=risk_pct, sl_pct=sl, leverage=lev, multiplier=size_mult)
     rec_margin = ai_risk["recommended_margin"]
@@ -1493,7 +1501,7 @@ def menu_execute_short():
     mult_desc = f"+{mult_delta:.0f}% modal" if mult_delta > 0 else (f"{mult_delta:.0f}% modal" if mult_delta < 0 else "Normal")
     print(f"    • Kualitas Setup AI       : Grade {grade} (Pengali: {size_mult:.2f}x ➔ {mult_desc})")
     print(f"    • Risiko Maksimal jika SL : ${ai_risk['max_risk_usd']} USDC (±{sl:.2f}%)")
-    print(f"    • REKOMENDASI MODAL FINAL : ${rec_margin:,.2f} USDC (Leverage {lev}x)")
+    print(f"    • REKOMENDASI MODAL FINAL : ${rec_margin:,.2f} USDC (Leverage {lev}x{dynamic_lev_note})")
     print("=" * 68)
 
     if not is_approved or conf_score < 60:
@@ -1523,10 +1531,12 @@ def menu_execute_short():
         print(f"  🎯 TP2 (2.0R)  : {tp_sign}{tp:.2f}% (Panen 50% Sisa)")
         print(f"  ⏱️ Time-Stop   : Auto-Close {prof['max_hold_hours']} Jam (Tanpa Risiko Menginap)")
     else:
-        print(f"  ✂️ Trimming 1  : {tp_sign}{trim_p:.2f}% (Panen 50% & Geser SL ke Breakeven)")
-        print(f"  🎯 Target 2    : {tp_sign}{tp:.2f}% (Panen 30% & Trailing SL ±10%)")
+        early_be_val = prof.get("early_be_pct", 5.0)
+        print(f"  🛡️ Early BE Shield: {tp_sign}{early_be_val:.1f}% (Geser SL ke Breakeven, 0% Risiko)")
+        print(f"  ✂️ Trimming 1     : {tp_sign}{trim_p:.2f}% (Panen 50% & Kunci SL di Breakeven)")
+        print(f"  🎯 Target 2       : {tp_sign}{tp:.2f}% (Panen 30% & Trailing SL ±{trim_p:.1f}%)")
         if runner_p:
-            print(f"  🚀 Runner 3    : {tp_sign}{runner_p:.2f}% (Sisa 20% | Cutoff {prof['max_hold_hours']} Jam)")
+            print(f"  🚀 Runner 3       : {tp_sign}{runner_p:.2f}% (Sisa 20% | Cutoff {prof['max_hold_hours']} Jam)")
 
     confirm = input(f"\nTekan ENTER atau ketik 'YES' untuk eksekusi order {chosen_side} sekarang: ").strip().upper()
 

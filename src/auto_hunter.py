@@ -62,28 +62,29 @@ class AutoHuntSniper:
         available = float(account_state.get("available", 0.0))
 
         lifecycle = self.pm.sync_active_positions()
-        active_positions_map = {
-            c: {
-                "strategy": s.get("strategy") or position_tags.get_strategy(c) or "SWING",
-                "side": s.get("side", "SHORT")
-            }
-            for c, s in lifecycle.items()
-        }
+        DUST_THRESHOLD_USD = 3.0
+        active_positions_map = {}
         for p in account_state.get("positions", []):
             coin = p.get("coin")
             if coin and float(p.get("size", 0)) > 0:
                 side = p.get("side", "SHORT")
-                strat = active_positions_map.get(coin, {}).get("strategy") or position_tags.get_strategy(coin) or "SWING"
+                strat = (lifecycle.get(coin, {}).get("strategy") or 
+                         position_tags.get_strategy(coin) or "SWING")
+                margin_used = float(p.get("margin_used", 0.0))
                 active_positions_map[coin] = {
                     "strategy": strat,
-                    "side": side
+                    "side": side,
+                    "margin_used": margin_used,
+                    "is_dust": margin_used < DUST_THRESHOLD_USD
                 }
 
-        # 3. Check Stream & Direction slot limits from live positions map
-        dt_short_coins = [c for c, s in active_positions_map.items() if s.get("strategy") == "DAYTRADE" and s.get("side") == "SHORT"]
-        dt_long_coins = [c for c, s in active_positions_map.items() if s.get("strategy") == "DAYTRADE" and s.get("side") == "LONG"]
-        sw_short_coins = [c for c, s in active_positions_map.items() if s.get("strategy") == "SWING" and s.get("side") == "SHORT"]
-        sw_long_coins = [c for c, s in active_positions_map.items() if s.get("strategy") == "SWING" and s.get("side") == "LONG"]
+        # 3. Check Stream & Direction slot limits from live positions map (excluding dust)
+        dt_short_coins = [c for c, s in active_positions_map.items() if s.get("strategy") == "DAYTRADE" and s.get("side") == "SHORT" and not s.get("is_dust")]
+        dt_long_coins = [c for c, s in active_positions_map.items() if s.get("strategy") == "DAYTRADE" and s.get("side") == "LONG" and not s.get("is_dust")]
+        sw_short_coins = [c for c, s in active_positions_map.items() if s.get("strategy") == "SWING" and s.get("side") == "SHORT" and not s.get("is_dust")]
+        sw_long_coins = [c for c, s in active_positions_map.items() if s.get("strategy") == "SWING" and s.get("side") == "LONG" and not s.get("is_dust")]
+
+        dust_coins = [f"{c} (${s.get('margin_used', 0):.2f})" for c, s in active_positions_map.items() if s.get("is_dust")]
 
         dt_short_count = len(dt_short_coins)
         dt_long_count = len(dt_long_coins)
@@ -112,10 +113,13 @@ class AutoHuntSniper:
             "sw_long": {"active": sw_long_count, "max": max_sw_long, "coins": sw_long_coins, "open": sw_long_count < max_sw_long},
             "circuit_breaker": circuit_breaker_active,
             "losses_today": losses_today,
-            "session": session_info
+            "session": session_info,
+            "dust_coins": dust_coins
         }
 
         print("\n🔍 PRA-SCAN RADAR: AUDIT POSISI AKTIF & STATUS SLOT:")
+        if dust_coins:
+            print(f"  • 🧹 Posisi Dust (< $3): {', '.join(dust_coins)} ➔ Kuota slot dibypass otomatis")
         if not slot_status["dt_short"]["open"]:
             reason = "Circuit Breaker Aktif" if circuit_breaker_active else f"Slot Penuh ({dt_short_count}/{max_dt_short}: {', '.join(dt_short_coins)})"
             print(f"  • [⚡ Intraday Short] : 🛑 {reason} ➔ SCREENER DILEWATI (BYPASS)")
@@ -284,6 +288,18 @@ class AutoHuntSniper:
 
         audit_res = ai_advisor.evaluate_pre_trade_signal(cand_summary, pre_trade_context)
         size_mult = float(audit_res.get("size_multiplier", 1.0))
+
+        # Dynamic Leverage: Boost to 3x for Grade A / A+ Intraday setups
+        conviction_grade = str(audit_res.get("conviction_grade", "B")).upper()
+        if strat == "DAYTRADE" and conviction_grade in ["A", "A+"]:
+            lev = 3
+            audit_res["leverage"] = 3
+            cand["leverage"] = 3
+            cand["dynamic_leverage_note"] = "⚡ Leverage 3x (Boosted Grade A/A+)"
+        else:
+            audit_res["leverage"] = lev
+            cand["leverage"] = lev
+            cand["dynamic_leverage_note"] = f"Leverage {lev}x (Standard)"
 
         # Compute final conviction margin
         ai_risk = self.trader.calculate_risk_margin(equity=equity, risk_pct=risk_pct, sl_pct=sl, leverage=lev, multiplier=size_mult)

@@ -30,9 +30,10 @@ PROFILES = {
         # --- Exit model: persentase tetap dari harga entry ---
         "exit_model": "FIXED_PCT",
         "sl_pct": 10.0,
-        "trim_pct": 10.0,
-        "tp2_pct": 20.0,
-        "runner_pct": 35.0,
+        "early_be_pct": 5.0,        # Early Breakeven Shield at +5% price move (10% ROE)
+        "trim_pct": 7.0,            # Trim 1 at +7% price move (14% ROE) for faster profit harvests
+        "tp2_pct": 18.0,            # TP2 at +18% price move (36% ROE)
+        "runner_pct": 30.0,         # Runner at +30% price move (60% ROE)
         "max_hold_hours": 72,
         "time_exit_enabled": True,  # 3-Day Cutoff to avoid Day-5 dead-cat bounce
         "stalemate_hours": 72,
@@ -47,13 +48,13 @@ PROFILES = {
         "session_gate": False,
         "poll_seconds": 25,
         "fee_roundtrip_pct": 0.09,  # taker 0.045% x 2
-        "target_desc": "Trim 10% (50%) ➔ TP 20% (30%) ➔ Runner 35% (20%) | SL: +10% | Max Hold: 3 Hari"
+        "target_desc": "Early BE @ ±5% ➔ Trim 50% @ ±7% ➔ TP 30% @ ±18% ➔ Runner @ ±30% | SL: ±10% | Max Hold: 72 Jam"
     },
     "DAYTRADE": {
         "key": "DAYTRADE",
         "name": "Mode Intraday Day-Trade (Precision v2.2)",
         "badge": "⚡ INTRADAY",
-        "description": "Eksekusi intraday sesi London/NY: SL teknis di pucuk jarum 15m, TP berbasis R, auto-close 6 jam.",
+        "description": "Eksekusi intraday 15m: Dynamic 2x-3x leverage (Grade A), SL teknis pucuk jarum, TP berbasis R, auto-close 6 jam.",
         # --- Screening ---
         "timeframe": "15m / 1H",
         "min_score": 75.0,
@@ -71,7 +72,8 @@ PROFILES = {
         "time_exit_enabled": True,
         "stalemate_hours": 6,
         # --- Risk & portfolio ---
-        "leverage": 2,
+        "leverage": 2,              # Baseline 2x (auto-boost ke 3x untuk Grade A / A+)
+        "dynamic_leverage_enabled": True,
         "risk_pct": 1.0,            # risiko per trade lebih kecil (frekuensi tinggi)
         "max_concurrent": 4,        # maksimal total posisi intraday terbuka bersamaan
         "max_concurrent_short": 2,  # alokasi slot intraday short
