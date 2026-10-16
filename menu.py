@@ -1666,9 +1666,11 @@ def menu_forward_test_journal():
         print("  [3] 🌊 Filter Tampilan: Hanya Stream SWING (Multi-Hari)")
         print("  [4] 🌐 Tampilkan Semua Stream (Gabungan)")
         print("  [5] 📜 Lihat Tabel Lengkap Semua Transaksi / Fills di Hyperliquid")
+        print("  [6] 🚀 Generate Dashboard HTML & Push ke GitHub (Pantau via Web / HP)")
+        print("  [7] 🧹 Hapus & Reset Riwayat Trade Lama (Mulai Bersih dari Posisi Live)")
         print("  [0] Kembali ke Menu Utama")
         print("-" * 72)
-        sub = input("Masukkan pilihan [0-5, default: 0]: ").strip()
+        sub = input("Masukkan pilihan [0-7, default: 0]: ").strip()
         if sub == "1":
             print("\n[*] Menyinkronkan data posisi aktif, SL on-chain, dan riwayat close...")
             ft.sync_with_exchange()
@@ -1706,6 +1708,34 @@ def menu_forward_test_journal():
                 print(f"[!] Gagal mengambil riwayat fills: {e}")
             print("-" * 82)
             input("\nTekan ENTER untuk kembali ke Jurnal Forward Test...")
+        elif sub == "6":
+            print("\n" + "=" * 65)
+            print("  🚀 PIPELINE GENERATE HTML DASHBOARD & PUSH KE GITHUB")
+            print("=" * 65)
+            print("[*] Meng-generate docs/index.html & menyinkronkan dengan GitHub...")
+            from src.github_sync import sync_and_push
+            res = sync_and_push()
+            if res.get("success"):
+                print(f"\n[✓] {res.get('message')}")
+                if res.get("pages_url"):
+                    print(f"  🌐 Link Dashboard (GitHub Pages) : {res['pages_url']}")
+                if res.get("repo_url"):
+                    print(f"  📦 Link Repository GitHub        : {res['repo_url']}")
+                open_browser = input("\nBuka dashboard di browser laptop sekarang? (Y/N) [default: Y]: ").strip().upper()
+                if open_browser in ["", "Y", "YES"]:
+                    import subprocess
+                    subprocess.run(["open", "docs/index.html"])
+            else:
+                print(f"\n[!] Gagal push ke GitHub: {res.get('error')}")
+            input("\nTekan ENTER untuk kembali ke Jurnal...")
+        elif sub == "7":
+            confirm = input("\n[⚠️] Reset seluruh riwayat trade yang SUDAH CLOSE & mulai bersih dari posisi live saat ini? (Y/N): ").strip().upper()
+            if confirm in ["Y", "YES"]:
+                purged = ft.purge_closed_trades()
+                print(f"\n[✓] Berhasil membersihkan {purged} log trade lama. Tracking kini murni dimulai dari posisi aktif!")
+            else:
+                print("\nReset dibatalkan.")
+            input("\nTekan ENTER untuk lanjut...")
         else:
             break
 

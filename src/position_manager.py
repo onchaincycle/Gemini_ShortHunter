@@ -650,6 +650,12 @@ class PositionManager:
             lifecycle[coin] = state
 
         self.save_lifecycle_state(lifecycle)
+        if actions_taken:
+            try:
+                from src.html_reporter import generate_html_report
+                generate_html_report()
+            except Exception:
+                pass
         return actions_taken
 
     def has_intraday_positions(self) -> bool:
