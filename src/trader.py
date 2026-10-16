@@ -34,7 +34,23 @@ class HyperliquidTrader:
         self._mids_cache_time = 0.0
         self._orders_cache = []
         self._orders_cache_time = 0.0
+        self._meta_cache = None
+        self._meta_cache_time = 0.0
         self._cache_ttl = 6.0
+
+    def get_meta(self, force_refresh: bool = False) -> Dict:
+        """Returns perp universe metadata with 10-minute caching to eliminate heavy redundant API calls."""
+        import time
+        now = time.time()
+        if not force_refresh and self._meta_cache and (now - self._meta_cache_time) < 600.0:
+            return self._meta_cache
+        try:
+            meta = self.info.meta()
+            self._meta_cache = meta
+            self._meta_cache_time = now
+            return meta
+        except Exception:
+            return self._meta_cache or {}
 
         if self.is_configured():
             account = eth_account.Account.from_key(self.secret_key)
@@ -161,83 +177,97 @@ class HyperliquidTrader:
         # Safety Guard: Cap leverage at 3x for volatile altcoins
         leverage = min(leverage, 3)
 
-        try:
-            # 1. Update leverage
-            self.exchange.update_leverage(leverage, coin, is_cross=True)
+        import time
+        for attempt in range(1, 4):
+            try:
+                # 1. Update leverage
+                self.exchange.update_leverage(leverage, coin, is_cross=True)
+                time.sleep(0.2)
 
-            # 2. Get coin metadata and mark price to calculate exact size
-            meta = self.info.meta()
-            sz_dec = 0
-            for asset in meta.get("universe", []):
-                if asset.get("name") == coin:
-                    sz_dec = asset.get("szDecimals", 0)
-                    break
+                # 2. Get coin metadata and mark price to calculate exact size
+                meta = self.get_meta()
+                sz_dec = 0
+                for asset in meta.get("universe", []):
+                    if asset.get("name") == coin:
+                        sz_dec = asset.get("szDecimals", 0)
+                        break
 
-            all_mids = self.info.all_mids()
-            mark_px = float(all_mids.get(coin, 0.0))
-            if mark_px <= 0:
-                return {"success": False, "error": f"Invalid mark price for {coin}"}
+                all_mids = self.get_all_mids()
+                mark_px = float(all_mids.get(coin, 0.0))
+                if mark_px <= 0:
+                    mark_px = float(self.info.all_mids().get(coin, 0.0))
+                if mark_px <= 0:
+                    return {"success": False, "error": f"Invalid mark price for {coin}"}
 
-            # Intraday: tolak jika harga sudah melewati SL teknis (setup basi)
-            if sl_px is not None and sl_px <= mark_px:
-                return {"success": False, "error": f"SL teknis ${sl_px} sudah di bawah harga sekarang ${mark_px} (setup kadaluarsa)."}
+                # Intraday: tolak jika harga sudah melewati SL teknis (setup basi)
+                if sl_px is not None and sl_px <= mark_px:
+                    return {"success": False, "error": f"SL teknis ${sl_px} sudah di bawah harga sekarang ${mark_px} (setup kadaluarsa)."}
 
-            raw_sz = usd_size / mark_px
-            sz_coin = round(raw_sz, sz_dec) if sz_dec > 0 else int(raw_sz)
+                raw_sz = usd_size / mark_px
+                sz_coin = round(raw_sz, sz_dec) if sz_dec > 0 else int(raw_sz)
 
-            # 3. Market Short Order (is_buy=False)
-            order_res = self.exchange.market_open(
-                name=coin,
-                is_buy=False,
-                sz=sz_coin,
-                slippage=0.02
-            )
+                # 3. Market Short Order (is_buy=False)
+                order_res = self.exchange.market_open(
+                    name=coin,
+                    is_buy=False,
+                    sz=sz_coin,
+                    slippage=0.02
+                )
 
-            # Check if Hyperliquid returned an error in the response
-            if isinstance(order_res, dict) and order_res.get("status") == "err":
-                return {"success": False, "error": f"Hyperliquid Error: {order_res.get('response')}"}
+                # Check if Hyperliquid returned an error in the response
+                if isinstance(order_res, dict) and order_res.get("status") == "err":
+                    return {"success": False, "error": f"Hyperliquid Error: {order_res.get('response')}"}
 
-            if isinstance(order_res, dict) and "response" in order_res:
-                data = order_res.get("response", {}).get("data", {})
-                statuses = data.get("statuses", [])
-                if statuses and "error" in statuses[0]:
-                    return {"success": False, "error": f"Order Rejected: {statuses[0]['error']}"}
+                if isinstance(order_res, dict) and "response" in order_res:
+                    data = order_res.get("response", {}).get("data", {})
+                    statuses = data.get("statuses", [])
+                    if statuses and "error" in statuses[0]:
+                        return {"success": False, "error": f"Order Rejected: {statuses[0]['error']}"}
 
-            # Calculate stop & targets according to the strategy's exit model
-            from src.position_tags import build_plan
-            plan = build_plan(strategy, mark_px, sl_px=sl_px, sl_pct=sl_pct)
-            sl_price = self.round_price(coin, plan["sl_px"])
-            trim_price = self.round_price(coin, plan["tp1_px"])
-            tp2_price = self.round_price(coin, plan["tp2_px"])
-            runner_price = self.round_price(coin, plan["runner_px"]) if plan.get("runner_px") else None
+                time.sleep(0.2)
 
-            # Auto-place Native Server-Side Stop Loss Trigger on Hyperliquid
-            sl_trigger_res = self.set_stop_loss_trigger(coin=coin, sz=sz_coin, trigger_px=sl_price)
+                # Calculate stop & targets according to the strategy's exit model
+                from src.position_tags import build_plan
+                plan = build_plan(strategy, mark_px, sl_px=sl_px, sl_pct=sl_pct)
+                sl_price = self.round_price(coin, plan["sl_px"])
+                trim_price = self.round_price(coin, plan["tp1_px"])
+                tp2_price = self.round_price(coin, plan["tp2_px"])
+                runner_price = self.round_price(coin, plan["runner_px"]) if plan.get("runner_px") else None
 
-            # Auto-place Native Server-Side Take Profit 1 (50% size) on Hyperliquid
-            tp1_sz = round(sz_coin * 0.50, sz_dec) if sz_dec > 0 else int(sz_coin * 0.50)
-            tp1_trigger_res = {"success": False}
-            if tp1_sz > 0 and trim_price > 0:
-                tp1_trigger_res = self.set_take_profit_trigger(coin=coin, sz=tp1_sz, trigger_px=trim_price)
+                # Auto-place Native Server-Side Stop Loss Trigger on Hyperliquid
+                sl_trigger_res = self.set_stop_loss_trigger(coin=coin, sz=sz_coin, trigger_px=sl_price)
 
-            return {
-                "success": True,
-                "coin": coin,
-                "strategy": plan["strategy"],
-                "plan": plan,
-                "size_usd": usd_size,
-                "size_coin": sz_coin,
-                "entry_est": mark_px,
-                "stop_loss_px": sl_price,
-                "trim_10pct_px": trim_price,
-                "tp_20pct_px": tp2_price,
-                "runner_35pct_px": runner_price,
-                "native_sl_placed": sl_trigger_res.get("success", False),
-                "native_tp1_placed": tp1_trigger_res.get("success", False),
-                "order_result": order_res
-            }
-        except Exception as e:
-            return {"success": False, "error": str(e)}
+                # Auto-place Native Server-Side Take Profit 1 (50% size) on Hyperliquid
+                tp1_sz = round(sz_coin * 0.50, sz_dec) if sz_dec > 0 else int(sz_coin * 0.50)
+                tp1_trigger_res = {"success": False}
+                if tp1_sz > 0 and trim_price > 0:
+                    time.sleep(0.2)
+                    tp1_trigger_res = self.set_take_profit_trigger(coin=coin, sz=tp1_sz, trigger_px=trim_price)
+
+                return {
+                    "success": True,
+                    "coin": coin,
+                    "strategy": plan["strategy"],
+                    "plan": plan,
+                    "size_usd": usd_size,
+                    "size_coin": sz_coin,
+                    "entry_est": mark_px,
+                    "stop_loss_px": sl_price,
+                    "trim_10pct_px": trim_price,
+                    "tp_20pct_px": tp2_price,
+                    "runner_35pct_px": runner_price,
+                    "native_sl_placed": sl_trigger_res.get("success", False),
+                    "native_tp1_placed": tp1_trigger_res.get("success", False),
+                    "order_result": order_res
+                }
+            except Exception as e:
+                err_str = str(e)
+                if "429" in err_str and attempt < 3:
+                    wait_sec = 2.0 * attempt
+                    print(f"\n  [!] Rate limit CloudFront 429 terdeteksi. Menunggu {wait_sec:.1f}s lalu mencoba ulang (Attempt {attempt}/3)...")
+                    time.sleep(wait_sec)
+                    continue
+                return {"success": False, "error": f"Hyperliquid Rate Limit 429: Server sedang padat, silakan coba 5 detik lagi." if "429" in err_str else str(e)}
 
     def round_price(self, coin: str, px: float) -> float:
         """
@@ -254,9 +284,9 @@ class HyperliquidTrader:
             return round(px, 4)
 
     def get_asset_precision(self, coin: str) -> int:
-        """Returns szDecimals for coin."""
+        """Returns szDecimals for coin using cached metadata."""
         try:
-            meta = self.info.meta()
+            meta = self.get_meta()
             for asset in meta.get("universe", []):
                 if asset.get("name") == coin:
                     return asset.get("szDecimals", 0)
@@ -395,79 +425,93 @@ class HyperliquidTrader:
 
         leverage = min(leverage, 3)
 
-        try:
-            self.exchange.update_leverage(leverage, coin, is_cross=True)
+        import time
+        for attempt in range(1, 4):
+            try:
+                self.exchange.update_leverage(leverage, coin, is_cross=True)
+                time.sleep(0.2)
 
-            meta = self.info.meta()
-            sz_dec = 0
-            for asset in meta.get("universe", []):
-                if asset.get("name") == coin:
-                    sz_dec = asset.get("szDecimals", 0)
-                    break
+                meta = self.get_meta()
+                sz_dec = 0
+                for asset in meta.get("universe", []):
+                    if asset.get("name") == coin:
+                        sz_dec = asset.get("szDecimals", 0)
+                        break
 
-            all_mids = self.info.all_mids()
-            mark_px = float(all_mids.get(coin, 0.0))
-            if mark_px <= 0:
-                return {"success": False, "error": f"Invalid mark price for {coin}"}
+                all_mids = self.get_all_mids()
+                mark_px = float(all_mids.get(coin, 0.0))
+                if mark_px <= 0:
+                    mark_px = float(self.info.all_mids().get(coin, 0.0))
+                if mark_px <= 0:
+                    return {"success": False, "error": f"Invalid mark price for {coin}"}
 
-            if sl_px is not None and sl_px >= mark_px:
-                return {"success": False, "error": f"SL teknis ${sl_px} sudah di atas harga sekarang ${mark_px} (setup Long kadaluarsa)."}
+                if sl_px is not None and sl_px >= mark_px:
+                    return {"success": False, "error": f"SL teknis ${sl_px} sudah di atas harga sekarang ${mark_px} (setup Long kadaluarsa)."}
 
-            raw_sz = usd_size / mark_px
-            sz_coin = round(raw_sz, sz_dec) if sz_dec > 0 else int(raw_sz)
+                raw_sz = usd_size / mark_px
+                sz_coin = round(raw_sz, sz_dec) if sz_dec > 0 else int(raw_sz)
 
-            # Market Buy Order (is_buy=True)
-            order_res = self.exchange.market_open(
-                name=coin,
-                is_buy=True,
-                sz=sz_coin,
-                slippage=0.02
-            )
+                # Market Buy Order (is_buy=True)
+                order_res = self.exchange.market_open(
+                    name=coin,
+                    is_buy=True,
+                    sz=sz_coin,
+                    slippage=0.02
+                )
 
-            if isinstance(order_res, dict) and order_res.get("status") == "err":
-                return {"success": False, "error": f"Hyperliquid Error: {order_res.get('response')}"}
+                if isinstance(order_res, dict) and order_res.get("status") == "err":
+                    return {"success": False, "error": f"Hyperliquid Error: {order_res.get('response')}"}
 
-            if isinstance(order_res, dict) and "response" in order_res:
-                data = order_res.get("response", {}).get("data", {})
-                statuses = data.get("statuses", [])
-                if statuses and "error" in statuses[0]:
-                    return {"success": False, "error": f"Order Rejected: {statuses[0]['error']}"}
+                if isinstance(order_res, dict) and "response" in order_res:
+                    data = order_res.get("response", {}).get("data", {})
+                    statuses = data.get("statuses", [])
+                    if statuses and "error" in statuses[0]:
+                        return {"success": False, "error": f"Order Rejected: {statuses[0]['error']}"}
 
-            from src.position_tags import build_plan
-            plan = build_plan(strategy, mark_px, sl_px=sl_px, sl_pct=sl_pct, side="LONG")
-            sl_price = self.round_price(coin, plan["sl_px"])
-            trim_price = self.round_price(coin, plan["tp1_px"])
-            tp2_price = self.round_price(coin, plan["tp2_px"])
-            runner_price = self.round_price(coin, plan["runner_px"]) if plan.get("runner_px") else None
+                time.sleep(0.2)
 
-            # Auto-place Native Server-Side Stop Loss Trigger on Hyperliquid (side="LONG")
-            sl_trigger_res = self.set_stop_loss_trigger(coin=coin, sz=sz_coin, trigger_px=sl_price, side="LONG")
+                from src.position_tags import build_plan
+                plan = build_plan(strategy, mark_px, sl_px=sl_px, sl_pct=sl_pct, side="LONG")
+                sl_price = self.round_price(coin, plan["sl_px"])
+                trim_price = self.round_price(coin, plan["tp1_px"])
+                tp2_price = self.round_price(coin, plan["tp2_px"])
+                runner_price = self.round_price(coin, plan["runner_px"]) if plan.get("runner_px") else None
 
-            # Auto-place Native Server-Side Take Profit 1 (50% size) on Hyperliquid (side="LONG")
-            tp1_sz = round(sz_coin * 0.50, sz_dec) if sz_dec > 0 else int(sz_coin * 0.50)
-            tp1_trigger_res = {"success": False}
-            if tp1_sz > 0 and trim_price > 0:
-                tp1_trigger_res = self.set_take_profit_trigger(coin=coin, sz=tp1_sz, trigger_px=trim_price, side="LONG")
+                # Auto-place Native Server-Side Stop Loss Trigger on Hyperliquid (side="LONG")
+                sl_trigger_res = self.set_stop_loss_trigger(coin=coin, sz=sz_coin, trigger_px=sl_price, side="LONG")
 
-            return {
-                "success": True,
-                "coin": coin,
-                "side": "LONG",
-                "strategy": plan["strategy"],
-                "plan": plan,
-                "size_usd": usd_size,
-                "size_coin": sz_coin,
-                "entry_est": mark_px,
-                "stop_loss_px": sl_price,
-                "trim_10pct_px": trim_price,
-                "tp_20pct_px": tp2_price,
-                "runner_35pct_px": runner_price,
-                "native_sl_placed": sl_trigger_res.get("success", False),
-                "native_tp1_placed": tp1_trigger_res.get("success", False),
-                "order_result": order_res
-            }
-        except Exception as e:
-            return {"success": False, "error": str(e)}
+                # Auto-place Native Server-Side Take Profit 1 (50% size) on Hyperliquid (side="LONG")
+                tp1_sz = round(sz_coin * 0.50, sz_dec) if sz_dec > 0 else int(sz_coin * 0.50)
+                tp1_trigger_res = {"success": False}
+                if tp1_sz > 0 and trim_price > 0:
+                    time.sleep(0.2)
+                    tp1_trigger_res = self.set_take_profit_trigger(coin=coin, sz=tp1_sz, trigger_px=trim_price, side="LONG")
+
+                return {
+                    "success": True,
+                    "coin": coin,
+                    "side": "LONG",
+                    "strategy": plan["strategy"],
+                    "plan": plan,
+                    "size_usd": usd_size,
+                    "size_coin": sz_coin,
+                    "entry_est": mark_px,
+                    "stop_loss_px": sl_price,
+                    "trim_10pct_px": trim_price,
+                    "tp_20pct_px": tp2_price,
+                    "runner_35pct_px": runner_price,
+                    "native_sl_placed": sl_trigger_res.get("success", False),
+                    "native_tp1_placed": tp1_trigger_res.get("success", False),
+                    "order_result": order_res
+                }
+            except Exception as e:
+                err_str = str(e)
+                if "429" in err_str and attempt < 3:
+                    wait_sec = 2.0 * attempt
+                    print(f"\n  [!] Rate limit CloudFront 429 terdeteksi. Menunggu {wait_sec:.1f}s lalu mencoba ulang (Attempt {attempt}/3)...")
+                    time.sleep(wait_sec)
+                    continue
+                return {"success": False, "error": f"Hyperliquid Rate Limit 429: Server sedang padat, silakan coba 5 detik lagi." if "429" in err_str else str(e)}
 
     def set_stop_loss_trigger(self, coin: str, sz: float, trigger_px: float, side: str = "SHORT") -> Dict:
         """
