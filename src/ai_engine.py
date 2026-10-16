@@ -114,11 +114,17 @@ class GeminiTradeAdvisor:
         self.api_key = api_key or os.getenv("GEMINI_API_KEY")
         self.model_name = model_name or os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite")
         self._client = None
+        self._audit_cache = {}
+        self._pre_trade_cache = {}
 
         if self.api_key:
             try:
                 from google import genai
-                self._client = genai.Client(api_key=self.api_key)
+                from google.genai import types
+                self._client = genai.Client(
+                    api_key=self.api_key,
+                    http_options=types.HttpOptions(timeout=15000)
+                )
             except Exception as e:
                 print(f"[!] Warning: Gagal inisialisasi Gemini Client: {e}")
                 self._client = None
@@ -135,6 +141,15 @@ class GeminiTradeAdvisor:
         Audits a closed trade to determine execution grade, failure root-cause,
         and key lessons learned.
         """
+        # 1. Reuse existing audit if already present in trade record
+        if trade_data.get("ai_review") and isinstance(trade_data["ai_review"], dict) and trade_data["ai_review"].get("execution_grade"):
+            return trade_data["ai_review"]
+
+        # 2. Check in-memory cache to prevent redundant API calls
+        cache_key = f"{trade_data.get('coin')}_{trade_data.get('entry_px')}_{trade_data.get('exit_px')}_{trade_data.get('exit_time')}"
+        if cache_key in self._audit_cache:
+            return self._audit_cache[cache_key]
+
         # Deterministic fallback if API offline
         default_fallback = {
             "execution_grade": "B" if trade_data.get("realized_pnl", 0) >= 0 else "C",
@@ -191,14 +206,18 @@ Determine:
             )
             res = json.loads(response.text)
             res["ai_generated"] = True
+            self._audit_cache[cache_key] = res
             return res
         except Exception as e:
             err_str = str(e)
             if "503" in err_str or "UNAVAILABLE" in err_str:
                 default_fallback["lessons_learned"] = "Gemini Flash sedang padat (503). Audit heuristik otomatis diterapkan."
+            elif "timeout" in err_str.lower() or "timed out" in err_str.lower():
+                default_fallback["lessons_learned"] = "Gemini API timeout (>15s). Audit heuristik otomatis diterapkan."
             else:
                 first_line = err_str.split("\n")[0][:100]
                 default_fallback["lessons_learned"] = f"Audit heuristik diterapkan ({first_line})."
+            self._audit_cache[cache_key] = default_fallback
             return default_fallback
 
     # -------------------------------------------------------------------------
@@ -337,6 +356,13 @@ Provide calibrated weights. Every weight MUST be positive and between 5.0 and 30
             "bos_status": candidate_data.get("bos_label")
         }
 
+        # Check in-memory pre-trade cache (valid for 5 minutes)
+        import time
+        cache_key = f"{clean_cand['coin']}_{clean_cand['side']}_{clean_cand['strategy']}_{round(float(clean_cand.get('price') or 0), 4)}"
+        cached = self._pre_trade_cache.get(cache_key)
+        if cached and (time.time() - cached.get("ts", 0)) < 300:
+            return cached["data"]
+
         if side == "LONG":
             prompt = f"""
 You are the Chief Risk Officer for a high-probability Crypto quantitative fund evaluating a LONG trade entry.
@@ -414,9 +440,18 @@ Decide:
             if not res.get("approve"):
                 res["size_multiplier"] = min(res["size_multiplier"], 0.6)
             res["ai_generated"] = True
+            self._pre_trade_cache[cache_key] = {"data": res, "ts": time.time()}
             return res
         except Exception as e:
-            print(f"[!] Warning: Gagal evaluasi pre-trade Gemini: {e}")
+            err_str = str(e)
+            if "503" in err_str or "UNAVAILABLE" in err_str:
+                default_fallback["verdict_reason"] = "Gemini Flash sedang padat (503). Evaluasi dialihkan ke kalkulator kuantitatif internal."
+            elif "timeout" in err_str.lower() or "timed out" in err_str.lower():
+                default_fallback["verdict_reason"] = "Gemini API timeout (>15s). Evaluasi dialihkan ke kalkulator kuantitatif internal."
+            else:
+                first_line = err_str.split("\n")[0][:100]
+                print(f"[!] Warning: Gagal evaluasi pre-trade Gemini: {first_line}")
+            self._pre_trade_cache[cache_key] = {"data": default_fallback, "ts": time.time()}
             return default_fallback
 
     # -------------------------------------------------------------------------

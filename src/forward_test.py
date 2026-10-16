@@ -388,7 +388,15 @@ class ForwardTestManager:
             # Discover any coin in user_fills that has a Close fill but is not in live_positions
             traded_coins = {f.get("coin") for f in fills if f.get("coin")}
             for coin in traded_coins:
-                if coin not in live_positions and (coin not in journal or journal[coin].get("status") != "CLOSED" or journal[coin].get("pending_fill_reconcile")):
+                if coin not in live_positions:
+                    existing_closed = next(
+                        (v for k, v in journal.items() if (k == coin or k.startswith(f"{coin}@")) and v.get("status") == "CLOSED"),
+                        None
+                    )
+                    # Lewati jika sudah tersinkron rapi & tidak pending rekonsiliasi
+                    if existing_closed and not existing_closed.get("pending_fill_reconcile"):
+                        continue
+
                     coin_fills = sorted([f for f in fills if f.get("coin") == coin], key=lambda x: x.get("time", 0))
                     open_fills = [f for f in coin_fills if ("Open Short" in str(f.get("dir", "")) or "Open Long" in str(f.get("dir", "")))]
                     if not open_fills:
@@ -427,7 +435,7 @@ class ForwardTestManager:
                     else:
                         move_pct = ((entry_px - exit_px) / entry_px) * 100.0 if entry_px > 0 else 0.0
 
-                    prev = journal.get(coin, {})
+                    prev = existing_closed or journal.get(coin, {})
                     strategy = prev.get("strategy") or get_strategy(coin)
                     sl_loss_thresh = -2.5 if strategy == "DAYTRADE" else -8.0
                     if prev.get("exit_reason"):
