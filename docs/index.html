@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="refresh" content="60">
+    <title>ShortHunter AI — Live Trade Performance & Audit</title>
+    <style>
+        :root {
+            --bg-dark: #0a0e17;
+            --card-bg: #111827;
+            --card-border: #1f293d;
+            --text-main: #f3f4f6;
+            --text-muted: #9ca3af;
+            --neon-green: #10b981;
+            --neon-green-glow: rgba(16, 185, 129, 0.2);
+            --coral-red: #ef4444;
+            --coral-red-glow: rgba(239, 68, 68, 0.2);
+            --cyan-intra: #06b6d4;
+            --purple-swing: #8b5cf6;
+            --amber-warn: #f59e0b;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            padding: 24px;
+            line-height: 1.5;
+        }
+        .container { max-width: 1300px; margin: 0 auto; }
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 16px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid var(--card-border);
+            margin-bottom: 24px;
+        }
+        .brand { display: flex; align-items: center; gap: 12px; }
+        .brand h1 { font-size: 1.7rem; font-weight: 700; letter-spacing: -0.5px; }
+        .badge-live {
+            background: rgba(16, 185, 129, 0.15);
+            color: var(--neon-green);
+            border: 1px solid var(--neon-green);
+            padding: 4px 10px;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .badge-live::before {
+            content: "";
+            width: 8px;
+            height: 8px;
+            background: var(--neon-green);
+            border-radius: 50%;
+            display: inline-block;
+            box-shadow: 0 0 8px var(--neon-green);
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.4; transform: scale(0.85); }
+            100% { opacity: 1; transform: scale(1); }
+        }
+        .header-meta {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            text-align: right;
+        }
+
+        /* Metrics Grid */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        .card {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 12px;
+            padding: 18px;
+            transition: transform 0.2s, border-color 0.2s;
+        }
+        .card:hover { border-color: #374151; }
+        .card-title {
+            font-size: 0.78rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-muted);
+            margin-bottom: 6px;
+        }
+        .card-val {
+            font-size: 1.6rem;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+        .card-sub {
+            font-size: 0.78rem;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+
+        .pnl-pos { color: var(--neon-green); text-shadow: 0 0 12px var(--neon-green-glow); }
+        .pnl-neg { color: var(--coral-red); text-shadow: 0 0 12px var(--coral-red-glow); }
+        .pnl-zero { color: var(--text-muted); }
+
+        /* Stream cards */
+        .streams-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        .stream-box {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 12px;
+            padding: 16px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .stream-title {
+            font-size: 1.05rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .stream-intra { color: var(--cyan-intra); }
+        .stream-swing { color: var(--purple-swing); }
+        .stream-stats {
+            display: flex;
+            gap: 20px;
+            text-align: right;
+        }
+        .stat-item .num { font-size: 1.15rem; font-weight: 700; }
+        .stat-item .lbl { font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; }
+
+        /* Table styling */
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+        .section-header h2 { font-size: 1.15rem; font-weight: 700; }
+        .table-responsive {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 12px;
+            overflow-x: auto;
+            margin-bottom: 30px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+            font-size: 0.85rem;
+        }
+        th {
+            background: #162032;
+            color: #d1d5db;
+            padding: 12px 14px;
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 0.72rem;
+            letter-spacing: 0.5px;
+            border-bottom: 1px solid var(--card-border);
+            white-space: nowrap;
+        }
+        td {
+            padding: 12px 14px;
+            border-bottom: 1px solid var(--card-border);
+            white-space: nowrap;
+        }
+        tr:last-child td { border-bottom: none; }
+        tr:hover td { background: rgba(255, 255, 255, 0.02); }
+
+        /* Badges */
+        .pill {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 6px;
+            font-size: 0.72rem;
+            font-weight: 600;
+            text-align: center;
+        }
+        .pill-intra { background: rgba(6, 182, 212, 0.15); color: var(--cyan-intra); border: 1px solid var(--cyan-intra); }
+        .pill-swing { background: rgba(139, 92, 246, 0.15); color: var(--purple-swing); border: 1px solid var(--purple-swing); }
+        .pill-short { background: rgba(239, 68, 68, 0.15); color: var(--coral-red); font-weight: 700; }
+        .pill-long  { background: rgba(16, 185, 129, 0.15); color: var(--neon-green); font-weight: 700; }
+        .pill-be    { background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid #10b981; }
+        .pill-sl    { background: rgba(239, 68, 68, 0.15); color: #f87171; }
+        .pill-win   { background: rgba(16, 185, 129, 0.2); color: var(--neon-green); font-weight: 700; }
+        .pill-loss  { background: rgba(239, 68, 68, 0.2); color: var(--coral-red); font-weight: 700; }
+
+        .empty-row {
+            text-align: center;
+            padding: 36px !important;
+            color: var(--text-muted);
+            font-style: italic;
+        }
+
+        footer {
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid var(--card-border);
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 0.8rem;
+        }
+
+        @media (max-width: 768px) {
+            body { padding: 14px; }
+            .streams-grid { grid-template-columns: 1fr; }
+            .stream-box { flex-direction: column; align-items: flex-start; gap: 12px; }
+            .stream-stats { width: 100%; justify-content: space-between; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="brand">
+                <h1>⚡ ShortHunter AI</h1>
+                <span class="badge-live">LIVE AUTO-PILOT GUARD</span>
+            </div>
+            <div class="header-meta">
+                <div>Terakhir Disinkronkan: <strong>2026-10-17 01:44:00</strong></div>
+                <div>Server Stop Loss: <span style="color:var(--neon-green);">🟢 AKTIF ON-CHAIN</span></div>
+            </div>
+        </header>
+
+        <!-- Executive Metrics Grid -->
+        <div class="metrics-grid">
+            <div class="card">
+                <div class="card-title">Win Rate (Selesai)</div>
+                <div class="card-val pnl-zero">0.0%</div>
+                <div class="card-sub">0 Menang / 0 Kalah (0 total)</div>
+            </div>
+            <div class="card">
+                <div class="card-title">Net Realized PnL</div>
+                <div class="card-val pnl-zero">+$0.00</div>
+                <div class="card-sub">Gross: +$0.00 | Loss: -$0.00</div>
+            </div>
+            <div class="card">
+                <div class="card-title">Profit Factor</div>
+                <div class="card-val pnl-zero">0.00</div>
+                <div class="card-sub">Rasio Reward / Risk kumulatif</div>
+            </div>
+            <div class="card">
+                <div class="card-title">Total Ekuitas Akun</div>
+                <div class="card-val">$199.64</div>
+                <div class="card-sub">Free: $0.00 | Margin: $98.36</div>
+            </div>
+            <div class="card">
+                <div class="card-title">Floating PnL Aktif</div>
+                <div class="card-val pnl-pos">+$1.44</div>
+                <div class="card-sub">8 posisi terbuka di bursa</div>
+            </div>
+        </div>
+
+        <!-- Stream Scorecards -->
+        <div class="streams-grid">
+            <div class="stream-box">
+                <div class="stream-title stream-intra">
+                    <span>⚡ INTRADAY (15m R-Multiple)</span>
+                </div>
+                <div class="stream-stats">
+                    <div class="stat-item">
+                        <div class="num">0%</div>
+                        <div class="lbl">Win Rate</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="num pnl-zero">+$0.00</div>
+                        <div class="lbl">Net PnL</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="num">0</div>
+                        <div class="lbl">Closed</div>
+                    </div>
+                </div>
+            </div>
+            <div class="stream-box">
+                <div class="stream-title stream-swing">
+                    <span>🌊 SWING (Multi-Day Fixed %)</span>
+                </div>
+                <div class="stream-stats">
+                    <div class="stat-item">
+                        <div class="num">0%</div>
+                        <div class="lbl">Win Rate</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="num pnl-zero">+$0.00</div>
+                        <div class="lbl">Net PnL</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="num">0</div>
+                        <div class="lbl">Closed</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SECTION 1: POSISI AKTIF (REAL-TIME) -->
+        <div class="section-header">
+            <h2>📊 Detail Posisi Aktif (8)</h2>
+            <span style="font-size:0.8rem; color:var(--text-muted);">Diperbarui otomatis tiap siklus</span>
+        </div>
+        <div class="table-responsive">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Simbol</th>
+                        <th>Stream</th>
+                        <th>Posisi</th>
+                        <th>Entry / Skrg</th>
+                        <th>Pergerakan</th>
+                        <th>Margin / Size</th>
+                        <th>Floating PnL (ROE%)</th>
+                        <th>Proteksi SL</th>
+                        <th>Target TP</th>
+                        <th>Auto-Close</th>
+                    </tr>
+                </thead>
+                <tbody>
+    
+                    <tr>
+                        <td><strong>EIGEN</strong></td>
+                        <td><span class="pill pill-intra">⚡ INTRADAY</span></td>
+                        <td><span class="pill pill-short">🔴 SHORT 2x</span></td>
+                        <td>$0.25540 <span style="color:var(--text-muted);">➔</span> $0.24720</td>
+                        <td class="pnl-pos"><strong>+3.21%</strong></td>
+                        <td>$9.68 <span style="color:var(--text-muted); font-size:0.75rem;">(78.3 koin)</span></td>
+                        <td class="pnl-pos"><strong>+$0.63 (+6.3%)</strong></td>
+                        <td><span class="pill pill-be">BE @ $0.25520 (0% Risiko) 🟢</span></td>
+                        <td><span style="color:var(--neon-green);">✅ TP1 Selesai (50%)</span> | <span>🎯 TP2: $0.2403</span></td>
+                        <td style="color:var(--text-muted); font-size:0.78rem;">0.2j tersisa (Max 6j)</td>
+                    </tr>
+            
+                    <tr>
+                        <td><strong>NEAR</strong></td>
+                        <td><span class="pill pill-intra">⚡ INTRADAY</span></td>
+                        <td><span class="pill pill-long">🟢 LONG 2x</span></td>
+                        <td>$5.06590 <span style="color:var(--text-muted);">➔</span> $4.96705</td>
+                        <td class="pnl-neg"><strong>-1.95%</strong></td>
+                        <td>$19.62 <span style="color:var(--text-muted); font-size:0.75rem;">(7.9 koin)</span></td>
+                        <td class="pnl-neg"><strong>$-0.78 (-3.9%)</strong></td>
+                        <td><span class="pill pill-sl">$4.89270 (SL Teknis) 🟢</span></td>
+                        <td><span>✂️ TP1: $5.2391</span> | <span>🎯 TP2: $5.4123</span></td>
+                        <td style="color:var(--text-muted); font-size:0.78rem;">4.9j tersisa (Max 6j)</td>
+                    </tr>
+            
+                    <tr>
+                        <td><strong>TIA</strong></td>
+                        <td><span class="pill pill-intra">⚡ INTRADAY</span></td>
+                        <td><span class="pill pill-short">🔴 SHORT 2x</span></td>
+                        <td>$0.70917 <span style="color:var(--text-muted);">➔</span> $0.67454</td>
+                        <td class="pnl-pos"><strong>+4.88%</strong></td>
+                        <td>$9.51 <span style="color:var(--text-muted); font-size:0.75rem;">(28.2 koin)</span></td>
+                        <td class="pnl-pos"><strong>+$0.98 (+9.8%)</strong></td>
+                        <td><span class="pill pill-be">BE @ $0.70853 (0% Risiko) 🟢</span></td>
+                        <td><span style="color:var(--neon-green);">✅ TP1 Selesai (50%)</span> | <span>🎯 TP2: $0.6691</span></td>
+                        <td style="color:var(--text-muted); font-size:0.78rem;">1.1j tersisa (Max 6j)</td>
+                    </tr>
+            
+                    <tr>
+                        <td><strong>AERO</strong></td>
+                        <td><span class="pill pill-swing">🌊 SWING</span></td>
+                        <td><span class="pill pill-short">🔴 SHORT 2x</span></td>
+                        <td>$0.86933 <span style="color:var(--text-muted);">➔</span> $0.86138</td>
+                        <td class="pnl-pos"><strong>+0.91%</strong></td>
+                        <td>$21.12 <span style="color:var(--text-muted); font-size:0.75rem;">(49.0 koin)</span></td>
+                        <td class="pnl-pos"><strong>+$0.36 (+1.7%)</strong></td>
+                        <td><span class="pill pill-sl">$0.94901 (SL Teknis) 🟢</span></td>
+                        <td><span>✂️ TP1: $0.7824</span> | <span>🎯 TP2: $0.6955</span></td>
+                        <td style="color:var(--text-muted); font-size:0.78rem;">71.5j tersisa (Max 72j)</td>
+                    </tr>
+            
+                    <tr>
+                        <td><strong>KAS</strong></td>
+                        <td><span class="pill pill-swing">🌊 SWING</span></td>
+                        <td><span class="pill pill-long">🟢 LONG 2x</span></td>
+                        <td>$0.03638 <span style="color:var(--text-muted);">➔</span> $0.03611</td>
+                        <td class="pnl-neg"><strong>-0.74%</strong></td>
+                        <td>$4.03 <span style="color:var(--text-muted); font-size:0.75rem;">(223.0 koin)</span></td>
+                        <td class="pnl-neg"><strong>$-0.06 (-1.4%)</strong></td>
+                        <td><span class="pill pill-sl">$0.03264 (SL Teknis) 🟢</span></td>
+                        <td><span>✂️ TP1: $0.0400</span> | <span>🎯 TP2: $0.0437</span></td>
+                        <td style="color:var(--text-muted); font-size:0.78rem;">71.7j tersisa (Max 72j)</td>
+                    </tr>
+            
+                    <tr>
+                        <td><strong>NIL</strong></td>
+                        <td><span class="pill pill-swing">🌊 SWING</span></td>
+                        <td><span class="pill pill-long">🟢 LONG 2x</span></td>
+                        <td>$0.08076 <span style="color:var(--text-muted);">➔</span> $0.08030</td>
+                        <td class="pnl-neg"><strong>-0.57%</strong></td>
+                        <td>$0.08 <span style="color:var(--text-muted); font-size:0.75rem;">(2.0 koin)</span></td>
+                        <td class="pnl-zero"><strong>+$-0.00 (-1.0%)</strong></td>
+                        <td><span class="pill pill-sl">$0.07268 (SL Teknis) 🟢</span></td>
+                        <td><span>✂️ TP1: $0.0888</span> | <span>🎯 TP2: $0.0969</span></td>
+                        <td style="color:var(--text-muted); font-size:0.78rem;">71.9j tersisa (Max 72j)</td>
+                    </tr>
+            
+                    <tr>
+                        <td><strong>ZK</strong></td>
+                        <td><span class="pill pill-swing">🌊 SWING</span></td>
+                        <td><span class="pill pill-short">🔴 SHORT 2x</span></td>
+                        <td>$0.01639 <span style="color:var(--text-muted);">➔</span> $0.01625</td>
+                        <td class="pnl-pos"><strong>+0.84%</strong></td>
+                        <td>$19.10 <span style="color:var(--text-muted); font-size:0.75rem;">(2350.0 koin)</span></td>
+                        <td class="pnl-pos"><strong>+$0.31 (+1.6%)</strong></td>
+                        <td><span class="pill pill-sl">$0.01802 (SL Teknis) 🟢</span></td>
+                        <td><span>✂️ TP1: $0.0147</span> | <span>🎯 TP2: $0.0131</span></td>
+                        <td style="color:var(--text-muted); font-size:0.78rem;">71.7j tersisa (Max 72j)</td>
+                    </tr>
+            
+                    <tr>
+                        <td><strong>ZRO</strong></td>
+                        <td><span class="pill pill-swing">🌊 SWING</span></td>
+                        <td><span class="pill pill-short">🔴 SHORT 2x</span></td>
+                        <td>$2.01610 <span style="color:var(--text-muted);">➔</span> $2.01620</td>
+                        <td class="pnl-zero"><strong>+-0.00%</strong></td>
+                        <td>$15.22 <span style="color:var(--text-muted); font-size:0.75rem;">(15.1 koin)</span></td>
+                        <td class="pnl-zero"><strong>+$-0.00 (-0.0%)</strong></td>
+                        <td><span class="pill pill-sl">$2.22000 (SL Teknis) 🟢</span></td>
+                        <td><span>✂️ TP1: $1.8145</span> | <span>🎯 TP2: $1.6129</span></td>
+                        <td style="color:var(--text-muted); font-size:0.78rem;">71.4j tersisa (Max 72j)</td>
+                    </tr>
+            
+                </tbody>
+            </table>
+        </div>
+
+        <!-- SECTION 2: AUDIT LOG RIWAYAT TRADE YANG SUDAH CLOSE -->
+        <div class="section-header">
+            <h2>🏁 Riwayat & Audit Trade Selesai (0)</h2>
+            <span style="font-size:0.8rem; color:var(--text-muted);">Sesi Forward-Test Baru Dimulai dari Batch Live Ini</span>
+        </div>
+        <div class="table-responsive">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Tgl Selesai</th>
+                        <th>Simbol</th>
+                        <th>Stream</th>
+                        <th>Side</th>
+                        <th>Entry / Exit</th>
+                        <th>Durasi</th>
+                        <th>Alasan Exit</th>
+                        <th>Hasil</th>
+                        <th>Net Realized PnL</th>
+                        <th>ROE %</th>
+                        <th>R-Multiple</th>
+                    </tr>
+                </thead>
+                <tbody>
+    
+                    <tr>
+                        <td colspan="11" class="empty-row">Belum ada posisi yang ditutup pada sesi baru ini. Seluruh posisi saat ini masih aktif dikawal.</td>
+                    </tr>
+        
+                </tbody>
+            </table>
+        </div>
+
+        <footer>
+            ShortHunter Dual-Stream Trading System &bull; Hyperliquid L1 Mainnet &bull; On-Chain Stop-Loss Protected
+        </footer>
+    </div>
+</body>
+</html>
+    

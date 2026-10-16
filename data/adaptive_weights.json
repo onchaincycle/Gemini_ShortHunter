@@ -1,0 +1,23 @@
+{
+  "SWING": {
+    "gain_90d": 15.0,
+    "rsi_daily": 15.0,
+    "rsi_divergence": 15.0,
+    "upper_wick_exhaustion": 15.0,
+    "h4_choch_breakdown": 20.0,
+    "funding_rate_euphoria": 10.0,
+    "nansen_smart_money": 10.0,
+    "tokenomics_dilution": 10.0
+  },
+  "DAYTRADE": {
+    "liquidity_sweep": 25.0,
+    "m15_pinbar": 25.0,
+    "bos_ema_breakdown": 25.0,
+    "funding_rate_guard": 15.0,
+    "volume_climax": 10.0
+  },
+  "SWING_meta": {
+    "rationale": "Data riwayat trade masih di bawah ambang batas (min. 3 trade) untuk kalibrasi AI.",
+    "updated_at": "2026-10-16T23:18:45.665354"
+  }
+}

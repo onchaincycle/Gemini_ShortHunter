@@ -1,0 +1,11 @@
+.env
+.env.*
+.venv/
+__pycache__/
+*.pyc
+*.pid
+data/*.db*
+data/*.duckdb*
+data/intraday_cache/
+logs/*.log
+.DS_Store

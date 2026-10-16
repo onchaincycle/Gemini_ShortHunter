@@ -1,0 +1,190 @@
+{
+  "EIGEN": {
+    "coin": "EIGEN",
+    "strategy": "DAYTRADE",
+    "plan": {
+      "strategy": "DAYTRADE",
+      "entry_px": 0.2554,
+      "sl_px": 0.26296,
+      "sl_pct": 2.96,
+      "tp1_px": 0.24784,
+      "tp2_px": 0.24028,
+      "runner_px": null,
+      "tp1_pct": 2.96,
+      "tp2_pct": 5.92,
+      "runner_pct": null,
+      "max_hold_hours": 6
+    },
+    "meta": {
+      "opened_via": "MENU_7",
+      "margin_usd": 20.0
+    },
+    "tagged_at": "2026-10-17T01:38:29.983922"
+  },
+  "TIA": {
+    "coin": "TIA",
+    "strategy": "DAYTRADE",
+    "plan": {
+      "strategy": "DAYTRADE",
+      "entry_px": 0.70917,
+      "sl_px": 0.72921,
+      "sl_pct": 2.826,
+      "tp1_px": 0.6891299999999999,
+      "tp2_px": 0.6690899999999999,
+      "runner_px": null,
+      "tp1_pct": 2.826,
+      "tp2_pct": 5.652,
+      "runner_pct": null,
+      "max_hold_hours": 6
+    },
+    "meta": {
+      "opened_via": "MENU_7",
+      "margin_usd": 20.0
+    },
+    "tagged_at": "2026-10-17T01:38:29.985009"
+  },
+  "NEAR": {
+    "coin": "NEAR",
+    "strategy": "DAYTRADE",
+    "plan": {
+      "strategy": "DAYTRADE",
+      "side": "LONG",
+      "entry_px": 5.0659,
+      "sl_px": 4.89272,
+      "sl_pct": 3.419,
+      "tp1_px": 5.23908,
+      "tp2_px": 5.412260000000001,
+      "runner_px": null,
+      "tp1_pct": 3.419,
+      "tp2_pct": 6.837,
+      "runner_pct": null,
+      "max_hold_hours": 6
+    },
+    "meta": {
+      "opened_via": "MENU_7",
+      "margin_usd": 20.0,
+      "side": "LONG"
+    },
+    "tagged_at": "2026-10-17T01:38:29.985648"
+  },
+  "ZRO": {
+    "coin": "ZRO",
+    "strategy": "SWING",
+    "plan": {
+      "strategy": "SWING",
+      "side": "SHORT",
+      "entry_px": 2.0161,
+      "sl_px": 2.21771,
+      "sl_pct": 10.0,
+      "tp1_px": 1.81449,
+      "tp2_px": 1.6128799999999999,
+      "runner_px": 1.310465,
+      "tp1_pct": 10.0,
+      "tp2_pct": 20.0,
+      "runner_pct": 35.0,
+      "max_hold_hours": 72
+    },
+    "meta": {
+      "source": "AUTO_HUNT_SNIPER",
+      "ai_grade": "A",
+      "ai_conviction": 85
+    },
+    "tagged_at": "2026-10-17T01:38:29.986147"
+  },
+  "AERO": {
+    "coin": "AERO",
+    "strategy": "SWING",
+    "plan": {
+      "strategy": "SWING",
+      "side": "SHORT",
+      "entry_px": 0.869585,
+      "sl_px": 0.94901,
+      "sl_pct": 9.134,
+      "tp1_px": 0.7826265000000001,
+      "tp2_px": 0.6956680000000001,
+      "runner_px": 0.56523025,
+      "tp1_pct": 10.0,
+      "tp2_pct": 20.0,
+      "runner_pct": 35.0,
+      "max_hold_hours": 72
+    },
+    "meta": {
+      "source": "AUTO_HUNT_SNIPER",
+      "ai_grade": "A+",
+      "ai_conviction": 92
+    },
+    "tagged_at": "2026-10-17T01:38:29.986579"
+  },
+  "ZK": {
+    "coin": "ZK",
+    "strategy": "SWING",
+    "plan": {
+      "strategy": "SWING",
+      "side": "SHORT",
+      "entry_px": 0.016382,
+      "sl_px": 0.01822,
+      "sl_pct": 11.22,
+      "tp1_px": 0.014743800000000001,
+      "tp2_px": 0.013105600000000002,
+      "runner_px": 0.010648300000000001,
+      "tp1_pct": 10.0,
+      "tp2_pct": 20.0,
+      "runner_pct": 35.0,
+      "max_hold_hours": 72
+    },
+    "meta": {
+      "source": "AUTO_HUNT_SNIPER",
+      "ai_grade": "A",
+      "ai_conviction": 85
+    },
+    "tagged_at": "2026-10-17T01:38:29.987059"
+  },
+  "KAS": {
+    "coin": "KAS",
+    "strategy": "SWING",
+    "plan": {
+      "strategy": "SWING",
+      "side": "LONG",
+      "entry_px": 0.036382,
+      "sl_px": 0.032743799999999997,
+      "sl_pct": 10.0,
+      "tp1_px": 0.0400202,
+      "tp2_px": 0.04365839999999999,
+      "runner_px": 0.0491157,
+      "tp1_pct": 10.0,
+      "tp2_pct": 20.0,
+      "runner_pct": 35.0,
+      "max_hold_hours": 72
+    },
+    "meta": {
+      "source": "AUTO_HUNT_SNIPER",
+      "ai_grade": "B",
+      "ai_conviction": 75
+    },
+    "tagged_at": "2026-10-17T01:38:29.987496"
+  },
+  "NIL": {
+    "coin": "NIL",
+    "strategy": "DAYTRADE",
+    "tagged_at": "2026-10-17T01:38:31.013885",
+    "plan": {
+      "strategy": "DAYTRADE",
+      "side": "LONG",
+      "entry_px": 0.080735,
+      "sl_px": 0.07834,
+      "sl_pct": 2.966,
+      "tp1_px": 0.08313,
+      "tp2_px": 0.08552499999999999,
+      "runner_px": null,
+      "tp1_pct": 2.966,
+      "tp2_pct": 5.933,
+      "runner_pct": null,
+      "max_hold_hours": 6
+    },
+    "meta": {
+      "source": "AUTO_HUNT_SNIPER",
+      "ai_grade": "B",
+      "ai_conviction": 68
+    }
+  }
+}

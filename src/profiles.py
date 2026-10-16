@@ -1,0 +1,129 @@
+"""
+ShortHunter Strategy Profiles:
+Defines configuration profiles for:
+1. SWING_3D   : Multi-day trend reversal (-10% Trim, -20% TP, -35% Runner, 10% SL, Hold 2-4 days)
+2. DAYTRADE   : Intraday precision (TP1 1.0R / TP2 2.0R, SL teknis 2.8-5.5%, Auto-Close 6 jam)
+
+PENTING (Dual-Stream Architecture):
+- Profil "aktif" global HANYA dipakai sebagai default tampilan/menu.
+- Manajemen posisi (SL, trimming, time-stop) SELALU memakai strategi yang
+  di-tag pada masing-masing posisi (lihat src/position_tags.py), sehingga
+  posisi Swing tidak pernah ikut dikelola dengan aturan Intraday (dan sebaliknya).
+"""
+
+import os
+import json
+from typing import Dict, Optional
+
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PROFILE_CONFIG_FILE = os.path.join(ROOT_DIR, "data", "active_profile.json")
+
+PROFILES = {
+    "SWING": {
+        "key": "SWING",
+        "name": "Mode Swing 3 Hari (Macro Dump v2.0)",
+        "badge": "🌊 SWING",
+        "description": "Menangkap dump besar multi-hari (-20% s/d -35%) pada koin pucuk yang patah tren.",
+        # --- Screening ---
+        "timeframe": "1D / 4H / 1H",
+        "min_score": 75.0,
+        # --- Exit model: persentase tetap dari harga entry ---
+        "exit_model": "FIXED_PCT",
+        "sl_pct": 10.0,
+        "trim_pct": 10.0,
+        "tp2_pct": 20.0,
+        "runner_pct": 35.0,
+        "max_hold_hours": 72,
+        "time_exit_enabled": True,  # 3-Day Cutoff to avoid Day-5 dead-cat bounce
+        "stalemate_hours": 72,
+        # --- Risk & portfolio ---
+        "leverage": 2,
+        "risk_pct": 2.0,            # % ekuitas yang dirisikokan per trade
+        "max_concurrent": 6,        # maksimal total posisi swing terbuka bersamaan
+        "max_concurrent_short": 3,  # batas slot swing short
+        "max_concurrent_long": 3,   # batas slot swing long
+        "max_daily_losses": None,   # swing tidak pakai circuit breaker harian
+        # --- Eksekusi & monitoring ---
+        "session_gate": False,
+        "poll_seconds": 25,
+        "fee_roundtrip_pct": 0.09,  # taker 0.045% x 2
+        "target_desc": "Trim 10% (50%) ➔ TP 20% (30%) ➔ Runner 35% (20%) | SL: +10% | Max Hold: 3 Hari"
+    },
+    "DAYTRADE": {
+        "key": "DAYTRADE",
+        "name": "Mode Intraday Day-Trade (Precision v2.2)",
+        "badge": "⚡ INTRADAY",
+        "description": "Eksekusi intraday sesi London/NY: SL teknis di pucuk jarum 15m, TP berbasis R, auto-close 6 jam.",
+        # --- Screening ---
+        "timeframe": "15m / 1H",
+        "min_score": 75.0,
+        # --- Exit model: kelipatan risiko (R) dari SL dinamis per posisi ---
+        "exit_model": "R_MULTIPLE",
+        "sl_pct": 3.8,              # default bila SL dinamis tidak tersedia
+        "sl_min_pct": 2.8,
+        "sl_max_pct": 5.5,
+        "tp1_r": 1.0,               # Trim 50% & SL ke BE
+        "tp2_r": 2.0,               # Tutup sisa
+        "trim_pct": 3.8,            # = 1.0R dari default SL (fallback)
+        "tp2_pct": 7.6,             # = 2.0R dari default SL (fallback)
+        "runner_pct": None,
+        "max_hold_hours": 6,
+        "time_exit_enabled": True,
+        "stalemate_hours": 6,
+        # --- Risk & portfolio ---
+        "leverage": 2,
+        "risk_pct": 1.0,            # risiko per trade lebih kecil (frekuensi tinggi)
+        "max_concurrent": 4,        # maksimal total posisi intraday terbuka bersamaan
+        "max_concurrent_short": 2,  # alokasi slot intraday short
+        "max_concurrent_long": 2,   # alokasi slot intraday long
+        "max_daily_losses": 2,      # circuit breaker: stop entry intraday setelah 2 loss/hari
+        # --- Eksekusi & monitoring ---
+        "session_gate": True,       # hanya London/NY (14:00-23:59 WIB)
+        "poll_seconds": 10,
+        "fee_roundtrip_pct": 0.09,
+        "target_desc": "TP1 1.0R (Trim 50% + SL ke BE) ➔ TP2 2.0R | SL Teknis 2.8-5.5% | Auto-Close: 6 Jam"
+    }
+}
+
+STRATEGY_ALIASES = {
+    "SWING": "SWING", "MULTIDAY": "SWING", "MULTI_DAY": "SWING",
+    "DAYTRADE": "DAYTRADE", "INTRADAY": "DAYTRADE", "DAY": "DAYTRADE",
+}
+
+
+def normalize_strategy(key: Optional[str]) -> str:
+    """Maps any alias (INTRADAY, DAYTRADE, MULTIDAY...) to a canonical profile key."""
+    if not key:
+        return "SWING"
+    return STRATEGY_ALIASES.get(str(key).upper(), "SWING")
+
+
+def get_profile(key: Optional[str]) -> Dict:
+    """Returns the profile for a given strategy key (defaults to SWING)."""
+    return PROFILES[normalize_strategy(key)]
+
+
+def get_active_profile() -> Dict:
+    """Returns the currently active (default UI) profile dictionary."""
+    if os.path.exists(PROFILE_CONFIG_FILE):
+        try:
+            with open(PROFILE_CONFIG_FILE, "r") as f:
+                data = json.load(f)
+                key = data.get("active_key", "SWING")
+                if key in PROFILES:
+                    return PROFILES[key]
+        except Exception:
+            pass
+    return PROFILES["SWING"]
+
+def set_active_profile(profile_key: str) -> Dict:
+    """Sets and persists the active (default UI) profile."""
+    profile_key = normalize_strategy(profile_key)
+    if profile_key not in PROFILES:
+        return {"success": False, "error": f"Profil {profile_key} tidak valid. Pilih SWING atau DAYTRADE."}
+
+    os.makedirs(os.path.dirname(PROFILE_CONFIG_FILE), exist_ok=True)
+    with open(PROFILE_CONFIG_FILE, "w") as f:
+        json.dump({"active_key": profile_key}, f, indent=2)
+
+    return {"success": True, "profile": PROFILES[profile_key]}
