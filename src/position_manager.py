@@ -1013,10 +1013,10 @@ class PositionManager:
 
         try:
             state = trader.get_account_state()
-            shorts = [p for p in state.get("positions", []) if p.get("side") == "SHORT"]
-            if shorts:
+            active_pos = [p for p in state.get("positions", []) if p.get("side") in ("SHORT", "LONG")]
+            if active_pos:
                 res = cls.start_daemon()
-                cls(trader).log_event(f"🛡️ Watchdog: Mendeteksi {len(shorts)} posisi aktif, Auto-Pilot otomatis dihidupkan (PID: {res.get('pid')})")
+                cls(trader).log_event(f"🛡️ Watchdog: Mendeteksi {len(active_pos)} posisi aktif, Auto-Pilot otomatis dihidupkan (PID: {res.get('pid')})")
                 return True
         except Exception:
             pass

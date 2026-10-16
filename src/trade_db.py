@@ -356,12 +356,25 @@ class TradeDatabase:
         details_json = json.dumps(details)
 
         with self.get_connection() as conn:
-            # Check if open record exists for this coin
-            cursor = conn.execute(
-                "SELECT id FROM trade_journal WHERE coin = ? AND status = 'OPEN' ORDER BY id DESC LIMIT 1",
-                (coin,)
-            )
-            row = cursor.fetchone()
+            # Check existing record by ID, (coin, entry_time), or active OPEN coin
+            pos_id = pos.get("id")
+            row = None
+            if pos_id:
+                cursor = conn.execute("SELECT id FROM trade_journal WHERE id = ?", (pos_id,))
+                row = cursor.fetchone()
+            if not row and coin and entry_time:
+                cursor = conn.execute(
+                    "SELECT id FROM trade_journal WHERE coin = ? AND entry_time = ? LIMIT 1",
+                    (coin, entry_time)
+                )
+                row = cursor.fetchone()
+            if not row and status == "OPEN":
+                cursor = conn.execute(
+                    "SELECT id FROM trade_journal WHERE coin = ? AND status = 'OPEN' ORDER BY id DESC LIMIT 1",
+                    (coin,)
+                )
+                row = cursor.fetchone()
+
             if row:
                 conn.execute("""
                     UPDATE trade_journal SET

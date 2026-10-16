@@ -193,7 +193,12 @@ Determine:
             res["ai_generated"] = True
             return res
         except Exception as e:
-            print(f"[!] Warning: Gagal audit Gemini post-mortem: {e}")
+            err_str = str(e)
+            if "503" in err_str or "UNAVAILABLE" in err_str:
+                default_fallback["lessons_learned"] = "Gemini Flash sedang padat (503). Audit heuristik otomatis diterapkan."
+            else:
+                first_line = err_str.split("\n")[0][:100]
+                default_fallback["lessons_learned"] = f"Audit heuristik diterapkan ({first_line})."
             return default_fallback
 
     # -------------------------------------------------------------------------

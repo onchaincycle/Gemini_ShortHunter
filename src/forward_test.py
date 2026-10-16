@@ -370,10 +370,9 @@ class ForwardTestManager:
         # 2. Check Hyperliquid user_fills to reconcile any position that closed on-chain
         journal = self.load_journal()
         try:
-            raw_fills = trader.info.user_fills(trader.account_address) or []
-            # Sesi forward test aktif dimulai sejak batch posisi live saat ini (2026-10-16 19:56:00)
+            # Sesi forward test aktif dimulai sejak batch posisi live saat ini (2026-10-16 19:56:40)
             # Fills sebelum timestamp ini diabaikan agar trade riwayat lama yang sudah close tidak masuk kembali.
-            SESSION_START_MS = 1729101400000
+            SESSION_START_MS = 1792155400000
             fills = [f for f in raw_fills if f.get("time", 0) >= SESSION_START_MS]
 
             # Update accurate entry_time from Open fill if available
