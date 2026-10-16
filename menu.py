@@ -558,6 +558,29 @@ def menu_auto_hunt_sniper(db):
         # ⚡ 1-Click Execution: Langsung gunakan modal rekomendasi AI tanpa prompt lagi
         size_usd = rec_margin
 
+        # Pre-flight Margin Safety Check
+        cur_acct = trader.get_account_state(force_refresh=True)
+        avail_margin = float(cur_acct.get("available", 0.0))
+        cur_equity = float(cur_acct.get("equity", equity))
+        pos_count = len(cur_acct.get("positions", []))
+
+        if avail_margin < 5.0 or size_usd > avail_margin:
+            print("\n" + "=" * 68)
+            print("  ⚠️  SALDO MARGIN BEBAS TIDAK MENCUKUPI DI HYPERLIQUID")
+            print("=" * 68)
+            print(f"  • Modal Dibutuhkan  : ${size_usd:,.2f} USDC")
+            print(f"  • Sisa Margin Bebas : ${avail_margin:,.2f} USDC (dari Total Modal ${cur_equity:,.2f} USDC)")
+            print(f"  • Margin Terpakai   : ${cur_equity - avail_margin:,.2f} USDC (Sedang mengawal {pos_count} posisi aktif)")
+            print("-" * 68)
+            print("  💡 PENJELASAN:")
+            print(f"    Hampir 100% modal Anda saat ini sedang bekerja mengawal {pos_count} posisi aktif.")
+            print(f"    Order {side} {coin} belum dapat dibuka karena sisa margin bebas hanya ${avail_margin:,.2f} USDC.")
+            print("    👉 Silakan tunggu salah satu posisi mencapai Take Profit / Stop Loss,")
+            print("       atau lakukan top-up deposit di akun Hyperliquid Anda.")
+            print("=" * 68)
+            input("\nTekan ENTER untuk kembali ke Menu Utama...")
+            return False
+
         print(f"\n🚀 Sedang mengirim order {side} {coin} [{badge}] ke Hyperliquid (Modal: ${size_usd:,.2f} USDC)...")
         notional_usd = size_usd * lev
         if side == "LONG":

@@ -14,6 +14,11 @@ from hyperliquid.utils import constants
 
 load_dotenv()
 
+# Global shared clients to eliminate duplicate Info and Exchange initializations
+_SHARED_INFO = None
+_SHARED_EXCHANGE = None
+_SHARED_EXCHANGE_KEY = None
+
 class HyperliquidTrader:
     def __init__(self,
                  account_address: Optional[str] = None,
@@ -24,7 +29,16 @@ class HyperliquidTrader:
         self.testnet = testnet if os.getenv("HYPERLIQUID_TESTNET") is None else (os.getenv("HYPERLIQUID_TESTNET", "true").lower() == "true")
         
         self.base_url = constants.TESTNET_API_URL if self.testnet else constants.MAINNET_API_URL
-        self.info = Info(self.base_url, skip_ws=True)
+        
+        global _SHARED_INFO, _SHARED_EXCHANGE, _SHARED_EXCHANGE_KEY
+        import time
+        if _SHARED_INFO is None:
+            try:
+                _SHARED_INFO = Info(self.base_url, skip_ws=True)
+            except Exception:
+                time.sleep(1.0)
+                _SHARED_INFO = Info(self.base_url, skip_ws=True)
+        self.info = _SHARED_INFO
         self.exchange = None
 
         # Rate-limiting & burst protection cache (TTL: 6 seconds)
@@ -37,6 +51,17 @@ class HyperliquidTrader:
         self._meta_cache = None
         self._meta_cache_time = 0.0
         self._cache_ttl = 6.0
+
+        if self.is_configured():
+            if _SHARED_EXCHANGE is None or _SHARED_EXCHANGE_KEY != self.secret_key:
+                account = eth_account.Account.from_key(self.secret_key)
+                _SHARED_EXCHANGE = Exchange(
+                    account,
+                    self.base_url,
+                    account_address=self.account_address
+                )
+                _SHARED_EXCHANGE_KEY = self.secret_key
+            self.exchange = _SHARED_EXCHANGE
 
     def get_meta(self, force_refresh: bool = False) -> Dict:
         """Returns perp universe metadata with 10-minute caching to eliminate heavy redundant API calls."""
@@ -51,14 +76,6 @@ class HyperliquidTrader:
             return meta
         except Exception:
             return self._meta_cache or {}
-
-        if self.is_configured():
-            account = eth_account.Account.from_key(self.secret_key)
-            self.exchange = Exchange(
-                account,
-                self.base_url,
-                account_address=self.account_address
-            )
 
     def is_configured(self) -> bool:
         return bool(self.account_address and self.secret_key and len(self.secret_key) >= 64)
@@ -78,17 +95,25 @@ class HyperliquidTrader:
             user_state = self.info.user_state(self.account_address)
             margin = user_state.get("marginSummary", {})
             perp_equity = float(margin.get("accountValue", 0.0))
+            perp_margin_used = float(margin.get("totalMarginUsed", 0.0))
             perp_available = float(user_state.get("withdrawable", 0.0))
 
             # 2. Spot clearinghouse state
             spot_state = self.info.spot_user_state(self.account_address)
-            spot_usdc = 0.0
+            spot_total = 0.0
+            spot_hold = 0.0
             for b in spot_state.get("balances", []):
                 if b.get("coin") == "USDC":
-                    spot_usdc = float(b.get("total", 0.0))
+                    spot_total = float(b.get("total", 0.0))
+                    spot_hold = float(b.get("hold", 0.0))
 
-            total_equity = perp_equity + spot_usdc
-            available_trade = max(perp_available, spot_usdc, perp_equity)
+            # In Hyperliquid unified clearinghouse:
+            # - spot_total represents total USDC capital of the account
+            # - spot_hold represents margin currently in use by active Perp positions
+            # - Free margin available to open new trades = max(0, spot_total - spot_hold)
+            free_margin = max(0.0, spot_total - spot_hold)
+            total_equity = max(perp_equity, spot_total)
+            available_trade = free_margin
 
             positions = []
             for p in user_state.get("assetPositions", []):
@@ -112,8 +137,10 @@ class HyperliquidTrader:
                 "configured": True,
                 "testnet": self.testnet,
                 "equity": round(total_equity, 2),
-                "spot_usdc": round(spot_usdc, 2),
+                "spot_usdc": round(spot_total, 2),
                 "perp_equity": round(perp_equity, 2),
+                "margin_used": round(perp_margin_used, 2),
+                "free_collateral": round(free_margin, 2),
                 "available": round(available_trade, 2),
                 "positions": positions
             }
