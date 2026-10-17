@@ -53,7 +53,8 @@ class FollowUpActionSpec(BaseModel):
         "EVALUATE_COIN_SETUP",
         "TRIGGER_AUTO_HUNT",
         "RUN_GUARDIAN_AUDIT",
-        "REVISIT_AND_SCALE_POSITIONS"
+        "REVISIT_AND_SCALE_POSITIONS",
+        "RUN_QUANT_VALIDATION"
     ] = Field(
         default="NONE",
         description="Concrete system follow-up action to execute if AI agrees with the user's opinion"
@@ -351,6 +352,11 @@ class AgentWarRoom:
             },
             "thermostat": state.get("thermostat", {}),
             "autonomous_enabled": state.get("enabled", True),
+            "quant_validation_schedule": {
+                "forward_audit_interval_hours": state.get("forward_audit_interval_hours", 24),
+                "backtest_interval_days": state.get("backtest_interval_days", 7),
+                "last_validation_report": state.get("last_validation_report", {})
+            },
             "active_positions": active_positions_summary,
             "mentioned_coins_tool_data": coin_investigations,
             "episodic_memory_rules": mem_rules,
@@ -399,6 +405,8 @@ Your 5 core duties:
    - `EVALUATE_COIN_SETUP`: When the user suggests shorting or longing a specific coin (`target_coin`, `target_side`, `target_stream`).
    - `TRIGGER_AUTO_HUNT`: When the user asks to scan/hunt the 4 quadrants right now.
    - `RUN_GUARDIAN_AUDIT`: When the user asks to check app health, security, or Git DLP.
+   - `REVISIT_AND_SCALE_POSITIONS`: When the user asks to revisit/scale up active positions to current equity tier.
+   - `RUN_QUANT_VALIDATION`: When the user asks to run a periodic walk-forward backtest or forward-test validation audit right now.
    - `NONE`: If `RESPECTFUL_DISAGREE` or `DISCUSSION_INSIGHT`.
 5. FORWARD ENGINEERING SPEC TO ANTIGRAVITY (`antigravity_dev_ticket`):
    - If the user's message proposes a new code feature, UI/menu improvement, new indicator/API integration, or asks to tell Antigravity to build/fix something, set `has_dev_request = true`, choose `category` & `priority`, and write a clear `ticket_title` and `technical_spec_for_antigravity` so Antigravity can immediately code it in the next development cycle!
@@ -723,6 +731,28 @@ Your 5 core duties:
             return {
                 "executed": True,
                 "message": f"✅ Audit Revisit Selesai: Semua posisi yang memenuhi syarat zona entry sudah optimal untuk Tier ${res.get('equity', 200):.0f}."
+            }
+
+        # 10. RUN_QUANT_VALIDATION
+        if act_type == "RUN_QUANT_VALIDATION":
+            from src.autonomous_engine import AutonomousEngine
+            eng = AutonomousEngine()
+            rep = eng.run_periodic_backtest_and_forward_validation(
+                mode="FULL",
+                trigger_reason="WAR_ROOM_REQUEST",
+                auto_apply=True
+            )
+            sw_bt = rep.get("swing_backtest") or {}
+            dt_bt = rep.get("intraday_backtest") or {}
+            cal = rep.get("tuning_applied") or []
+            return {
+                "executed": True,
+                "message": (
+                    f"✅ Walk-Forward Backtest & Forward-Test Validation Selesai:\n"
+                    f"     • Swing BT    : {sw_bt.get('total_trades', 0)} trades | WR {sw_bt.get('win_rate_pct', 0)}% | PF {sw_bt.get('profit_factor', 0)} | Net {sw_bt.get('net_return_pct', 0):+.2f}% | Rek. Skor >= {sw_bt.get('optimal_min_score', 75.0)}\n"
+                    f"     • Intraday BT : {dt_bt.get('total_trades', 0)} trades | WR {dt_bt.get('win_rate_pct', 0)}% | PF {dt_bt.get('profit_factor', 0)} | Avg {dt_bt.get('avg_r', 0):+.2f}R | Rek. Skor >= {dt_bt.get('optimal_min_score', 75.0)}\n"
+                    f"     • Status Drift: {rep.get('drift_badge', 'ON-TRACK')} | Kalibrasi: {', '.join(cal)}"
+                )
             }
 
         return {"executed": False, "message": f"Tipe aksi {act_type} tidak dikenali."}

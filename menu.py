@@ -28,7 +28,7 @@ def display_width(text: str) -> int:
             w += 2
         elif ord(ch) >= 0x1F300:
             w += 2
-        elif ch in ['⚡', '🔴', '🟢', '✅', '✂️', '🎯', '🚀', '🛑', '⏰', '🪙', '🌊', '🏆', '🛡️']:
+        elif ch in ['⚡', '🔴', '🟢', '✅', '✂️', '🎯', '🚀', '🛑', '⏰', '🪙', '🌊', '🏆', '🛡️', '🚨', '⚠️']:
             w += 2
         elif cat == 'Mn':
             continue
@@ -122,6 +122,45 @@ def print_header():
                 f"(🌊Swing {gov['swing_count']}/{gov['max_swing']} | ⚡Intra {gov['intraday_count']}/{gov['max_intraday']}) "
                 f"| Peluru: ${gov['min_order_margin']:,.2f}–${gov['max_order_margin']:,.2f} | Thermostat: {thermo.get('mode', 'OPTIMAL')}"
             )
+
+            # Circuit Breaker Status (Intraday & Global Thermostat)
+            is_intraday_cb = bool(gov.get("intraday_cb_active", False))
+            is_thermo_cb = bool(gov.get("thermostat_cb_active", False))
+            intraday_losses = gov.get("intraday_losses_today", 0)
+            max_intraday_losses = gov.get("intraday_max_losses", 2)
+            pause_until_ts = float(thermo.get("pause_until_ts", 0.0))
+            import time
+            now_ts = time.time()
+
+            if is_intraday_cb and is_thermo_cb:
+                cb_badge = f"🛑 AKTIF PENUH (⚡Intra {intraday_losses}/{max_intraday_losses} SL Hit & 🌊Global Thermostat Pause)"
+            elif is_intraday_cb:
+                cb_badge = f"🛑 AKTIF (⚡Intra {intraday_losses}/{max_intraday_losses} SL Hit Hari Ini ➔ Entry 15m Di-Pause | 🌊Swing Normal)"
+            elif is_thermo_cb:
+                cb_badge = f"🛑 AKTIF (🌊Global Thermostat Pause | Alasan: {thermo.get('reason', '-')})"
+            elif thermo.get("mode") == "DEFENSIVE_SHIELD":
+                cb_badge = "🟡 WASPADA (Defensive Shield: 2x SL Streak | Syarat Skor 80+)"
+            else:
+                cb_badge = f"🟢 NORMAL / SIAP (Loss Intraday: {intraday_losses}/{max_intraday_losses} | Global: Normal)"
+
+            print(f"🛑 Circuit Breaker     : {cb_badge}")
+
+            # Prominent Alert Box when Circuit Breaker is Active
+            if is_intraday_cb or is_thermo_cb:
+                print("┌" + "─" * 66 + "┐")
+                print("│" + pad_str("🚨 PERINGATAN: CIRCUIT BREAKER AKTIF (PROTEKSI MODAL) 🚨", 66, "center") + "│")
+                print("├" + "─" * 66 + "┤")
+                if is_intraday_cb:
+                    print("│" + pad_str(f" • ⚡ INTRADAY 15m : 🛑 DI-PAUSE ({intraday_losses}/{max_intraday_losses} SL hit hari ini)", 66, "left") + "│")
+                    print("│" + pad_str("   ➔ Auto-Hunt & Screener Day-Trade tidak akan membuka posisi baru", 66, "left") + "│")
+                    print("│" + pad_str("      sampai reset harian (00:00 UTC) demi disiplin drawdown.", 66, "left") + "│")
+                if is_thermo_cb:
+                    pause_rem = max(0, int((pause_until_ts - now_ts) / 60)) if pause_until_ts > 0 else 0
+                    print("│" + pad_str(f" • 🌊 THERMOSTAT   : 🛑 DI-PAUSE (Cooldown sisa ~{pause_rem} menit)", 66, "left") + "│")
+                    print("│" + pad_str(f"   ➔ Alasan: {thermo.get('reason', '-')[:52]}", 66, "left") + "│")
+                print("│" + pad_str(f" • 🌊 SWING MACRO  : {'🟢 NORMAL (Screener & Eksekusi Swing tetap siap)' if not is_thermo_cb else '🛑 DI-PAUSE'}", 66, "left") + "│")
+                print("│" + pad_str(f" • 🛡️ PENGAWALAN   : 🟢 BERJALAN PENUH ({len(positions)} posisi aktif tetap dikawal)", 66, "left") + "│")
+                print("└" + "─" * 66 + "┘")
 
             if positions:
                 print(f"\n📊 DETAIL POSISI TERBUKA ANDA ({len(positions)}):")
@@ -1627,15 +1666,16 @@ def menu_position_guard():
         print("  [1] 📡 Buka Live Monitor Real-Time di Layar (Tabel Posisi + Telemetri AI Auto-Refresh)")
         print("  [2] 🎯 Paksa Siklus Auto-Hunt & Audit Grade A Sekarang (Force Autonomous Hunt)")
         print("  [3] 🧠 Jalankan Siklus Self-Evaluation & Kalibrasi Mandiri Sekarang (Force Self-Eval)")
-        print("  [4] ⚙️  Atur Parameter AI Mandiri (Reserve % Ekuitas, Interval Hunt, Toggle ON/OFF)")
+        print("  [4] ⚙️  Atur Parameter AI Mandiri (Reserve %, Interval Hunt, Interval Backtest/Forward-Test)")
         print("  [5] 🚀 Nyalakan / Restart Daemon AI Mandiri 24/7 (Anti-Sleep Caffeinate)")
         print("  [6] 🛑 Matikan Background Daemon")
         print("  [7] 🏷️  Ubah Tag Stream Posisi Tertentu (INTRADAY ⇄ SWING)")
         print("  [8] 🌐 Update & Publish Dashboard Pemantauan ke Web / GitHub Pages Sekarang")
+        print("  [9] 🔬 Jalankan Walk-Forward Backtest & Forward-Test Validation Mandiri Sekarang")
         print("  [0] Kembali ke Menu Utama")
         print("-" * 80)
 
-        sub = input("Masukkan pilihan [0-8]: ").strip()
+        sub = input("Masukkan pilihan [0-9]: ").strip()
         if sub == "1":
             pm.run_live_guard()
         elif sub == "2":
@@ -1675,8 +1715,10 @@ def menu_position_guard():
             print(f"  [B] Pagar Cadangan Margin Bebas (%)   : {th.get('reserve_pct', 15.0):.1f}% dari Total Saldo USDC")
             print(f"  [C] Interval Siklus Auto-Hunt (Menit) : Tiap {st.get('hunt_interval_minutes', 30)} menit")
             print(f"  [D] Cooldown Antar-Entry Baru (Menit) : Minimal {st.get('cooldown_minutes', 30)} menit")
+            print(f"  [E] Interval Walk-Forward Backtest    : Tiap {st.get('backtest_interval_days', 7)} hari (Mingguan + Early Trigger 3h)")
+            print(f"  [F] Interval Audit Forward-Test Live  : Tiap {st.get('forward_audit_interval_hours', 24)} jam (Harian)")
             print("  [ENTER] Batal / Kembali")
-            p_in = input("\nPilih parameter yang ingin diubah [A/B/C/D]: ").strip().upper()
+            p_in = input("\nPilih parameter yang ingin diubah [A/B/C/D/E/F]: ").strip().upper()
             if p_in == "A":
                 st["enabled"] = not st.get("enabled", True)
                 auto_eng.save_state(st)
@@ -1706,6 +1748,24 @@ def menu_position_guard():
                     st["cooldown_minutes"] = mins
                     auto_eng.save_state(st)
                     print(f"[✓] Cooldown antar-entry diatur ke {mins} menit.")
+                except Exception:
+                    print("[!] Input tidak valid.")
+            elif p_in == "E":
+                val = input("Masukkan interval Walk-Forward Backtest dalam hari (contoh 3, 7, 14): ").strip()
+                try:
+                    days = max(1, min(30, int(val)))
+                    st["backtest_interval_days"] = days
+                    auto_eng.save_state(st)
+                    print(f"[✓] Interval Walk-Forward Backtest diatur ke tiap {days} hari.")
+                except Exception:
+                    print("[!] Input tidak valid.")
+            elif p_in == "F":
+                val = input("Masukkan interval Audit Forward-Test Live dalam jam (contoh 12, 24, 48): ").strip()
+                try:
+                    hrs = max(4, min(168, int(val)))
+                    st["forward_audit_interval_hours"] = hrs
+                    auto_eng.save_state(st)
+                    print(f"[✓] Interval Audit Forward-Test Live diatur ke tiap {hrs} jam.")
                 except Exception:
                     print("[!] Input tidak valid.")
             input("\nTekan ENTER untuk lanjut...")
@@ -1755,6 +1815,24 @@ def menu_position_guard():
                 p = generate_html_report()
                 print(f"[✓] HTML lokal diperbarui di {p} ({e})")
             input("\nTekan ENTER untuk lanjut...")
+        elif sub == "9":
+            print("\n🔬 Menjalankan Walk-Forward Backtest (Swing Daily/4H + Intraday 15m) & Audit Forward-Test Live...")
+            v_rep = auto_eng.run_periodic_backtest_and_forward_validation(mode="FULL", trigger_reason="MANUAL_USER_TRIGGER")
+            sw_bt = v_rep.get("swing_backtest") or {}
+            dt_bt = v_rep.get("intraday_backtest") or {}
+            ft_live = v_rep.get("forward_test_live") or {}
+            sw_ft = ft_live.get("SWING") or {}
+            dt_ft = ft_live.get("DAYTRADE") or {}
+            print("\n" + "=" * 78)
+            print("  [✓] VALIDASI WALK-FORWARD BACKTEST & FORWARD-TEST MANDIRI SELESAI!")
+            print("=" * 78)
+            print(f"  • Status Reality-Gap / Drift : {v_rep.get('drift_badge')}")
+            print(f"  • Backtest 🌊 SWING (95d)    : {sw_bt.get('total_trades',0)} Trades | WR: {sw_bt.get('win_rate_pct',0)}% (Safe: {sw_bt.get('safe_rate_pct',0)}%) | PF: {sw_bt.get('profit_factor',0)} | Net: {sw_bt.get('net_return_pct',0):+.1f}% | Opt Score >= {sw_bt.get('optimal_min_score',78)}")
+            print(f"  • Backtest ⚡ INTRADAY (15m)  : {dt_bt.get('total_trades',0)} Trades | WR: {dt_bt.get('win_rate_pct',0)}% (Safe: {dt_bt.get('safe_rate_pct',0)}%) | PF: {dt_bt.get('profit_factor',0)} | AvgR: {dt_bt.get('avg_r',0):+.2f}R | Mode: {dt_bt.get('best_session_mode')}")
+            print(f"  • Forward-Test Live Aktual   : 🌊 SWING (Open:{sw_ft.get('open',0)} Closed:{sw_ft.get('closed',0)} WR:{sw_ft.get('win_rate',0)}% Net:${sw_ft.get('realized_usd',0):+.2f}) | ⚡ INTRADAY (Open:{dt_ft.get('open',0)} Closed:{dt_ft.get('closed',0)} WR:{dt_ft.get('win_rate',0)}% Net:${dt_ft.get('realized_usd',0):+.2f})")
+            print(f"  • Auto-Tuning Diterapkan     : {', '.join(v_rep.get('tuning_applied', []))}")
+            print("=" * 78)
+            input("\nTekan ENTER untuk kembali ke Pusat Komando...")
         elif sub in ["0", ""]:
             break
 
@@ -2105,7 +2183,7 @@ def menu_ai_war_room():
             print(f"\n🚀 RENCANA FOLLOW-UP AI: [{act_type}] ➔ {act_summary}")
 
             # Non-destructive config/memory/audit actions auto-execute immediately when AI agrees
-            auto_safe_types = {"ADD_EPISODIC_RULE", "UPDATE_THERMOSTAT", "EVALUATE_COIN_SETUP", "RUN_GUARDIAN_AUDIT", "PAUSE_OR_RESUME_AUTONOMOUS"}
+            auto_safe_types = {"ADD_EPISODIC_RULE", "UPDATE_THERMOSTAT", "EVALUATE_COIN_SETUP", "RUN_GUARDIAN_AUDIT", "PAUSE_OR_RESUME_AUTONOMOUS", "RUN_QUANT_VALIDATION"}
             if act_type in auto_safe_types:
                 exec_res = war_room.execute_follow_up(follow_up)
                 print(f"   {exec_res.get('message')}")

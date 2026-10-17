@@ -395,8 +395,8 @@ class IntradayDaytradeEngine:
                               tp1_r: float = 1.0,
                               tp2_r: float = 2.0,
                               max_hold_hours: int = 6,
-                              min_sl_pct: float = 2.8,
-                              max_sl_pct: float = 5.5,
+                              min_sl_pct: float = 2.5,
+                              max_sl_pct: float = 4.5,
                               sl_buffer_pct: float = 0.35,
                               wick_min: float = 0.35,
                               require_vol_climax: bool = True,
@@ -404,7 +404,7 @@ class IntradayDaytradeEngine:
                               data_map: Optional[Dict[str, pd.DataFrame]] = None) -> Dict:
         """
         Runs a true 15-minute candle-by-candle backtest specifically for the Intraday Day-Trade stream:
-        - Dynamic Technical SL above 15m pinbar wick (+buffer, clamped 2.8%-5.5%).
+        - Dynamic Technical SL above 15m pinbar wick (+buffer, clamped 2.5%-4.5%).
         - TP1 = tp1_r * SL (Trim 50% & move SL to BE).
         - TP2 = tp2_r * SL (Full exit remaining 50%).
         - Auto-Close time-stop at max_hold_hours (default 6 hours = 24 candles of 15m).

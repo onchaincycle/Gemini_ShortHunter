@@ -580,8 +580,20 @@ def generate_html_report(output_path: str = OUTPUT_HTML) -> str:
         eval_rep = auto_state.get("last_eval_report") or {}
         feed = auto_state.get("telemetry_feed", [])
 
+        cb_banner = ""
+        if gov.get("circuit_breaker_active"):
+            intraday_note = f"⚡ Intraday 15m di-pause ({gov.get('intraday_losses_today', 0)}/{gov.get('intraday_max_losses', 2)} SL hit hari ini)" if gov.get("intraday_cb_active") else ""
+            thermo_note = f"🌊 Global Thermostat di-pause ({thermo.get('reason', '-')})" if gov.get("thermostat_cb_active") else ""
+            comb_note = " | ".join(filter(None, [intraday_note, thermo_note]))
+            cb_banner = f"""
+            <div style="background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.5); border-radius: 8px; padding: 12px 16px; margin-bottom: 16px; color: #fca5a5; font-size: 0.9rem;">
+                <strong style="color: #ef4444;">🚨 CIRCUIT BREAKER AKTIF (PROTEKSI MODAL):</strong> {comb_note}. Seluruh posisi terbuka tetap dikawal penuh 24/7.
+            </div>
+            """
+
         html += f"""
         <div class="section-title" style="margin-top:28px;">🤖 Autonomous AI Self-Operating Engine &amp; Self-Evaluation Monitor</div>
+        {cb_banner}
         <div class="metrics-grid" style="margin-bottom:18px;">
             <div class="metric-card">
                 <div class="metric-label">Thermostat Self-Defense</div>

@@ -59,6 +59,8 @@ class AutonomousEngine:
             "enabled": True,
             "hunt_interval_minutes": 30,
             "self_eval_interval_hours": 6,
+            "forward_audit_interval_hours": 24,
+            "backtest_interval_days": 7,
             "cooldown_minutes": 30,
             "thermostat": {
                 "mode": "OPTIMAL",
@@ -79,6 +81,11 @@ class AutonomousEngine:
             "last_eval_ts": 0.0,
             "last_eval_time": "-",
             "last_eval_report": {},
+            "last_forward_audit_ts": 0.0,
+            "last_forward_audit_time": "-",
+            "last_backtest_ts": 0.0,
+            "last_backtest_time": "-",
+            "last_validation_report": {},
             "last_entry_ts": 0.0,
             "last_entry_coin": "-",
             "last_calibrated_trade_count": 0,
@@ -88,7 +95,8 @@ class AutonomousEngine:
                 "total_ai_audits": 0,
                 "total_autonomous_opens": 0,
                 "total_vetoed_or_skipped": 0,
-                "total_self_evaluations": 0
+                "total_self_evaluations": 0,
+                "total_quant_validations": 0
             },
             "telemetry_feed": []
         }
@@ -265,7 +273,23 @@ class AutonomousEngine:
         in_cooldown = (now_ts - last_entry_ts) < cooldown_sec
         cooldown_rem_min = max(0, int((cooldown_sec - (now_ts - last_entry_ts)) / 60)) if in_cooldown else 0
 
+        # Circuit Breaker Checks:
+        # 1. Global Thermostat Circuit Breaker (loss streak >= 3 or daily DD >= 5%)
         cb_pause = bool(thermo.get("circuit_breaker_pause", False)) and now_ts < float(thermo.get("pause_until_ts", 0.0))
+
+        # 2. Intraday Stream Circuit Breaker (losses today >= max daily losses)
+        try:
+            from src.forward_test import ForwardTestManager
+            from src.profiles import get_profile
+            ft = ForwardTestManager()
+            losses_today = ft.count_losses_today("DAYTRADE")
+            prof_dt = get_profile("DAYTRADE")
+            max_dt_losses = prof_dt.get("max_daily_losses", 2)
+            intraday_cb_active = (losses_today >= max_dt_losses)
+        except Exception:
+            losses_today = 0
+            max_dt_losses = 2
+            intraday_cb_active = False
 
         # Gate evaluation uses Capital-Weighted Effective Slots so legacy $10 positions don't lock out $60+ idle cash
         can_open = True
@@ -330,6 +354,11 @@ class AutonomousEngine:
             "cooldown_rem_min": cooldown_rem_min,
             "can_open_new_position": can_open,
             "gate_summary": gate_summary,
+            "circuit_breaker_active": cb_pause or intraday_cb_active,
+            "intraday_cb_active": intraday_cb_active,
+            "intraday_losses_today": losses_today,
+            "intraday_max_losses": max_dt_losses,
+            "thermostat_cb_active": cb_pause,
             "thermostat": thermo
         }
 
@@ -548,6 +577,256 @@ class AutonomousEngine:
         return eval_report
 
     # ------------------------------------------------------------------
+    # 2.5 AUTONOMOUS WALK-FORWARD BACKTEST & FORWARD-TEST VALIDATOR
+    # ------------------------------------------------------------------
+    def run_periodic_backtest_and_forward_validation(
+        self,
+        mode: str = "FULL",
+        trigger_reason: str = "WEEKLY_SCHEDULE",
+        auto_apply: bool = True
+    ) -> Dict:
+        """
+        Autonomous Dual-Tier Walk-Forward Backtest & Live Forward-Test Validation Loop:
+        - Tier 1 (FORWARD_AUDIT — Every 24 Hours):
+            Evaluates Live Forward-Test Scorecard (Win Rate, Profit Factor, Expectancy, MFE/MAE, Avg R)
+            for both SWING and DAYTRADE streams and detects Strategy Drift against Backtest benchmarks.
+        - Tier 2 (FULL WALK-FORWARD BACKTEST — Every 7 Days, or Early-Trigger at 3 Days on Drift):
+            1. Runs Swing Daily/4H threshold optimization grid ([72, 75, 78, 80, 82]) on DuckDB read-only snapshot.
+            2. Runs Intraday 15m session & volume-climax validation grid on 15m candle cache.
+            3. Compares Backtest Expectation vs Live Forward-Test Realization (Reality Gap).
+            4. Auto-calibrates Thermostat score thresholds & adaptive indicator weights within safe guardrails.
+        """
+        now_ts = time.time()
+        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        state = self.load_state()
+        prev_rep = state.get("last_validation_report") or {}
+
+        # 1. Live Forward-Test Scorecard & Drift Detection (Always runs in both FORWARD_AUDIT and FULL modes)
+        journal = self.ft.load_journal()
+        ft_stats = self.ft.stream_stats(journal)
+        sw_ft = ft_stats.get("SWING", {})
+        dt_ft = ft_stats.get("DAYTRADE", {})
+
+        # Evaluate Forward-Test Drift
+        drift_alerts = []
+        drift_level = "ON_TRACK"
+        drift_badge = "🟢 ON-TRACK (Sesuai Ekspektasi Backtest)"
+
+        if int(sw_ft.get("closed", 0)) >= 3:
+            if float(sw_ft.get("win_rate", 0.0)) < 45.0 or float(sw_ft.get("profit_factor", 1.0)) < 1.0:
+                drift_alerts.append(
+                    f"SWING Forward-Test WR {sw_ft['win_rate']}% (PF {sw_ft['profit_factor']}) di bawah benchmark backtest (WR >= 55%)."
+                )
+        if int(dt_ft.get("closed", 0)) >= 3:
+            if float(dt_ft.get("win_rate", 0.0)) < 45.0 or float(dt_ft.get("profit_factor", 1.0)) < 1.0:
+                drift_alerts.append(
+                    f"INTRADAY Forward-Test WR {dt_ft['win_rate']}% (PF {dt_ft['profit_factor']}) di bawah benchmark backtest (WR >= 50%)."
+                )
+
+        if drift_alerts:
+            drift_level = "DRIFT_ALERT"
+            drift_badge = f"🔴 DRIFT DETECTED ({'; '.join(drift_alerts)})"
+        elif (int(sw_ft.get("closed", 0)) + int(dt_ft.get("closed", 0))) < 3:
+            drift_level = "COLLECTING_SAMPLE"
+            drift_badge = "🟡 COLLECTING DATA (Sampel Forward-Test Live masih dikumpulkan, mengacu pada Backtest)"
+
+        # Escalate FORWARD_AUDIT -> FULL if DRIFT_ALERT and at least 3 days (72h) passed since last backtest
+        last_bt_ts = float(state.get("last_backtest_ts", 0.0))
+        if mode == "FORWARD_AUDIT" and drift_level == "DRIFT_ALERT" and (now_ts - last_bt_ts) >= (3 * 86400):
+            mode = "FULL"
+            trigger_reason = "EARLY_DRIFT_TRIGGER_3D"
+
+        swing_bt_summary = prev_rep.get("swing_backtest") or {}
+        intraday_bt_summary = prev_rep.get("intraday_backtest") or {}
+        tuning_applied = []
+
+        # 2. Full Walk-Forward Historical Backtest (Swing Daily/4H + Intraday 15m)
+        if mode == "FULL" or not swing_bt_summary or not intraday_bt_summary:
+            # 2A. Swing Daily/4H Threshold Grid Backtest (Read-Only DuckDB Snapshot)
+            try:
+                from src.database import Database
+                from src.backtester import ShortBacktester
+                prof_sw = get_profile("SWING")
+                db_ro = Database(read_only=True)
+                try:
+                    bt = ShortBacktester(db_ro)
+                    candidate_thresholds = [72, 75, 78, 80, 82]
+                    best_sw_th = float(state["thermostat"].get("min_score_swing", 78.0))
+                    best_sw_metric = -1.0
+                    best_sw_res = None
+                    grid_rows = []
+
+                    for th in candidate_thresholds:
+                        r = bt.run_backtest(
+                            min_score=float(th),
+                            min_90d_gain=90.0,
+                            stop_loss_pct=float(prof_sw.get("sl_pct", 10.0)),
+                            trim_pct=float(prof_sw.get("trim_pct", 7.0)),
+                            take_profit_pct=float(prof_sw.get("tp2_pct", 18.0)),
+                            runner_tp_pct=float(prof_sw.get("runner_pct", 30.0)),
+                            max_hold_days=max(1, int(prof_sw.get("max_hold_hours", 72)) // 24),
+                            use_trimming=True
+                        )
+                        t_cnt = int(r.get("total_trades", 0))
+                        wr = float(r.get("win_rate", 0.0))
+                        sr = float(r.get("safe_rate", 0.0))
+                        pf = min(25.0, float(r.get("profit_factor", 0.0)))
+                        net_ret = float(r.get("net_return_pct", 0.0))
+                        grid_rows.append({
+                            "threshold": th,
+                            "trades": t_cnt,
+                            "win_rate": wr,
+                            "safe_rate": sr,
+                            "profit_factor": round(float(r.get("profit_factor", 0.0)), 2),
+                            "net_return_pct": net_ret
+                        })
+                        # Prefer threshold >= 75 with at least 4 trades that maximizes PF * SafeRate
+                        if th >= 75 and t_cnt >= 4:
+                            score_metric = (pf * (sr / 100.0)) + (net_ret * 0.02)
+                            if score_metric > best_sw_metric:
+                                best_sw_metric = score_metric
+                                best_sw_th = float(th)
+                                best_sw_res = r
+
+                    if best_sw_res is None and grid_rows:
+                        # Fallback to threshold 78
+                        for g in grid_rows:
+                            if g["threshold"] == 78:
+                                best_sw_res = g
+                                break
+                        if best_sw_res is None:
+                            best_sw_res = grid_rows[0]
+
+                    swing_bt_summary = {
+                        "evaluated_at": now_str,
+                        "optimal_min_score": best_sw_th,
+                        "total_trades": int(best_sw_res.get("total_trades", best_sw_res.get("trades", 0))),
+                        "win_rate_pct": float(best_sw_res.get("win_rate", 0.0)),
+                        "safe_rate_pct": float(best_sw_res.get("safe_rate", 0.0)),
+                        "profit_factor": round(float(best_sw_res.get("profit_factor", 0.0)), 2),
+                        "net_return_pct": float(best_sw_res.get("net_return_pct", 0.0)),
+                        "threshold_grid": grid_rows
+                    }
+                finally:
+                    db_ro.close()
+            except Exception as e:
+                swing_bt_summary = {"error": str(e), "optimal_min_score": 78.0}
+
+            # 2B. Intraday 15m Walk-Forward Backtest (Calibrated SL 2.5-4.5%, TP1 1R, TP2 2R, 6h)
+            try:
+                from src.daytrade_engine import IntradayDaytradeEngine
+                dt_eng = IntradayDaytradeEngine()
+                data_map = dt_eng.load_or_fetch_15m_cache()
+                r_std = dt_eng.run_intraday_backtest(
+                    session_filter="LONDON_NY", tp1_r=1.0, tp2_r=2.0,
+                    max_hold_hours=6, min_sl_pct=2.5, max_sl_pct=4.5,
+                    require_vol_climax=True, data_map=data_map
+                )
+                r_noclx = dt_eng.run_intraday_backtest(
+                    session_filter="LONDON_NY", tp1_r=1.0, tp2_r=2.0,
+                    max_hold_hours=6, min_sl_pct=2.5, max_sl_pct=4.5,
+                    require_vol_climax=False, data_map=data_map
+                )
+                r_gold = dt_eng.run_intraday_backtest(
+                    session_filter="GOLDEN_OVERLAP", tp1_r=1.0, tp2_r=2.0,
+                    max_hold_hours=6, min_sl_pct=2.5, max_sl_pct=4.5,
+                    require_vol_climax=False, data_map=data_map
+                )
+                # Choose best intraday config & recommended min_score_intraday
+                best_dt_res = r_std if float(r_std.get("profit_factor", 0)) >= float(r_noclx.get("profit_factor", 0)) else r_noclx
+                opt_dt_score = 75.0
+                if drift_level == "DRIFT_ALERT" and int(dt_ft.get("closed", 0)) >= 3 and float(dt_ft.get("win_rate", 50.0)) < 45.0:
+                    opt_dt_score = 78.0  # Tighten Intraday threshold if live forward-test shows low WR
+
+                intraday_bt_summary = {
+                    "evaluated_at": now_str,
+                    "optimal_min_score": opt_dt_score,
+                    "best_session_mode": "LONDON_NY + Vol Climax" if best_dt_res is r_std else "LONDON_NY Standard",
+                    "total_trades": int(best_dt_res.get("total_trades", 0)),
+                    "win_rate_pct": float(best_dt_res.get("win_rate", 0.0)),
+                    "safe_rate_pct": float(best_dt_res.get("safe_rate", 0.0)),
+                    "profit_factor": float(best_dt_res.get("profit_factor", 0.0)),
+                    "avg_r": float(best_dt_res.get("avg_r", 0.0)),
+                    "net_return_pct": float(best_dt_res.get("net_return_pct", 0.0)),
+                    "avg_hold_hours": float(best_dt_res.get("avg_hours", 0.0)),
+                    "golden_overlap_pf": float(r_gold.get("profit_factor", 0.0))
+                }
+            except Exception as e:
+                intraday_bt_summary = {"error": str(e), "optimal_min_score": 75.0}
+
+            state["last_backtest_ts"] = now_ts
+            state["last_backtest_time"] = now_str
+
+            # 3. Closed-Loop Parameter Auto-Calibration (Bounded within Safe Guardrails)
+            if auto_apply and state["thermostat"].get("mode") not in ("CIRCUIT_BREAKER", "DEFENSIVE_SHIELD"):
+                opt_sw = float(swing_bt_summary.get("optimal_min_score", 78.0))
+                opt_dt = float(intraday_bt_summary.get("optimal_min_score", 75.0))
+                # Clamp to safe institutional bounds [75.0, 82.0] for Swing, [72.0, 80.0] for Intraday
+                new_sw_score = max(75.0, min(82.0, opt_sw))
+                new_dt_score = max(72.0, min(80.0, opt_dt))
+
+                old_sw = float(state["thermostat"].get("min_score_swing", 78.0))
+                old_dt = float(state["thermostat"].get("min_score_intraday", 75.0))
+                if new_sw_score != old_sw:
+                    state["thermostat"]["min_score_swing"] = new_sw_score
+                    tuning_applied.append(f"min_score_swing: {old_sw:.1f} -> {new_sw_score:.1f}")
+                if new_dt_score != old_dt:
+                    state["thermostat"]["min_score_intraday"] = new_dt_score
+                    tuning_applied.append(f"min_score_intraday: {old_dt:.1f} -> {new_dt_score:.1f}")
+
+            # Also run Adaptive Screener Weight Calibration
+            try:
+                from src.adaptive_weights import run_calibration
+                run_calibration("SWING")
+                run_calibration("DAYTRADE")
+                tuning_applied.append("Adaptive Indicator Weights Recalibrated")
+            except Exception:
+                pass
+
+        state["last_forward_audit_ts"] = now_ts
+        state["last_forward_audit_time"] = now_str
+        state["stats"]["total_quant_validations"] = int(state["stats"].get("total_quant_validations", 0)) + 1
+
+        validation_report = {
+            "validated_at": now_str,
+            "mode": mode,
+            "trigger_reason": trigger_reason,
+            "schedule_policy": "Forward-Test Audit: Tiap 24 Jam (Harian) | Full Walk-Forward Backtest: Tiap 7 Hari (Mingguan) + Early-Trigger 3 Hari jika Drift",
+            "drift_level": drift_level,
+            "drift_badge": drift_badge,
+            "forward_test_live": {
+                "SWING": sw_ft,
+                "DAYTRADE": dt_ft
+            },
+            "swing_backtest": swing_bt_summary,
+            "intraday_backtest": intraday_bt_summary,
+            "tuning_applied": tuning_applied if tuning_applied else ["Parameter optimal sudah sinkron (tidak ada perubahan ekstrem)"]
+        }
+
+        state["last_validation_report"] = validation_report
+        self.save_state(state)
+
+        # Persist standalone quant validation report JSON for dashboard & War Room inspection
+        try:
+            rep_path = os.path.join(ROOT_DIR, "data", "quant_validation_report.json")
+            tmp_p = rep_path + ".tmp"
+            with open(tmp_p, "w") as f:
+                json.dump(validation_report, f, indent=2)
+            os.replace(tmp_p, rep_path)
+        except Exception:
+            pass
+
+        sw_pf = swing_bt_summary.get("profit_factor", "-")
+        dt_pf = intraday_bt_summary.get("profit_factor", "-")
+        self.log_telemetry(
+            category="QUANT_VALID",
+            action=f"Validasi {mode} ({trigger_reason})",
+            detail=f"BT Swing PF:{sw_pf} (WR:{swing_bt_summary.get('win_rate_pct','-')}%) | BT Intraday PF:{dt_pf} (WR:{intraday_bt_summary.get('win_rate_pct','-')}%) | Status: {drift_level}",
+            equity=float(self.trader.get_account_state().get("equity", 0.0))
+        )
+        return validation_report
+
+    # ------------------------------------------------------------------
     # 3. AUTONOMOUS HUNTER & STRICT GRADE-A SNIPER EXECUTION
     # ------------------------------------------------------------------
     def run_autonomous_hunt_if_due(self, force: bool = False) -> Dict:
@@ -566,10 +845,20 @@ class AutonomousEngine:
         except Exception:
             pass
 
-        #Check periodic self-evaluation (every 6 hours)
+        # Check periodic self-evaluation (every 6 hours)
         eval_interval_sec = int(state.get("self_eval_interval_hours", 6)) * 3600
         if (now_ts - float(state.get("last_eval_ts", 0.0))) >= eval_interval_sec:
             self.run_self_evaluation(trigger_reason="PERIODIC_6H")
+            state = self.load_state()
+
+        # Check Periodic Walk-Forward Backtest (Every 7 Days) & Daily Forward-Test Audit (Every 24 Hours)
+        bt_interval_sec = int(state.get("backtest_interval_days", 7)) * 86400
+        ft_interval_sec = int(state.get("forward_audit_interval_hours", 24)) * 3600
+        if (now_ts - float(state.get("last_backtest_ts", 0.0))) >= bt_interval_sec:
+            self.run_periodic_backtest_and_forward_validation(mode="FULL", trigger_reason="WEEKLY_7D_WALK_FORWARD")
+            state = self.load_state()
+        elif (now_ts - float(state.get("last_forward_audit_ts", 0.0))) >= ft_interval_sec:
+            self.run_periodic_backtest_and_forward_validation(mode="FORWARD_AUDIT", trigger_reason="DAILY_24H_FORWARD_AUDIT")
             state = self.load_state()
 
         hunt_interval_sec = int(state.get("hunt_interval_minutes", 30)) * 60
@@ -1076,12 +1365,54 @@ class AutonomousEngine:
             lines.append("  • Belum ada rapor evaluasi. Akan otomatis dieksekusi pada siklus pertama.")
         lines.append("-" * 80)
 
+        # Section 3.5: Periodic Walk-Forward Backtest & Live Forward-Test Validation
+        val_rep = state.get("last_validation_report") or {}
+        bt_days = int(state.get("backtest_interval_days", 7))
+        ft_hrs = int(state.get("forward_audit_interval_hours", 24))
+        last_bt_ts = float(state.get("last_backtest_ts", 0.0))
+        last_ft_ts = float(state.get("last_forward_audit_ts", 0.0))
+        next_bt_h = max(0, int(((bt_days * 86400) - (now_ts - last_bt_ts)) / 3600)) if last_bt_ts > 0 else 0
+        next_ft_h = max(0, int(((ft_hrs * 3600) - (now_ts - last_ft_ts)) / 3600)) if last_ft_ts > 0 else 0
+
+        lines.append("🔬 RAPOR PERIODIC WALK-FORWARD BACKTEST & FORWARD-TEST MANDIRI:")
+        lines.append(
+            f"  • Jadwal Validasi Mandiri  : Forward-Test Audit tiap {ft_hrs}j (dlm ~{next_ft_h}j) | Walk-Forward Backtest tiap {bt_days} Hari (dlm ~{next_bt_h}j / 3h jika Drift)"
+        )
+        if val_rep:
+            sw_bt = val_rep.get("swing_backtest") or {}
+            dt_bt = val_rep.get("intraday_backtest") or {}
+            ft_live = val_rep.get("forward_test_live") or {}
+            sw_ft = ft_live.get("SWING") or {}
+            dt_ft = ft_live.get("DAYTRADE") or {}
+            lines.append(
+                f"  • Validasi Terakhir        : {val_rep.get('validated_at', '-')} [{val_rep.get('mode', 'FULL')} | {val_rep.get('trigger_reason', '-')}]"
+            )
+            lines.append(f"  • Status Reality-Gap/Drift : {val_rep.get('drift_badge', '-')}")
+            lines.append(
+                f"  • Backtest 🌊 SWING (95d)  : {sw_bt.get('total_trades', 0)} Trades | WR: {sw_bt.get('win_rate_pct', 0)}% (Safe: {sw_bt.get('safe_rate_pct', 0)}%) "
+                f"| PF: {sw_bt.get('profit_factor', 0)} | Net: {sw_bt.get('net_return_pct', 0):+.1f}% | Opt Score >= {sw_bt.get('optimal_min_score', 78.0)}"
+            )
+            lines.append(
+                f"  • Backtest ⚡ INTRADAY(15m): {dt_bt.get('total_trades', 0)} Trades | WR: {dt_bt.get('win_rate_pct', 0)}% (Safe: {dt_bt.get('safe_rate_pct', 0)}%) "
+                f"| PF: {dt_bt.get('profit_factor', 0)} | AvgR: {dt_bt.get('avg_r', 0):+.2f}R | Mode: {dt_bt.get('best_session_mode', 'LONDON_NY')}"
+            )
+            lines.append(
+                f"  • Forward-Test Live Aktual : 🌊 SWING (Open:{sw_ft.get('open',0)} Closed:{sw_ft.get('closed',0)} WR:{sw_ft.get('win_rate',0)}% Net:${sw_ft.get('realized_usd',0):+.2f}) "
+                f"| ⚡ INTRADAY (Open:{dt_ft.get('open',0)} Closed:{dt_ft.get('closed',0)} WR:{dt_ft.get('win_rate',0)}% Net:${dt_ft.get('realized_usd',0):+.2f})"
+            )
+            tunings = val_rep.get("tuning_applied") or []
+            if tunings:
+                lines.append(f"  • Kalibrasi Mandiri        : {', '.join(tunings)}")
+        else:
+            lines.append("  • Belum ada rapor Walk-Forward Backtest. Akan otomatis dieksekusi pada siklus daemon berikutnya.")
+        lines.append("-" * 80)
+
         # Section 4: Telemetry & Execution Statistics
         lines.append(
             f"📡 TELEMETRI KEPUTUSAN AI MANDIRI "
             f"(Hunt: {stats.get('total_hunt_cycles', 0)}x | Scan: {stats.get('total_scans_executed', 0)}x | "
             f"Audit AI: {stats.get('total_ai_audits', 0)}x | Auto-Open Grade A: {stats.get('total_autonomous_opens', 0)}x | "
-            f"Self-Eval: {stats.get('total_self_evaluations', 0)}x):"
+            f"Self-Eval: {stats.get('total_self_evaluations', 0)}x | Validasi BT/FT: {stats.get('total_quant_validations', 0)}x):"
         )
         lines.append(f"  • Status Siklus Hunt Terakhir ({state.get('last_hunt_time', '-')}): {state.get('last_hunt_status', '-')}")
 
