@@ -188,9 +188,38 @@ class LongScreener:
             if is_dilution_veto:
                 score -= 35
 
+            # Pillar 7: Claude_Crypto BMS (Bottom Momentum Score) & Crash Gate
+            from src.claude_crypto_engine import ClaudeCryptoEngine
+            sector_data = ClaudeCryptoEngine.get_coin_sector(symbol)
+            bms_data = ClaudeCryptoEngine.compute_bms(df_d)
+            crash_gate = ClaudeCryptoEngine.check_crash_gate(df_d, bms_data)
+            drs_data = ClaudeCryptoEngine.compute_drs(df_d, funding_rate=funding_rate)
+            phase_data = ClaudeCryptoEngine.classify_phase(df_d, bms_data, drs_data)
+
+            # 7a. Solid Whale Accumulation Base (Claude_Crypto BMS >= 70)
+            if bms_data["is_solid_base"]:
+                score += 15
+            elif bms_data["bms"] >= 60.0:
+                score += 8
+            elif bms_data["is_breakdown_freefall"]:
+                # Statistical edge: BMS < 30 underperforms market severely (p=0.001)
+                score -= 20
+
+            # 7b. Phase Confluence
+            if phase_data["phase"] == "P3/P4 Whale Accumulation":
+                score += 10
+            elif phase_data["phase"] == "P1 Capitulation":
+                score -= 25  # Veto: falling knife without base
+
+            # 7c. Crash Gate
+            is_crash_gate_fail = False
+            if not crash_gate["passed"]:
+                score -= 25
+                is_crash_gate_fail = True
+
             # Clamp score
             score = max(0.0, min(100.0, score))
-            if ex["is_falling_knife"] or is_dilution_veto:
+            if ex["is_falling_knife"] or is_dilution_veto or is_crash_gate_fail:
                 score = min(score, 45.0)
 
             if score >= min_score or (has_absorption and has_reclaim and score >= 40.0):
@@ -209,7 +238,13 @@ class LongScreener:
                     "dilution": dilution_label,
                     "funding_rate": f"{funding_rate:.6f}",
                     "vol_24h_m": round(volume_24h / 1_000_000, 2),
-                    "_is_falling_knife": ex["is_falling_knife"],
+                    "sector": sector_data["label"],
+                    "sector_badge": sector_data["badge"],
+                    "bms_score": bms_data["bms"],
+                    "drs_score": drs_data["drs"],
+                    "crash_gate": crash_gate["status"],
+                    "phase": phase_data["badge"],
+                    "_is_falling_knife": ex["is_falling_knife"] or is_crash_gate_fail,
                     "_has_reclaim": has_reclaim,
                     "_is_dilution_veto": is_dilution_veto
                 })

@@ -350,6 +350,9 @@ class AutoHuntSniper:
         score = float(r.get("score", 75.0))
         f_rate = float(r.get("funding_1h_pct", 0.0))
 
+        from src.claude_crypto_engine import ClaudeCryptoEngine
+        sec_info = ClaudeCryptoEngine.get_coin_sector(coin)
+
         badge = "⚡ INTRADAY SHORT" if side == "SHORT" else "⚡ INTRADAY LONG"
         reasons = r.get("reasons", [])
         if isinstance(reasons, str):
@@ -377,6 +380,8 @@ class AutoHuntSniper:
             "reasons": reasons,
             "pinbar_type": "BULLISH_WICK" if side == "LONG" else "BEARISH_PINBAR",
             "bos_status": "CHoCH_CONFIRMED" if r.get("bos_detected") else "PENDING",
+            "sector": sec_info["label"],
+            "sector_badge": sec_info["badge"],
             "max_hold_hours": 6,
             "timeframe": "15-Menit"
         }
@@ -407,6 +412,9 @@ class AutoHuntSniper:
             badge = "🚀 SWING LONG"
             reasons = [f"Diskon: -{pb_pct}%", f"Jarum Bawah: {r.get('wick_pct', 0)}%", f"Reclaim D1: {r.get('reclaim_d1', 'YA')}"]
 
+        from src.claude_crypto_engine import ClaudeCryptoEngine
+        sec_info = ClaudeCryptoEngine.get_coin_sector(coin)
+
         return {
             "coin": coin,
             "side": side,
@@ -426,6 +434,12 @@ class AutoHuntSniper:
             "verdict": r.get("verdict", "SIAP SWING"),
             "funding_1h": 0.0,
             "squeeze_risk": r.get("squeeze_risk", "NORMAL"),
+            "sector": r.get("sector", sec_info["label"]),
+            "sector_badge": r.get("sector_badge", sec_info["badge"]),
+            "bms_score": r.get("bms_score"),
+            "drs_score": r.get("drs_score"),
+            "crash_gate": r.get("crash_gate"),
+            "phase": r.get("phase"),
             "reasons": reasons,
             "max_hold_hours": 72,
             "timeframe": "Daily / 4H"
@@ -434,7 +448,7 @@ class AutoHuntSniper:
     def _compute_alpha_score(self, cand: Dict, session_info: Dict) -> float:
         """
         Calculates unified multi-factor ranking score:
-        Score * RRR factor * Session Factor * Funding Alignment
+        Score * RRR factor * Session Factor * Funding Alignment * Claude_Crypto Phase
         """
         score = cand["score"]
         rrr = cand.get("rrr", 1.8)
@@ -458,5 +472,14 @@ class AutoHuntSniper:
             alpha += 3.0  # Longs pay shorts (favorable yield)
         elif cand["side"] == "LONG" and f_rate < -0.005:
             alpha += 3.0  # Shorts pay longs & potential squeeze pump
+
+        # Claude_Crypto Phase Confluence Bonus
+        phase = str(cand.get("phase", ""))
+        if "P7 DISTRIBUSI" in phase and cand["side"] == "SHORT":
+            alpha += 4.0
+        elif "P3/P4 AKUMULASI" in phase and cand["side"] == "LONG":
+            alpha += 4.0
+        elif cand.get("bms_score") is not None and float(cand["bms_score"]) < 30.0 and cand["side"] == "SHORT":
+            alpha += 3.0  # Claude_Crypto statistical short edge (BMS < 30, p=0.001)
 
         return round(alpha, 1)

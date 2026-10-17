@@ -123,6 +123,12 @@ def print_header():
                 f"| Peluru: ${gov['min_order_margin']:,.2f}–${gov['max_order_margin']:,.2f} | Thermostat: {thermo.get('mode', 'OPTIMAL')}"
             )
 
+            # Claude_Crypto Sector Diversification
+            sec_dist = gov.get("sector_distribution", {})
+            if sec_dist:
+                sec_items = [f"{v}x {k}" for k, v in sorted(sec_dist.items(), key=lambda x: -x[1])]
+                print(f"🌐 Sektor Portofolio   : {' | '.join(sec_items)} (Diversifikasi Claude_Crypto, batas 2/sektor)")
+
             # Circuit Breaker Status (Intraday & Global Thermostat)
             is_intraday_cb = bool(gov.get("intraday_cb_active", False))
             is_thermo_cb = bool(gov.get("thermostat_cb_active", False))
@@ -168,7 +174,7 @@ def print_header():
                 open_orders = trader.get_open_orders()
 
                 cols = [
-                    ('KOIN', 6, 'center'),
+                    ('KOIN [SEKTOR]', 13, 'center'),
                     ('POSISI', 12, 'center'),
                     ('MARGIN (SZ)', 16, 'right'),
                     ('ENTRY ➔ HARGA', 28, 'left'),
@@ -290,8 +296,12 @@ def print_header():
                     else:
                         tp2_str = f"${fmt_price(t2_target)} ({dist_tp2:.1f}%)"
 
+                    from src.claude_crypto_engine import ClaudeCryptoEngine
+                    c_sec = ClaudeCryptoEngine.get_coin_sector(coin)["badge"].split()[-1]
+                    coin_display = f"{coin} [{c_sec}]"
+
                     cells = [
-                        f" {pad_str(coin, cols[0][1], cols[0][2])} ",
+                        f" {pad_str(coin_display, cols[0][1], cols[0][2])} ",
                         f" {pad_str(pos_badge, cols[1][1], cols[1][2])} ",
                         f" {pad_str(margin_str, cols[2][1], cols[2][2])} ",
                         f" {pad_str(px_str, cols[3][1], cols[3][2])} ",

@@ -244,6 +244,14 @@ class AutonomousEngine:
             else:
                 short_coins.append(c)
 
+        # Claude_Crypto Sector Distribution Tracking
+        from src.claude_crypto_engine import ClaudeCryptoEngine
+        sector_distribution = {}
+        for c in active_coins:
+            sec_info = ClaudeCryptoEngine.get_coin_sector(c)
+            s_lbl = sec_info["label"]
+            sector_distribution[s_lbl] = sector_distribution.get(s_lbl, 0) + 1
+
         max_pos = slot_plan["max_positions"]
         base_max_swing = slot_plan["max_swing"]
         max_intraday = slot_plan["max_intraday"]
@@ -359,6 +367,7 @@ class AutonomousEngine:
             "intraday_losses_today": losses_today,
             "intraday_max_losses": max_dt_losses,
             "thermostat_cb_active": cb_pause,
+            "sector_distribution": sector_distribution,
             "thermostat": thermo
         }
 
@@ -964,6 +973,14 @@ class AutonomousEngine:
                 skip_logs.append(f"{coin} (SHORT): Batas arah SHORT penuh ({gov['short_count']}/{gov['max_directional']})")
                 continue
 
+            # Check Claude_Crypto Sector Diversification Guard (Max 2 positions per sector)
+            sec_info = ClaudeCryptoEngine.get_coin_sector(coin)
+            sec_label = sec_info["label"]
+            sec_count = gov.get("sector_distribution", {}).get(sec_label, 0)
+            if sec_count >= 2:
+                skip_logs.append(f"{coin} ({sec_label}): Batas diversifikasi sektor tercapai ({sec_count}/2 posisi {sec_label} aktif)")
+                continue
+
             # Passed quantitative & portfolio guards -> Run AI Gatekeeper Audit
             audit = sniper.audit_candidate(cand, equity)
             state = self.load_state()
@@ -1019,6 +1036,10 @@ class AutonomousEngine:
         )
         audit_margin = float(selected_audit.get("final_margin", gov["slot_base_margin"])) * float(thermo.get("sizing_mult", 1.0))
         rec_margin = max(audit_margin, float(gov_target_margin))
+
+        # Apply Claude_Crypto Sector Sizing Multiplier (0.85x for Meme/High-Beta, 1.05x for Structural L1/DeFi)
+        sec_mult = float(sec_info.get("sizing_mult", 1.0))
+        rec_margin = rec_margin * sec_mult
 
         # Clamp strictly to governor [min_order_margin, max_order_margin] and Free Margin above 15% Reserve!
         order_margin = max(gov["min_order_margin"], min(rec_margin, gov["max_order_margin"], gov["free_above_reserve"]))

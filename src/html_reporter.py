@@ -476,9 +476,12 @@ def generate_html_report(output_path: str = OUTPUT_HTML) -> str:
             pnl_cls = "pnl-pos" if pnl > 0 else "pnl-neg" if pnl < 0 else "pnl-zero"
             drop_cls = "pnl-pos" if drop_pct > 0 else "pnl-neg" if drop_pct < 0 else "pnl-zero"
 
+            from src.claude_crypto_engine import ClaudeCryptoEngine
+            c_sec = ClaudeCryptoEngine.get_coin_sector(coin)
+
             html += f"""
                     <tr>
-                        <td><strong>{coin}</strong></td>
+                        <td><strong>{coin}</strong> <span class="pill" style="font-size:0.65rem; background:rgba(255,255,255,0.06); color:#94a3b8; border:1px solid rgba(255,255,255,0.12); margin-left:4px;">{c_sec['badge']}</span></td>
                         <td>{strat_pill}</td>
                         <td>{side_pill}</td>
                         <td>${entry_px:.5f} <span style="color:var(--text-muted);">➔</span> ${cur_px:.5f}</td>
@@ -614,6 +617,11 @@ def generate_html_report(output_path: str = OUTPUT_HTML) -> str:
                 <div class="metric-label">Ukuran Peluru f(E)</div>
                 <div class="metric-value">${gov.get('min_order_margin', 12.0):.2f} – ${gov.get('max_order_margin', 18.0):.2f}</div>
                 <div class="metric-sub">Slot Base: ${gov.get('slot_base_margin', 15.0):.2f} USDC</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Diversifikasi Sektor (Claude_Crypto)</div>
+                <div class="metric-value" style="font-size:1.05rem;">{len(gov.get('sector_distribution', {}))} Sektor Aktif</div>
+                <div class="metric-sub">{', '.join([f'{k}: {v}' for k, v in sorted(gov.get('sector_distribution', {}).items(), key=lambda x: -x[1])]) or 'Menunggu entry'} (Maks 2/sektor)</div>
             </div>
         </div>
         <div class="table-card" style="padding:16px; margin-bottom:24px;">

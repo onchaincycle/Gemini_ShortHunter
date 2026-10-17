@@ -229,6 +229,26 @@ class ShortScreener:
             elif dilution_label == "MODERATE_DILUTION":
                 score += 5
 
+            # Pillar 8: Claude_Crypto Quantitative Intelligence (DRS, BMS, & Phase)
+            from src.claude_crypto_engine import ClaudeCryptoEngine
+            sector_data = ClaudeCryptoEngine.get_coin_sector(symbol)
+            bms_data = ClaudeCryptoEngine.compute_bms(df_d)
+            drs_data = ClaudeCryptoEngine.compute_drs(df_d, funding_rate=funding_rate, oi_vol_ratio=oi_vol_ratio)
+            phase_data = ClaudeCryptoEngine.classify_phase(df_d, bms_data, drs_data)
+
+            # 8a. Distribution Phase & High DRS (Institutional Dump Confirmation)
+            if phase_data["phase"] == "P7 Distribution" or drs_data["is_distributing"]:
+                score += 15
+            elif drs_data["drs"] >= 50.0:
+                score += 8
+
+            # 8b. Statistical Edge from Claude_Crypto: BMS < 30 (p=0.001) confirms zero-base freefall
+            if bms_data["is_breakdown_freefall"]:
+                score += 10
+            elif bms_data["is_solid_base"]:
+                # Danger: Multi-retest whale accumulation base present, penalize shorting into base
+                score -= 15
+
             # Cap score if stale/oversold so it never masquerades as a top candidate
             if ex["is_stale_or_oversold"]:
                 score = min(score, 45.0)
@@ -259,6 +279,11 @@ class ShortScreener:
                     "dilution": dilution_label,
                     "funding_rate": f"{funding_rate:.6f}",
                     "vol_24h_m": round(volume_24h / 1_000_000, 2),
+                    "sector": sector_data["label"],
+                    "sector_badge": sector_data["badge"],
+                    "drs_score": drs_data["drs"],
+                    "bms_score": bms_data["bms"],
+                    "phase": phase_data["badge"],
                     "_is_stale": ex["is_stale_or_oversold"],
                     "_has_breakdown": has_breakdown
                 })
