@@ -334,6 +334,54 @@ def print_header():
             else:
                 print("📊 Posisi Aktif        : Tidak ada posisi terbuka (Mode Cash)")
 
+            # Tampilkan kepemilikan koin SPOT di Menu Home jika ada
+            try:
+                from src.spot_macro_vault import SpotMacroVault
+                spot_audit = SpotMacroVault.get_spot_portfolio_audit()
+                spot_holdings = spot_audit.get("holdings", [])
+                if spot_holdings:
+                    print(f"\n🏛️  PORTOFOLIO SPOT VAULT ({len(spot_holdings)} KOIN AKTIF - ZERO LEVERAGE):")
+                    s_cols = [
+                        ('KOIN [TIER]', 15, 'center'),
+                        ('JUMLAH', 14, 'right'),
+                        ('MODAL BELI', 14, 'right'),
+                        ('HARGA BELI ➔ NOW', 26, 'left'),
+                        ('PnL SPOT (ROE%)', 18, 'right'),
+                        ('STATUS EXIT / WHALE', 22, 'left'),
+                    ]
+                    s_widths = [c[1] for c in s_cols]
+                    s_top = "┌" + "┬".join("─" * (w + 2) for w in s_widths) + "┐"
+                    s_mid = "├" + "┼".join("─" * (w + 2) for w in s_widths) + "┤"
+                    s_bot = "└" + "┴".join("─" * (w + 2) for w in s_widths) + "┘"
+                    print(s_top)
+                    print("│" + "│".join(f" {pad_str(c[0], c[1], 'center')} " for c in s_cols) + "│")
+                    print(s_mid)
+                    for sh in spot_holdings:
+                        s_sym = f"{sh['symbol']} [{sh.get('tier', 'SPOT')}]"
+                        s_amt = f"{sh['amount']:,.4f}"
+                        s_inv = f"${sh['invested_usd']:,.2f}"
+                        s_pxs = f"${sh['avg_buy_price']:,.4f} ➔ ${sh['current_price']:,.4f}"
+                        s_pnl = sh['unrealized_pnl']
+                        s_pnl_pct = sh['unrealized_pnl_pct']
+                        s_clr = green if s_pnl >= 0 else red
+                        s_alert = sh.get('status_alert', '🟢 HOLD')
+                        s_cells = [
+                            f" {pad_str(s_sym, s_cols[0][1], s_cols[0][2])} ",
+                            f" {pad_str(s_amt, s_cols[1][1], s_cols[1][2])} ",
+                            f" {pad_str(s_inv, s_cols[2][1], s_cols[2][2])} ",
+                            f" {pad_str(s_pxs, s_cols[3][1], s_cols[3][2])} ",
+                            f" {s_clr}{pad_str(f'${s_pnl:+,.2f} ({s_pnl_pct:+.1f}%)', s_cols[4][1], s_cols[4][2])}{reset} ",
+                            f" {pad_str(s_alert, s_cols[5][1], s_cols[5][2])} ",
+                        ]
+                        print("│" + "│".join(s_cells) + "│")
+                    print(s_bot)
+                    s_val = spot_audit.get('total_current_value', 0.0)
+                    s_tot_pnl = spot_audit.get('total_unrealized_pnl', 0.0)
+                    s_tot_clr = green if s_tot_pnl >= 0 else red
+                    print(f"Total Investasi: ${spot_audit.get('total_invested', 0.0):,.2f} | Nilai Spot: ${s_val:,.2f} ({s_tot_clr}${s_tot_pnl:+,.2f}{reset})\n")
+            except Exception:
+                pass
+
             # Show compact summary of recently CLOSED positions from Forward Test Journal
             try:
                 from src.forward_test import ForwardTestManager
@@ -2272,10 +2320,13 @@ def menu_macro_spot_vault():
         print("  [2] 🌱 Radar Akumulasi Spot Baru (Kandidat Prime & Challenger SCR v10)")
         print("  [3] ⚠️  Periksa Peringatan Panen / De-risking (DRS >= 55)")
         print("  [4] 🌐 Sinkronkan ke Dashboard Web & HTML Reporter")
+        print("  [5] 🛒 Rencana & Eksekusi Pembelian DCA SPOT 3-Tranche (Smart DCA)")
+        print("  [6] 🎯 Evaluator Exit Bertahap Multi-Tier (Whale DRS & Cycle Peak)")
+        print("  [7] ⚖️  Portofolio Sizer Master (Breakdown Alokasi Modal 3 Stream)")
         print("  [0] ↩️  Kembali ke Menu Utama")
         print("-" * 78)
 
-        ch = input("Pilihan Anda [0-4]: ").strip()
+        ch = input("Pilihan Anda [0-7]: ").strip()
         if ch == "1":
             clear_screen()
             print("=" * 78)
@@ -2331,6 +2382,223 @@ def menu_macro_spot_vault():
             hp = generate_html_report()
             print(f"[✓] Berhasil di-generate di: {hp}")
             input("\nTekan ENTER untuk kembali...")
+        elif ch == "5":
+            clear_screen()
+            from src.spot_strategy_engine import SpotStrategyEngine
+            from src.portfolio_sizer import PortfolioSizer
+            from src.trader import HyperliquidTrader
+
+            # 1. Baca total saldo riil dari Hyperliquid & hitung porsi Spot (55%)
+            acct = {}
+            eq_live = 0.0
+            avail_live = 0.0
+            hl_connected = False
+            try:
+                hl = HyperliquidTrader()
+                if hl.is_configured():
+                    acct = hl.get_account_state()
+                    eq_live = float(acct.get("equity", 0.0))
+                    avail_live = float(acct.get("available", 0.0))
+                    if eq_live > 0:
+                        hl_connected = True
+            except Exception:
+                pass
+
+            if not hl_connected:
+                print("⚠️  Akun Hyperliquid belum terhubung atau saldo live $0.00.")
+                user_eq_str = input("Masukkan estimasi Total Saldo Modal Anda (USD) [default 1000.0]: ").strip()
+                try:
+                    eq_live = float(user_eq_str) if user_eq_str else 1000.0
+                except ValueError:
+                    eq_live = 1000.0
+                avail_live = eq_live
+
+            alloc = PortfolioSizer.calculate_allocation(eq_live)
+            spot_alloc = alloc["spot"]
+            total_spot_budget = spot_alloc["budget_usd"]
+            base_rec_budget = spot_alloc["budget_per_coin"]
+            num_coins = spot_alloc["num_coins"]
+
+            # Hitung modal spot yang sudah terpakai di portfolio.csv
+            spot_used = audit.get("total_invested", 0.0)
+            spot_remaining = max(0.0, total_spot_budget - spot_used)
+
+            print("=" * 78)
+            print("   🛒 RENCANA & EKSEKUSI PEMBELIAN DCA SPOT 3-TRANCHE (SMART DCA)    ")
+            print("=" * 78)
+            print(f"💰 STATUS MODAL & ALOKASI SPOT (Live Hyperliquid):")
+            print(f"   • Total Saldo Ekuitas      : ${eq_live:,.2f}")
+            print(f"   • Porsi Alokasi Spot (55%) : ${total_spot_budget:,.2f} (Target {num_coins} koin @ base ${base_rec_budget:,.2f}/koin)")
+            print(f"   • Modal Spot Terpakai      : ${spot_used:,.2f} ({len(audit.get('holdings', []))} koin aktif)")
+            print(f"   • Sisa Kuota Modal Spot    : ${spot_remaining:,.2f}")
+            if avail_live > 0 and hl_connected:
+                print(f"   • Kas Bebas Tersedia       : ${avail_live:,.2f}")
+            print("-" * 78)
+
+            cands = SpotStrategyEngine.select_accumulation_candidates(limit=6)
+            if cands:
+                print("Top Rekomendasi Koin Akumulasi Terkini (scr.db):")
+                for idx, cd in enumerate(cands, 1):
+                    print(f"  [{idx}] {cd['symbol']} ({cd['name']}) ➔ ${cd['price']:,.4f} | SS: {cd['ss']} | ES (Paus): {cd['es']} | DRS: {cd['drs']}")
+                    print(f"      Tier: {cd['badge']}")
+            sym_in = input("\nMasukkan Simbol Koin (misal: SUI / NEAR / APT atau angka 1-6): ").strip()
+            if sym_in:
+                chosen_sym = sym_in.upper()
+                chosen_px = 0.0
+                chosen_ss = 70.0
+                chosen_es = 70.0
+                chosen_drs = 10.0
+                chosen_tier = "PRIME_CONVICTION"
+                chosen_max_alloc_pct = 100.0
+                if sym_in.isdigit() and 1 <= int(sym_in) <= len(cands):
+                    target_cand = cands[int(sym_in) - 1]
+                    chosen_sym = target_cand["symbol"]
+                    chosen_px = target_cand["price"]
+                    chosen_ss = target_cand.get("ss", 70.0)
+                    chosen_es = target_cand.get("es", 70.0)
+                    chosen_drs = target_cand.get("drs", 10.0)
+                    chosen_tier = target_cand.get("signal_tier", "PRIME_CONVICTION")
+                    chosen_max_alloc_pct = target_cand.get("max_alloc_pct", 100.0)
+                else:
+                    for cd in cands:
+                        if cd["symbol"].upper() == chosen_sym:
+                            chosen_px = cd["price"]
+                            chosen_ss = cd.get("ss", 70.0)
+                            chosen_es = cd.get("es", 70.0)
+                            chosen_drs = cd.get("drs", 10.0)
+                            chosen_tier = cd.get("signal_tier", "PRIME_CONVICTION")
+                            chosen_max_alloc_pct = cd.get("max_alloc_pct", 100.0)
+                            break
+                if chosen_px <= 0:
+                    px_str = input(f"Masukkan harga pasar saat ini untuk {chosen_sym} (USD): ").strip()
+                    try:
+                        chosen_px = float(px_str)
+                    except ValueError:
+                        print("⚠️ Harga tidak valid.")
+                        chosen_px = 0.0
+                if chosen_px > 0:
+                    # Hitung rekomendasi default sebagai fungsi dari: saldo total, saldo sisa, dan confidence
+                    dyn_alloc = PortfolioSizer.calculate_dynamic_spot_allocation(
+                        total_equity=eq_live,
+                        spot_remaining=spot_remaining,
+                        available_cash=avail_live if avail_live > 0 else None,
+                        ss_score=chosen_ss,
+                        es_score=chosen_es,
+                        drs_score=chosen_drs,
+                        signal_tier=chosen_tier,
+                        max_alloc_pct=chosen_max_alloc_pct
+                    )
+                    rec_budget = dyn_alloc["recommended_budget"]
+
+                    print(f"\n📊 REKOMENDASI ALOKASI DINAMIS ({chosen_sym}):")
+                    print(f"   • Saldo Total             : ${eq_live:,.2f}")
+                    print(f"   • Saldo Sisa Kuota Spot   : ${spot_remaining:,.2f}" + (f" (Kas Bebas: ${avail_live:,.2f})" if avail_live > 0 else ""))
+                    print(f"   • Skor Confidence         : {dyn_alloc['confidence_score']:.1f}/100 | Tier: {chosen_tier}")
+                    print(f"   • Bobot Alokasi           : {dyn_alloc['confidence_factor'] * 100:.1f}% dari slot dasar (${dyn_alloc['base_slot_budget']:,.2f})")
+                    if dyn_alloc["is_capped_by_remaining"]:
+                        print(f"   • Status Batasan          : ⚠️ {dyn_alloc['reason']}")
+                    print(f"   • Nilai Default Diusulkan : ${rec_budget:,.2f}")
+
+                    budget_str = input(f"\nTotal Alokasi Modal untuk {chosen_sym} (Tekan ENTER untuk rekomendasi ${rec_budget:,.2f}): ").strip()
+                    try:
+                        budget_usd = float(budget_str) if budget_str else rec_budget
+                    except ValueError:
+                        budget_usd = rec_budget
+
+                    if budget_usd > spot_remaining and spot_remaining > 0:
+                        print(f"⚠️  Perhatian: Alokasi ${budget_usd:,.2f} melebihi sisa kuota spot (${spot_remaining:,.2f}).")
+                    elif budget_usd > eq_live and eq_live > 0:
+                        print(f"⚠️  Perhatian: Alokasi ${budget_usd:,.2f} melebihi total saldo (${eq_live:,.2f}).")
+
+                    plan = SpotStrategyEngine.generate_smart_dca_plan(
+                        chosen_sym, budget_usd, chosen_px, es_score=chosen_es, drs_score=chosen_drs
+                    )
+                    print(f"\n{'=' * 78}")
+                    print(f"  STRUKTUR PEMBELIAN SMART DCA 3-TRANCHE — {chosen_sym} (Total: ${budget_usd:,.2f})")
+                    print(f"{'=' * 78}")
+                    for tr in plan["tranches"]:
+                        print(f"\n🔹 {tr['name']} | Status: {tr['status']}")
+                        print(f"   • Tipe Order   : {tr['type']}")
+                        print(f"   • Alokasi      : ${tr['allocation_usd']:,.2f} ({tr['allocation_pct']}%) ➔ ~{tr['estimated_qty']:,.4f} {chosen_sym}")
+                        print(f"   • Harga Target : ${tr['target_price']:,.4f}")
+                        print(f"   • Aturan Pemicu: {tr['trigger_rule']}")
+                        if "whale_rule" in tr:
+                            print(f"   • Validasi Paus: {tr['whale_rule']}")
+                    print(f"\n🎯 Estimasi Harga Beli Rata-Rata (Blended Avg): ${plan['blended_estimated_avg_price']:,.4f}")
+                    print("Prinsip Pacing: DCA Anti-Martingale. Tidak averaging down jika Paus dump.")
+                    konfirmasi = input("\nMau catat eksekusi Tranche 1 (Pilot Buy 30%) ke portfolio.csv? [Y/n]: ").strip().lower()
+                    if konfirmasi in ["", "y", "yes"]:
+                        t1 = plan["tranches"][0]
+                        res = SpotStrategyEngine.record_spot_purchase(
+                            symbol=chosen_sym,
+                            entry_price=t1["target_price"],
+                            qty=t1["estimated_qty"],
+                            note="Tranche 1 Pilot Scout (30%)"
+                        )
+                        print(f"\n✅ Sukses mencatat Tranche 1 {chosen_sym} ({t1['estimated_qty']:,.4f} @ ${t1['target_price']:,.4f}) ke portfolio.csv!")
+            input("\nTekan ENTER untuk kembali ke menu Spot...")
+        elif ch == "6":
+            clear_screen()
+            from src.spot_strategy_engine import SpotStrategyEngine
+            print("=" * 78)
+            print("   🎯 EVALUATOR EXIT BERTAHAP MULTI-TIER (WHALE DRS & CYCLE PEAK)    ")
+            print("=" * 78)
+            holdings = audit.get("holdings", [])
+            if not holdings:
+                print("\n[-] Belum ada posisi di portfolio.csv untuk dievaluasi exit.")
+            else:
+                macro = SpotMacroVault.get_macro_cycle_status()
+                mayer = float(macro.get("mayer_multiple", 1.2))
+                phase = str(macro.get("phase", "Fase B"))
+                for h in holdings:
+                    sym = h["symbol"]
+                    ent_px = float(h["entry_price"])
+                    cur_px = float(h["current_price"])
+                    qty = float(h["qty"])
+                    ss = float(h.get("ss", 50.0) or 50.0)
+                    es = float(h.get("es", 50.0) or 50.0)
+                    drs = float(h.get("drs", 10.0) or 10.0)
+                    eval_res = SpotStrategyEngine.evaluate_spot_exit_strategy(
+                        symbol=sym, entry_price=ent_px, current_price=cur_px, qty=qty,
+                        ss_score=ss, es_score=es, drs_score=drs,
+                        mayer_multiple=mayer, btc_macro_phase=phase
+                    )
+                    c_pnl = "\033[92m" if eval_res['gain_pct'] >= 0 else "\033[91m"
+                    reset = "\033[0m"
+                    print(f"\n🪙  {sym} — Gain: {c_pnl}{eval_res['gain_pct']:+.2f}%{reset} | Rekomendasi: {eval_res['recommended_action']}")
+                    print(f"    Dist Risk (DRS): {drs:.1f}/100 | Mayer: {mayer:.2f} ({phase})")
+                    for r in eval_res["reasons"]:
+                        print(f"    👉 {r}")
+                    if eval_res["sell_pct_recommended"] > 0:
+                        print(f"    ⚡ Rekomendasi Panen: JUAL {eval_res['sell_pct_recommended']}% ({eval_res['sell_qty_recommended']:,.4f} {sym})")
+                        eksek = input(f"    Eksekusi & catat panen {eval_res['sell_pct_recommended']}% untuk {sym}? [y/N]: ").strip().lower()
+                        if eksek == "y":
+                            harvest_res = SpotStrategyEngine.record_spot_harvest(
+                                symbol=sym,
+                                sell_qty=eval_res["sell_qty_recommended"],
+                                sell_price=cur_px,
+                                tier_name=eval_res["recommended_action"]
+                            )
+                            print(f"    ✅ Realized Profit: +${harvest_res.get('realized_profit_usd', 0.0):,.2f}! Portofolio diperbarui.")
+            input("\nTekan ENTER untuk kembali ke menu Spot...")
+        elif ch == "7":
+            clear_screen()
+            from src.portfolio_sizer import PortfolioSizer
+            from src.trader import HyperliquidTrader
+            eq_live = 1000.0
+            try:
+                acct = HyperliquidTrader().get_account_state()
+                eq_live = float(acct.get("equity", 1000.0))
+            except Exception:
+                pass
+            print("=" * 78)
+            print("   ⚖️  PORTOFOLIO SIZING & ALLOCATION MASTER (CORE-SATELLITE)")
+            print("=" * 78)
+            eq_in = input(f"Masukkan Total Ekuitas Akun USD (Enter untuk auto-fetch ${eq_live:,.2f}): ").strip()
+            total_eq = float(eq_in) if eq_in else eq_live
+            alloc = PortfolioSizer.calculate_allocation(total_eq)
+            print(f"\n{PortfolioSizer.format_allocation_report(alloc)}")
+            input("\nTekan ENTER untuk kembali ke menu Spot...")
         elif ch in ["0", ""]:
             break
 
