@@ -1,0 +1,139 @@
+{
+  "enabled": true,
+  "hunt_interval_minutes": 30,
+  "self_eval_interval_hours": 6,
+  "cooldown_minutes": 30,
+  "thermostat": {
+    "mode": "COMPOUND_BOOST",
+    "badge": "\ud83d\ude80 COMPOUND BOOST (Win Streak Aktif)",
+    "reserve_pct": 15.0,
+    "min_score_intraday": 75.0,
+    "min_score_swing": 77.0,
+    "required_grades": [
+      "A",
+      "A+"
+    ],
+    "min_ai_confidence": 75,
+    "sizing_mult": 1.08,
+    "circuit_breaker_pause": false,
+    "pause_until_ts": 0.0,
+    "reason": "Win streak 3x berturut-turut (Win Rate 60.0%, Net +$2.90). Mode Compounding Optimal aktif."
+  },
+  "last_hunt_ts": 1792201226.712724,
+  "last_hunt_time": "2026-10-17 08:40:26",
+  "last_hunt_status": "Skip Scan (Hemat Token): Kapasitas Slot Penuh (7/5 posisi aktif untuk ekuitas $101.31) | Margin Bebas di atas Cadangan 15% ($15.20) hanya $0.00 (Butuh min. $12.91 untuk buka posisi baru)",
+  "last_eval_ts": 1792201334.9295099,
+  "last_eval_time": "2026-10-17 08:42:14",
+  "last_eval_report": {
+    "evaluated_at": "2026-10-17 08:42:14",
+    "trigger_reason": "CALIBRATION_VERIFICATION",
+    "total_closed": 5,
+    "wins_count": 3,
+    "losses_count": 2,
+    "win_rate_pct": 60.0,
+    "net_realized_pnl_usd": 2.9,
+    "profit_factor": 49.33,
+    "win_streak": 3,
+    "loss_streak": 0,
+    "today_pnl_usd": 2.9,
+    "thermostat_mode": "COMPOUND_BOOST",
+    "thermostat_badge": "\ud83d\ude80 COMPOUND BOOST (Win Streak Aktif)",
+    "thermostat_reason": "Win streak 3x berturut-turut (Win Rate 60.0%, Net +$2.90). Mode Compounding Optimal aktif.",
+    "weight_calibration": "Auto-Kalibrasi Bobot Selesai: Recent daytrade outcomes showed multiple stalemate exits and time stops, indicat",
+    "quadrants": {
+      "SWING_SHORT": {
+        "trades": 0,
+        "wins": 0,
+        "pnl": 0.0
+      },
+      "SWING_LONG": {
+        "trades": 0,
+        "wins": 0,
+        "pnl": 0.0
+      },
+      "DAYTRADE_SHORT": {
+        "trades": 3,
+        "wins": 2,
+        "pnl": 2.81
+      },
+      "DAYTRADE_LONG": {
+        "trades": 2,
+        "wins": 1,
+        "pnl": 0.09
+      }
+    },
+    "recent_lessons": [
+      {
+        "coin": "TRX",
+        "strategy": "DAYTRADE",
+        "pnl": -0.06,
+        "grade": "C",
+        "lesson": "The short trade suffered from minor adverse excursion before hitting a staleness exit. Monitor entry momentum more closely to avoid sideways chop."
+      },
+      {
+        "coin": "BERA",
+        "strategy": "DAYTRADE",
+        "pnl": 0.0,
+        "grade": "D",
+        "lesson": "The trade failed to capitalize on the initial MFE of 1.34% and resulted in a breakeven exit due to stagnant momentum. Future entries require tighter profit-taking protocols when momentum stalls near resistance."
+      },
+      {
+        "coin": "NEAR",
+        "strategy": "DAYTRADE",
+        "pnl": 0.09,
+        "grade": "D",
+        "lesson": "The short position reached 1.44 percent in favorable excursion but failed to secure profits before the time stop triggered. Traders must ensure trailing stops or take-profit targets are actively managed during choppy market conditions."
+      },
+      {
+        "coin": "EIGEN",
+        "strategy": "DAYTRADE",
+        "pnl": 1.15,
+        "grade": "B",
+        "lesson": "The short position successfully hit its take-profit target for a clean win. Continue to monitor exit execution efficiency to maintain systematic discipline."
+      }
+    ]
+  },
+  "last_entry_ts": 0.0,
+  "last_entry_coin": "-",
+  "last_calibrated_trade_count": 5,
+  "stats": {
+    "total_hunt_cycles": 1,
+    "total_scans_executed": 0,
+    "total_ai_audits": 0,
+    "total_autonomous_opens": 0,
+    "total_vetoed_or_skipped": 0,
+    "total_self_evaluations": 2
+  },
+  "telemetry_feed": [
+    {
+      "timestamp": "2026-10-17 08:40:26",
+      "category": "SELF_EVAL",
+      "coin": "-",
+      "action": "Evaluasi Mandiri (INITIAL_BOOT_EVAL)",
+      "detail": "WR: 60.0% (3W/2L) | Net: $+2.90 | Thermostat: COMPOUND_BOOST (Reserve 15.0%)",
+      "grade": "-",
+      "equity": 101.31,
+      "free_margin": 7.91
+    },
+    {
+      "timestamp": "2026-10-17 08:40:26",
+      "category": "CAPITAL_GUARD",
+      "coin": "-",
+      "action": "Bypass Scan (Slot/Reserve Guard)",
+      "detail": "Kapasitas Slot Penuh (7/5 posisi aktif untuk ekuitas $101.31) | Margin Bebas di atas Cadangan 15% ($15.20) hanya $0.00 (Butuh min. $12.91 untuk buka posisi baru)",
+      "grade": "-",
+      "equity": 101.31,
+      "free_margin": 7.91
+    },
+    {
+      "timestamp": "2026-10-17 08:42:17",
+      "category": "SELF_EVAL",
+      "coin": "-",
+      "action": "Evaluasi Mandiri (CALIBRATION_VERIFICATION)",
+      "detail": "WR: 60.0% (3W/2L) | Net: $+2.90 | Thermostat: COMPOUND_BOOST (Reserve 15.0%)",
+      "grade": "-",
+      "equity": 101.28,
+      "free_margin": 7.84
+    }
+  ]
+}
