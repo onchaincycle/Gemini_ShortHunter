@@ -87,10 +87,16 @@ def print_header():
             pm = PositionManager(trader)
             lifecycle = pm.load_lifecycle_state()
 
-            # Check daemon status & Self-Healing
+            # Check daemon status & Self-Healing (starts even with 0 positions if Autonomous Mode is enabled)
+            from src.autonomous_engine import AutonomousEngine
+            auto_eng = AutonomousEngine(trader)
+            auto_state = auto_eng.load_state()
+            gov = auto_eng.get_live_governor_snapshot(account_state=state)
+            thermo = gov["thermostat"]
+
             daemon_pid = PositionManager.is_daemon_running()
             auto_started = False
-            if not daemon_pid and positions:
+            if not daemon_pid and (positions or auto_state.get("enabled", True)):
                 start_res = PositionManager.start_daemon()
                 if start_res.get("success"):
                     daemon_pid = start_res.get("pid")
@@ -98,16 +104,24 @@ def print_header():
 
             if daemon_pid:
                 suffix = " [⚡ AUTO-RESTORED]" if auto_started else ""
-                daemon_str = f"🟢 AKTIF DI BACKGROUND (PID: {daemon_pid} | Dual-Stream){suffix}"
+                mode_tag = "Zero-Touch Autonomous Grade-A + Guard" if auto_state.get("enabled", True) else "Position Guard Only"
+                daemon_str = f"🟢 AKTIF 24/7 DI BACKGROUND (PID: {daemon_pid} | {mode_tag}){suffix}"
             else:
-                daemon_str = "⚪ OFF (Pilih menu [4] opsi 2 untuk menyalakan)"
+                daemon_str = "⚪ OFF (Pilih menu [4] untuk menyalakan)"
 
             from src.ai_engine import ai_advisor
-            ai_str = "🟢 AKTIF (Gemini 2.5 Flash)" if ai_advisor.is_available() else "⚪ OFF / FALLBACK (Set GEMINI_API_KEY di .env)"
-            print(f"💼 Saldo Akun ({net_label}): ${eq:,.2f} USDC (Siap Trade: ${avail:,.2f} USDC)")
-            print(f"🤖 Status Auto-Pilot   : {daemon_str}")
-            print(f"🧠 AI Trade Advisor    : {ai_str}")
-            print(f"🔀 Mode Pengawalan     : Per-Posisi (⚡ INTRADAY & 🌊 SWING terisolasi penuh)")
+            ai_str = "🟢 AKTIF (Gemini Flash | Self-Eval & Gatekeeper Wajib Grade A)" if ai_advisor.is_available() else "⚪ OFF / FALLBACK"
+            print(
+                f"💼 Saldo Akun ({net_label}): ${eq:,.2f} USDC "
+                f"(Bebas: ${avail:,.2f} | Cadangan {gov['reserve_pct']:.0f}%: ${gov['reserve_usd']:,.2f} | Siap Tembak: ${gov['free_above_reserve']:,.2f})"
+            )
+            print(f"🤖 Status AI Mandiri   : {daemon_str}")
+            print(f"🧠 AI Advisor & Eval   : {ai_str}")
+            print(
+                f"📐 Pagar Dinamis f(E)  : Slot {gov['active_count']}/{gov['max_positions']} Posisi "
+                f"(🌊Swing {gov['swing_count']}/{gov['max_swing']} | ⚡Intra {gov['intraday_count']}/{gov['max_intraday']}) "
+                f"| Peluru: ${gov['min_order_margin']:,.2f}–${gov['max_order_margin']:,.2f} | Thermostat: {thermo.get('mode', 'OPTIMAL')}"
+            )
 
             if positions:
                 print(f"\n📊 DETAIL POSISI TERBUKA ANDA ({len(positions)}):")
@@ -1582,49 +1596,114 @@ def menu_execute_short():
 
 def menu_position_guard():
     from src.position_manager import PositionManager, LOG_FILE
+    from src.autonomous_engine import AutonomousEngine, AUTONOMOUS_LOG_FILE
     from src import position_tags
     pm = PositionManager()
+    auto_eng = AutonomousEngine(pm.trader)
 
     while True:
-        pid = PositionManager.is_daemon_running()
-        status_str = f"🟢 AKTIF DI BACKGROUND (PID: {pid})" if pid else "⚪ TIDAK AKTIF DI BACKGROUND"
-        lifecycle = pm.load_lifecycle_state()
-        swing_coins = [c for c, s in lifecycle.items() if s.get("strategy", "SWING") == "SWING"]
-        intra_coins = [c for c, s in lifecycle.items() if s.get("strategy") == "DAYTRADE"]
+        clear_screen()
+        for ln in auto_eng.render_autonomous_dashboard():
+            print(ln)
 
-        print("\n" + "=" * 68)
-        print("       🛡️  AUTO-PILOT PENGAWAL POSISI (ARSITEKTUR DUAL-STREAM)      ")
-        print("=" * 68)
-        print(f"Status Background Daemon : {status_str}")
-        print(f"Posisi Stream ⚡ INTRADAY: {len(intra_coins)} aktif ({', '.join(intra_coins) if intra_coins else 'kosong'})")
-        print(f"  └─ Aturan Intraday     : SL Teknis Jarum 15m | TP1 1R (BE+Fee) | TP2 2R | Auto-Close 6 Jam")
-        print(f"Posisi Stream 🌊 SWING   : {len(swing_coins)} aktif ({', '.join(swing_coins) if swing_coins else 'kosong'})")
-        print(f"  └─ Aturan Swing        : SL +10% | Trim -10% (BE) | TP2 -20% | Runner -35% | Max 72 Jam")
-        print("Perlindungan Server      : Native Server Stop Loss On-Chain (Aman jika laptop mati)")
-        print("-" * 68)
-        print("Pilih opsi:")
-        print("  [1] 📊 Buka Live Log Posisi Aktif di Layar (Pantau Real-Time PnL, Drop %, & SL per Stream)")
-        print("  [2] 🚀 Nyalakan / Restart Auto-Pilot di Background Sekarang")
-        print("  [3] 🛑 Matikan Auto-Pilot Background")
-        print("  [4] 🏷️  Ubah Tag Stream Posisi Tertentu (INTRADAY ⇄ SWING)")
-        print("  [5] 📜 Lihat Catatan Log Eksekusi Terakhir (logs/autopilot.log)")
+        print("\nPilih opsi Komando & Pemantauan AI Mandiri:")
+        print("  [1] 📡 Buka Live Monitor Real-Time di Layar (Tabel Posisi + Telemetri AI Auto-Refresh)")
+        print("  [2] 🎯 Paksa Siklus Auto-Hunt & Audit Grade A Sekarang (Force Autonomous Hunt)")
+        print("  [3] 🧠 Jalankan Siklus Self-Evaluation & Kalibrasi Mandiri Sekarang (Force Self-Eval)")
+        print("  [4] ⚙️  Atur Parameter AI Mandiri (Reserve % Ekuitas, Interval Hunt, Toggle ON/OFF)")
+        print("  [5] 🚀 Nyalakan / Restart Daemon AI Mandiri 24/7 (Anti-Sleep Caffeinate)")
+        print("  [6] 🛑 Matikan Background Daemon")
+        print("  [7] 🏷️  Ubah Tag Stream Posisi Tertentu (INTRADAY ⇄ SWING)")
+        print("  [8] 🌐 Update & Publish Dashboard Pemantauan ke Web / GitHub Pages Sekarang")
         print("  [0] Kembali ke Menu Utama")
-        print("-" * 68)
+        print("-" * 80)
 
-        sub = input("Masukkan pilihan [0-5]: ").strip()
+        sub = input("Masukkan pilihan [0-8]: ").strip()
         if sub == "1":
             pm.run_live_guard()
         elif sub == "2":
+            print("\n🎯 Menjalankan Siklus Autonomous Hunt & Audit Grade A Sekarang...")
+            res = auto_eng.run_autonomous_hunt_if_due(force=True)
+            print("\n" + "=" * 72)
+            if res.get("executed"):
+                print(f"  [✓] {res.get('msg')}")
+            else:
+                print(f"  [ℹ️] Status Siklus Hunt : {res.get('status')}")
+                if res.get("reason"):
+                    print(f"  • Alasan Pagar Modal   : {res.get('reason')}")
+                if res.get("details"):
+                    print("  • Catatan Seleksi AI   :")
+                    for d in res["details"]:
+                        print(f"      - {d}")
+            print("=" * 72)
+            input("\nTekan ENTER untuk kembali ke Pusat Komando...")
+        elif sub == "3":
+            print("\n🧠 Menjalankan Siklus Closed-Loop Self-Evaluation & Kalibrasi Bobot...")
+            rep = auto_eng.run_self_evaluation(trigger_reason="MANUAL_USER_AUDIT")
+            print("\n" + "=" * 72)
+            print("  [✓] SELF-EVALUATION MANDIRI SELESAI!")
+            print("=" * 72)
+            print(f"  • Win Rate Realized   : {rep.get('win_rate_pct')}% ({rep.get('wins_count')}W / {rep.get('losses_count')}L)")
+            print(f"  • Net Realized PnL    : ${rep.get('net_realized_pnl_usd'):+.2f} USDC (Profit Factor: {rep.get('profit_factor')})")
+            print(f"  • Mode Thermostat     : {rep.get('thermostat_badge')}")
+            print(f"  • Analisis Thermostat : {rep.get('thermostat_reason')}")
+            print(f"  • Kalibrasi Bobot     : {rep.get('weight_calibration')}")
+            print("=" * 72)
+            input("\nTekan ENTER untuk kembali ke Pusat Komando...")
+        elif sub == "4":
+            st = auto_eng.load_state()
+            th = st["thermostat"]
+            print("\n⚙️  KONFIGURASI PARAMETER AI MANDIRI:")
+            print(f"  [A] Status Zero-Touch Autonomous Hunt : {'🟢 ON (Aktif)' if st.get('enabled', True) else '⚪ OFF (Pause)'}")
+            print(f"  [B] Pagar Cadangan Margin Bebas (%)   : {th.get('reserve_pct', 15.0):.1f}% dari Total Saldo USDC")
+            print(f"  [C] Interval Siklus Auto-Hunt (Menit) : Tiap {st.get('hunt_interval_minutes', 30)} menit")
+            print(f"  [D] Cooldown Antar-Entry Baru (Menit) : Minimal {st.get('cooldown_minutes', 30)} menit")
+            print("  [ENTER] Batal / Kembali")
+            p_in = input("\nPilih parameter yang ingin diubah [A/B/C/D]: ").strip().upper()
+            if p_in == "A":
+                st["enabled"] = not st.get("enabled", True)
+                auto_eng.save_state(st)
+                print(f"[✓] Status Zero-Touch Autonomous Hunt diubah menjadi: {'🟢 ON' if st['enabled'] else '⚪ OFF'}")
+            elif p_in == "B":
+                val = input("Masukkan persentase cadangan margin bebas baru (contoh 15 untuk 15%): ").strip()
+                try:
+                    pct = max(5.0, min(50.0, float(val)))
+                    st["thermostat"]["reserve_pct"] = pct
+                    auto_eng.save_state(st)
+                    print(f"[✓] Pagar Cadangan Margin Bebas diatur ke {pct:.1f}% dari Total Saldo USDC.")
+                except Exception:
+                    print("[!] Input tidak valid.")
+            elif p_in == "C":
+                val = input("Masukkan interval Auto-Hunt dalam menit (contoh 15, 30, 60): ").strip()
+                try:
+                    mins = max(5, min(240, int(val)))
+                    st["hunt_interval_minutes"] = mins
+                    auto_eng.save_state(st)
+                    print(f"[✓] Interval Auto-Hunt diatur ke tiap {mins} menit.")
+                except Exception:
+                    print("[!] Input tidak valid.")
+            elif p_in == "D":
+                val = input("Masukkan jeda Cooldown antar-entry dalam menit (contoh 15, 30, 60): ").strip()
+                try:
+                    mins = max(5, min(240, int(val)))
+                    st["cooldown_minutes"] = mins
+                    auto_eng.save_state(st)
+                    print(f"[✓] Cooldown antar-entry diatur ke {mins} menit.")
+                except Exception:
+                    print("[!] Input tidak valid.")
+            input("\nTekan ENTER untuk lanjut...")
+        elif sub == "5":
             if PositionManager.is_daemon_running():
                 PositionManager.stop_daemon()
             res = PositionManager.start_daemon()
             print(f"\n[✓] {res['message']}")
             input("Tekan ENTER untuk lanjut...")
-        elif sub == "3":
+        elif sub == "6":
             res = PositionManager.stop_daemon()
             print(f"\n[✓] {res['message']}\n")
             input("Tekan ENTER untuk lanjut...")
-        elif sub == "4":
+        elif sub == "7":
+            lifecycle = pm.load_lifecycle_state()
             if not lifecycle:
                 print("\n[!] Tidak ada posisi terbuka saat ini.")
                 input("Tekan ENTER untuk lanjut...")
@@ -1639,7 +1718,6 @@ def menu_position_guard():
                 entry_px = float(lifecycle[c_in]["entry_px"])
                 new_plan = position_tags.build_plan(new_strat, entry_px)
                 position_tags.tag_position(c_in, new_strat, new_plan, meta={"source": "MANUAL_RETAG"})
-                # Update lifecycle and replace on-chain SL if not yet trimmed
                 lifecycle[c_in]["strategy"] = new_strat
                 lifecycle[c_in]["tp1_px"] = new_plan["tp1_px"]
                 lifecycle[c_in]["tp2_px"] = new_plan["tp2_px"]
@@ -1650,16 +1728,15 @@ def menu_position_guard():
                 pm.save_lifecycle_state(lifecycle)
                 print(f"\n[✓] {c_in} berhasil dipindahkan ke stream [{new_strat}]!")
             input("\nTekan ENTER untuk lanjut...")
-        elif sub == "5":
-            print("\n📜 20 BARIS LOG TERAKHIR:")
-            print("-" * 68)
-            if os.path.exists(LOG_FILE):
-                with open(LOG_FILE, "r") as f:
-                    lines = f.readlines()
-                    print("".join(lines[-20:]) if lines else "Log masih kosong.")
-            else:
-                print("Belum ada log tercatat.")
-            print("-" * 68)
+        elif sub == "8":
+            print("\n🌐 Memperbarui Dashboard Web (docs/index.html) & Sinkronisasi ke GitHub Pages...")
+            try:
+                from src.github_sync import run_sync_pipeline
+                run_sync_pipeline()
+            except Exception as e:
+                from src.html_reporter import generate_html_report
+                p = generate_html_report()
+                print(f"[✓] HTML lokal diperbarui di {p} ({e})")
             input("\nTekan ENTER untuk lanjut...")
         elif sub in ["0", ""]:
             break
@@ -1881,11 +1958,11 @@ def main_menu():
     while True:
         clear_screen()
         print_header()
-        print("─── 🚀 TRADING OPERASIONAL (FLOW UTAMA) ────────────────────────────")
+        print("─── 🚀 TRADING OPERASIONAL & AI MANDIRI (FLOW UTAMA) ───────────────")
         print("  [1] 🎯 Auto-Hunt AI Sniper (Scan 4 Kuadran ➔ Auto-Pilih #1 ➔ AI Guard ➔ Eksekusi)")
         print("  [2] 🔍 Screener Sinyal Manual (Intraday ⚡ & Swing 🌊 | Short 🔴 & Long 🟢)")
         print("  [3] ⚡ Eksekusi Posisi Manual (Ketik Koin Sendiri | Server SL & TP)")
-        print("  [4] 🛡️  Auto-Pilot Guard & Live Monitor (Real-Time PnL, BE & Trailing)")
+        print("  [4] 🤖 Pusat Komando AI Mandiri & Live Monitor (Zero-Touch 24/7, Self-Eval & Telemetri)")
         print("  [5] 📓 Jurnal Forward Test & Scorecard Per-Stream (Audit PnL)")
         print("\n─── 🧠 AI INTELLIGENCE & RISET ───────────────────────────────────")
         print("  [6] 🧠 AI Advisor Hub & Auto-Optimizer (Gemini Flash - 5 Feedback Loops)")

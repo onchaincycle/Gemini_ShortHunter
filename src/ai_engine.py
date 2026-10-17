@@ -86,10 +86,15 @@ class RegimeSynthesis(BaseModel):
     reasoning: str = Field(description="Macro analysis reasoning in 2-3 sentences")
 
 
+class WeightFactorItem(BaseModel):
+    factor: str = Field(description="Factor key name from current weights")
+    weight: float = Field(description="Calibrated weight between 5.0 and 30.0")
+
+
 class WeightCalibration(BaseModel):
     stream: Literal["SWING", "DAYTRADE"] = Field(description="Strategy stream")
-    proposed_weights: Dict[str, float] = Field(
-        description="Recommended score weights for screener factors"
+    weights_list: List[WeightFactorItem] = Field(
+        description="List of factor names and their calibrated score weights"
     )
     calibration_rationale: str = Field(
         description="Why these specific weight adjustments are proposed based on trade data"
@@ -329,11 +334,14 @@ Provide calibrated weights. Every weight MUST be positive and between 5.0 and 30
                 )
             )
             raw = json.loads(response.text)
-            # Enforce hard bounds
+            # Enforce hard bounds from weights_list
             clamped_weights = {}
-            for k, v in raw.get("proposed_weights", {}).items():
-                low, high = BOUNDS.get(k, (5.0, 30.0))
-                clamped_weights[k] = round(max(low, min(high, float(v))), 1)
+            for item in raw.get("weights_list", []):
+                k = item.get("factor")
+                v = item.get("weight", 15.0)
+                if k:
+                    low, high = BOUNDS.get(k, (5.0, 30.0))
+                    clamped_weights[k] = round(max(low, min(high, float(v))), 1)
 
             # Ensure all current keys are preserved
             for k in current_weights:

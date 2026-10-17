@@ -364,40 +364,101 @@ class HyperliquidTrader:
 
         return {"coin": coin, "funding_hourly": 0.0, "risk_level": "NOT_FOUND", "description": "Coin not found in perp universe"}
 
+    @staticmethod
+    def get_equity_slot_plan(equity: float, reserve_pct: float = 15.0, thermostat_mult: float = 1.0) -> Dict:
+        """
+        Computes dynamic slot capacity N_max(E), reserve floor (%), and per-slot margin allocation
+        as a pure mathematical function of Total Account Equity (USDC).
+        """
+        if equity <= 0:
+            return {
+                "equity": 0.0,
+                "reserve_pct": reserve_pct,
+                "reserve_usd": 0.0,
+                "deployable_usd": 0.0,
+                "max_positions": 5,
+                "max_swing": 3,
+                "max_intraday": 2,
+                "slot_base_margin": 14.0,
+                "min_slot_margin": 10.5,
+                "max_slot_margin": 17.5,
+            }
+
+        # Dynamic Max Open Positions: N_max(E) = clamp(floor(4 + E/60), min=5, max=10)
+        raw_slots = int(4 + (equity / 60.0))
+        min_slots = 4 if equity < 75.0 else 5
+        max_positions = max(min_slots, min(10, raw_slots))
+
+        # Split between Swing (~60%) and Intraday (~40%)
+        max_swing = max(2, int(round(max_positions * 0.60)))
+        max_intraday = max(2, max_positions - max_swing)
+
+        reserve_usd = round(equity * (reserve_pct / 100.0), 2)
+        deployable_usd = round(max(0.0, equity - reserve_usd), 2)
+        slot_base_margin = round(deployable_usd / max_positions, 2)
+
+        min_slot_margin = round(max(10.0, slot_base_margin * 0.75), 2)
+        max_slot_margin = round(max(14.0, slot_base_margin * 1.20 * thermostat_mult), 2)
+
+        return {
+            "equity": round(equity, 2),
+            "reserve_pct": round(reserve_pct, 1),
+            "reserve_usd": reserve_usd,
+            "deployable_usd": deployable_usd,
+            "max_positions": max_positions,
+            "max_swing": max_swing,
+            "max_intraday": max_intraday,
+            "slot_base_margin": slot_base_margin,
+            "min_slot_margin": min_slot_margin,
+            "max_slot_margin": max_slot_margin,
+        }
+
     def calculate_risk_margin(self,
                               equity: float,
                               risk_pct: float = 2.0,
                               sl_pct: float = 10.0,
                               leverage: int = 2,
-                              multiplier: float = 1.0) -> Dict:
+                              multiplier: float = 1.0,
+                              reserve_pct: float = 15.0) -> Dict:
         """
-        Calculates mathematically sound margin sizing where 1 Stop Loss hit (+sl_pct)
-        equals risk_pct (e.g. 2.0%) modulated by conviction multiplier.
+        Calculates mathematically sound margin sizing as a function of Total Equity (E),
+        bounded by the dynamic Equity-Scaled Slot Allocation so no single position
+        ever over-concentrates capital (even when intraday SL% is tight).
         """
         if equity <= 0:
-            return {"recommended_margin": 10.0, "base_margin": 10.0, "max_risk_usd": 0.2, "pos_value": 20.0}
+            return {"recommended_margin": 12.0, "base_margin": 12.0, "max_risk_usd": 1.2, "pos_value": 24.0}
 
-        effective_risk_pct = risk_pct * multiplier
-        max_risk_usd = equity * (effective_risk_pct / 100.0)
-        pos_value = max_risk_usd / (sl_pct / 100.0)
-        raw_margin = pos_value / leverage
+        slot_plan = self.get_equity_slot_plan(equity, reserve_pct=reserve_pct)
+        slot_base = slot_plan["slot_base_margin"]
+        min_slot = slot_plan["min_slot_margin"]
+        max_slot = slot_plan["max_slot_margin"]
 
-        # Base margin with 1.0 multiplier
+        # Risk-derived raw margin (1.0x anchor)
         base_risk_usd = equity * (risk_pct / 100.0)
-        base_pos_value = base_risk_usd / (sl_pct / 100.0)
-        base_margin = max(5.0, min(base_pos_value / leverage, equity * 0.5))
+        base_pos_value = base_risk_usd / max(0.005, (sl_pct / 100.0))
+        raw_base_margin = base_pos_value / max(1, leverage)
 
-        # Guardrails: minimum $5, maximum 50% of equity
-        recommended_margin = max(5.0, min(raw_margin, equity * 0.5))
+        # Anchor base_margin to the Equity-Scaled Slot Base (prevents tight SL from inflating margin to 40% equity)
+        base_margin = max(min_slot, min(raw_base_margin, slot_base))
+
+        # Apply AI conviction & thermostat multiplier, clamped to [min_slot, max_slot]
+        recommended_margin = max(min_slot, min(base_margin * multiplier, max_slot))
+        pos_value = recommended_margin * leverage
+        actual_risk_usd = pos_value * (sl_pct / 100.0)
+        effective_risk_pct = (actual_risk_usd / equity) * 100.0 if equity > 0 else risk_pct
 
         return {
             "equity": round(equity, 2),
             "risk_pct": risk_pct,
             "effective_risk_pct": round(effective_risk_pct, 2),
-            "max_risk_usd": round(max_risk_usd, 2),
+            "max_risk_usd": round(actual_risk_usd, 2),
             "pos_value": round(pos_value, 2),
             "base_margin": round(base_margin, 2),
             "recommended_margin": round(recommended_margin, 2),
+            "slot_base_margin": slot_base,
+            "max_positions": slot_plan["max_positions"],
+            "reserve_pct": slot_plan["reserve_pct"],
+            "reserve_usd": slot_plan["reserve_usd"],
             "multiplier": round(multiplier, 2),
             "leverage": leverage
         }

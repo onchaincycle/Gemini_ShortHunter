@@ -391,6 +391,12 @@ class PositionManager:
             self.log_event(f"🏁 {c} sudah tidak aktif di bursa. Lifecycle & tag strategi dibersihkan.", strategy)
 
         self.save_lifecycle_state(lifecycle)
+        if to_delete:
+            try:
+                from src.autonomous_engine import AutonomousEngine
+                AutonomousEngine(self.trader).run_self_evaluation(trigger_reason=f"ON_CLOSE_{','.join(to_delete)}")
+            except Exception as e:
+                self.log_event(f"Warning: Gagal menjalankan Self-Evaluation pasca close: {e}")
         return lifecycle
 
     # ------------------------------------------------------------------
@@ -421,6 +427,11 @@ class PositionManager:
                 coin=coin, exit_px=current_px, reason=reason,
                 pnl_usd=pos_info.get("unrealized_pnl", 0.0)
             )
+            try:
+                from src.autonomous_engine import AutonomousEngine
+                AutonomousEngine(self.trader).run_self_evaluation(trigger_reason=f"ON_CLOSE_{coin}_{reason}")
+            except Exception:
+                pass
             actions.append({"type": action_type, "coin": coin, "strategy": state.get("strategy"), "msg": msg})
             return True
         self.log_event(f"⚠️ Gagal menutup {coin} ({reason}): {res.get('error')}", state.get("strategy"))
@@ -844,29 +855,52 @@ class PositionManager:
             except Exception as e:
                 self.log_event(f"Warning: Gagal eksekusi Macro Shock Defender: {e}")
 
+    def _run_autonomous_cycle_if_due(self, actions_taken: List[Dict]):
+        """
+        Scenario 5: Zero-Touch Autonomous Hunter & Closed-Loop Self-Evaluation.
+        Scans & opens Grade A setups when slots and free margin (> reserve %) permit.
+        """
+        try:
+            from src.autonomous_engine import AutonomousEngine
+            auto_eng = AutonomousEngine(self.trader)
+            res = auto_eng.run_autonomous_hunt_if_due(force=False)
+            if res.get("executed"):
+                msg = res.get("msg", f"🚀 AUTO-OPEN {res.get('side')} {res.get('coin')}")
+                self.log_event(msg, res.get("strategy", "SWING"))
+                actions_taken.append({
+                    "type": "AUTONOMOUS_OPEN_GRADE_A",
+                    "coin": res.get("coin"),
+                    "strategy": res.get("strategy", "SWING"),
+                    "msg": msg
+                })
+        except Exception as e:
+            self.log_event(f"Warning: Gagal siklus Autonomous Hunter: {e}")
+
     # ------------------------------------------------------------------
     # MAIN CYCLE
     # ------------------------------------------------------------------
     def check_and_execute(self) -> List[Dict]:
         """
-        Performs one check cycle across all monitored positions.
+        Performs one check cycle across all monitored positions + Autonomous Hunter & Self-Evaluation.
         Setiap posisi dikelola oleh stream strateginya sendiri (SWING / DAYTRADE).
         """
         now_ts = time.time()
+        actions_taken = []
+
         # Scenario 4: Periodic 4-hour AI Market Regime Pulse Check
         self._audit_macro_pulse_if_needed(now_ts)
 
         lifecycle = self.sync_active_positions()
         if not lifecycle:
-            return []
+            # Even with 0 open positions, run Autonomous Hunter so it can open Grade A positions!
+            self._run_autonomous_cycle_if_due(actions_taken)
+            return actions_taken
 
         acc = self.trader.get_account_state()
         if acc.get("error"):
             return []
         live_positions = {p["coin"]: p for p in acc.get("positions", []) if p.get("side") in ("SHORT", "LONG")}
         all_mids = self.trader.get_all_mids()
-
-        actions_taken = []
 
         # Scenario 3: AI Macro Shock Defender (Rapid BTC Volatility Surge > 2.8%/1h)
         self._check_macro_shock(all_mids, lifecycle, live_positions, actions_taken)
@@ -907,6 +941,10 @@ class PositionManager:
             lifecycle[coin] = state
 
         self.save_lifecycle_state(lifecycle)
+
+        # Scenario 5: Check if Autonomous Hunter & Self-Evaluation cycle is due
+        self._run_autonomous_cycle_if_due(actions_taken)
+
         if actions_taken:
             try:
                 from src.html_reporter import generate_html_report
@@ -1099,6 +1137,22 @@ class PositionManager:
         if time_stops:
             lines.append(f"  ⏰ Time-Stop Auto-Close: {' | '.join(time_stops)}")
         lines.append("  💡 Keterangan: 🟢 SL On-Chain Hyperliquid | BE = Breakeven (0% Risiko) | ⚡ Intraday | 🌊 Swing")
+        try:
+            from src.autonomous_engine import AutonomousEngine
+            auto_eng = AutonomousEngine(self.trader)
+            st = auto_eng.load_state()
+            gov = auto_eng.get_live_governor_snapshot()
+            th = gov.get("thermostat", {})
+            lines.append("-" * 68)
+            lines.append(
+                f"  🤖 AI Mandiri: {th.get('badge', '🟢 OPTIMAL')} | "
+                f"Cadangan {gov.get('reserve_pct', 15):.0f}% (${gov.get('reserve_usd', 15):.2f}) | "
+                f"Siap Tembak: ${gov.get('free_above_reserve', 0):.2f} | "
+                f"Slot: {gov.get('active_count', 0)}/{gov.get('max_positions', 5)}"
+            )
+            lines.append(f"  📡 Status Hunt ({st.get('last_hunt_time', '-')}): {st.get('last_hunt_status', '-')[:90]}")
+        except Exception:
+            pass
         lines.append("-" * 68)
         return lines
 
@@ -1219,11 +1273,14 @@ class PositionManager:
     def start_daemon() -> Dict:
         pid = PositionManager.is_daemon_running()
         if pid:
-            return {"success": True, "message": f"Auto-Pilot Background sudah berjalan (PID: {pid}).", "pid": pid}
+            return {"success": True, "message": f"Auto-Pilot & Autonomous AI sudah berjalan (PID: {pid}).", "pid": pid}
 
-        # Launch detached background process
+        # Launch detached background process (wrapped with macOS caffeinate -i so system won't sleep unattended)
         python_bin = sys.executable
-        cmd = [python_bin, "-m", "src.position_manager", "--daemon-loop"]
+        if os.path.exists("/usr/bin/caffeinate"):
+            cmd = ["/usr/bin/caffeinate", "-i", python_bin, "-m", "src.position_manager", "--daemon-loop"]
+        else:
+            cmd = [python_bin, "-m", "src.position_manager", "--daemon-loop"]
 
         with open(LOG_FILE, "a") as log_f:
             p = subprocess.Popen(
@@ -1236,8 +1293,10 @@ class PositionManager:
 
         with open(PID_FILE, "w") as f:
             f.write(str(p.pid))
+        time.sleep(0.3)
+        actual_pid = PositionManager.is_daemon_running() or p.pid
 
-        return {"success": True, "message": f"Auto-Pilot Background berhasil dinyalakan! (PID: {p.pid})", "pid": p.pid}
+        return {"success": True, "message": f"Auto-Pilot & Autonomous AI berhasil dinyalakan 24/7! (PID: {actual_pid})", "pid": actual_pid}
 
     @staticmethod
     def stop_daemon() -> Dict:
@@ -1261,8 +1320,8 @@ class PositionManager:
     def ensure_daemon_running_if_positions(cls) -> bool:
         """
         Watchdog check:
-        If active SHORT positions exist on Hyperliquid and daemon is dead,
-        auto-starts the daemon immediately.
+        If active positions exist on Hyperliquid OR Autonomous AI Mode is enabled,
+        auto-starts the daemon immediately if dead.
         """
         trader = HyperliquidTrader()
         if not trader.is_configured():
@@ -1272,11 +1331,13 @@ class PositionManager:
             return True
 
         try:
+            from src.autonomous_engine import AutonomousEngine
+            auto_enabled = AutonomousEngine(trader).load_state().get("enabled", True)
             state = trader.get_account_state()
             active_pos = [p for p in state.get("positions", []) if p.get("side") in ("SHORT", "LONG")]
-            if active_pos:
+            if active_pos or auto_enabled:
                 res = cls.start_daemon()
-                cls(trader).log_event(f"🛡️ Watchdog: Mendeteksi {len(active_pos)} posisi aktif, Auto-Pilot otomatis dihidupkan (PID: {res.get('pid')})")
+                cls(trader).log_event(f"🛡️ Watchdog: Menghidupkan Auto-Pilot & Autonomous AI otomatis (PID: {res.get('pid')})")
                 return True
         except Exception:
             pass

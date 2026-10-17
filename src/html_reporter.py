@@ -564,13 +564,88 @@ def generate_html_report(output_path: str = OUTPUT_HTML) -> str:
                     </tr>
             """
 
-    html += f"""
+    html += """
                 </tbody>
             </table>
         </div>
+    """
 
+    # 4. Autonomous AI Self-Operating & Self-Evaluation Telemetry Section
+    try:
+        from src.autonomous_engine import AutonomousEngine
+        auto_eng = AutonomousEngine(trader)
+        auto_state = auto_eng.load_state()
+        gov = auto_eng.get_live_governor_snapshot()
+        thermo = gov.get("thermostat", {})
+        eval_rep = auto_state.get("last_eval_report") or {}
+        feed = auto_state.get("telemetry_feed", [])
+
+        html += f"""
+        <div class="section-title" style="margin-top:28px;">🤖 Autonomous AI Self-Operating Engine &amp; Self-Evaluation Monitor</div>
+        <div class="metrics-grid" style="margin-bottom:18px;">
+            <div class="metric-card">
+                <div class="metric-label">Thermostat Self-Defense</div>
+                <div class="metric-value" style="font-size:1.05rem;">{thermo.get('badge', '🟢 OPTIMAL')}</div>
+                <div class="metric-sub">Wajib APPROVED + Grade A (&ge;{thermo.get('min_ai_confidence', 75)}%)</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Pagar Cadangan Kas f(E)</div>
+                <div class="metric-value">${gov.get('reserve_usd', 15.0):.2f} <span style="font-size:0.85rem; color:var(--text-muted);">({gov.get('reserve_pct', 15.0):.0f}% E)</span></div>
+                <div class="metric-sub">Margin Siap Tembak: ${gov.get('free_above_reserve', 0.0):.2f} USDC</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Kapasitas Slot N_max(E)</div>
+                <div class="metric-value">{gov.get('active_count', 0)} / {gov.get('max_positions', 5)} <span style="font-size:0.85rem; color:var(--text-muted);">Posisi</span></div>
+                <div class="metric-sub">Swing: {gov.get('swing_count', 0)}/{gov.get('max_swing', 3)} | Intra: {gov.get('intraday_count', 0)}/{gov.get('max_intraday', 2)}</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Ukuran Peluru f(E)</div>
+                <div class="metric-value">${gov.get('min_order_margin', 12.0):.2f} – ${gov.get('max_order_margin', 18.0):.2f}</div>
+                <div class="metric-sub">Slot Base: ${gov.get('slot_base_margin', 15.0):.2f} USDC</div>
+            </div>
+        </div>
+        <div class="table-card" style="padding:16px; margin-bottom:24px;">
+            <div style="margin-bottom:10px; font-size:0.9rem;">
+                <strong>Status Gatekeeper Otonom:</strong> <span style="color:var(--neon-green);">{gov.get('gate_summary', '-')}</span><br>
+                <strong>Evaluasi Mandiri Terakhir ({eval_rep.get('evaluated_at', '-')}):</strong> {thermo.get('reason', '-')}<br>
+                <strong>Kalibrasi Bobot Screener:</strong> <span style="color:var(--text-muted);">{eval_rep.get('weight_calibration', '-')}</span>
+            </div>
+            <table style="margin-top:10px;">
+                <thead>
+                    <tr>
+                        <th>Waktu</th>
+                        <th>Kategori</th>
+                        <th>Koin</th>
+                        <th>Aksi Otonom</th>
+                        <th>Detail Keputusan &amp; Evaluasi AI</th>
+                    </tr>
+                </thead>
+                <tbody>
+        """
+        if not feed:
+            html += """<tr><td colspan="5" class="empty-row">Menunggu log telemetri otonom pertama...</td></tr>"""
+        else:
+            for item in reversed(feed[-12:]):
+                html += f"""
+                    <tr>
+                        <td style="color:var(--text-muted); font-size:0.78rem;">{item.get('timestamp', '-')}</td>
+                        <td><code>{item.get('category', '-')}</code></td>
+                        <td><strong>{item.get('coin', '-')}</strong></td>
+                        <td>{item.get('action', '-')}</td>
+                        <td style="font-size:0.82rem; color:var(--text-muted);">{item.get('detail', '-')}</td>
+                    </tr>
+                """
+        html += """
+                </tbody>
+            </table>
+        </div>
+        """
+    except Exception:
+        pass
+
+    html += f"""
         <footer>
-            ShortHunter Dual-Stream Trading System &bull; Hyperliquid L1 Mainnet &bull; On-Chain Stop-Loss Protected
+            ShortHunter Dual-Stream Autonomous Quant Engine &bull; Hyperliquid L1 Mainnet &bull; On-Chain Stop-Loss Protected
         </footer>
     </div>
 </body>
