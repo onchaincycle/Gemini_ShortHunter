@@ -188,7 +188,9 @@ class LongScreener:
             if is_dilution_veto:
                 score -= 35
 
-            # Pillar 7: Claude_Crypto BMS (Bottom Momentum Score) & Crash Gate
+            # Pillar 7: Claude_Crypto Macro Context & Safety Backdrop (Pagar Pengaman Pasif)
+            # Metrik makro Claude_Crypto difungsikan proporsional untuk mencegah membeli pisau jatuh (P1 Capitulation / Crash Gate Fail)
+            # dan memberikan konfluensi latar belakang jika ada base akumulasi:
             from src.claude_crypto_engine import ClaudeCryptoEngine
             sector_data = ClaudeCryptoEngine.get_coin_sector(symbol)
             bms_data = ClaudeCryptoEngine.compute_bms(df_d)
@@ -196,25 +198,17 @@ class LongScreener:
             drs_data = ClaudeCryptoEngine.compute_drs(df_d, funding_rate=funding_rate)
             phase_data = ClaudeCryptoEngine.classify_phase(df_d, bms_data, drs_data)
 
-            # 7a. Solid Whale Accumulation Base (Claude_Crypto BMS >= 70)
-            if bms_data["is_solid_base"]:
-                score += 15
-            elif bms_data["bms"] >= 60.0:
-                score += 8
-            elif bms_data["is_breakdown_freefall"]:
-                # Statistical edge: BMS < 30 underperforms market severely (p=0.001)
-                score -= 20
+            # 7a. Konfluensi Base Akumulasi Makro (Bonus ringan +4 jika ada konfluensi base)
+            if bms_data["is_solid_base"] or phase_data["phase"] == "P3/P4 Whale Accumulation":
+                score += 4
 
-            # 7b. Phase Confluence
-            if phase_data["phase"] == "P3/P4 Whale Accumulation":
-                score += 10
-            elif phase_data["phase"] == "P1 Capitulation":
-                score -= 25  # Veto: falling knife without base
-
-            # 7c. Crash Gate
+            # 7b. Safety Veto: Jangan Long koin yang sedang air terjun tanpa henti (P1 Capitulation)
             is_crash_gate_fail = False
-            if not crash_gate["passed"]:
-                score -= 25
+            if phase_data["phase"] == "P1 Capitulation":
+                score -= 15
+                is_crash_gate_fail = True
+            elif not crash_gate["passed"]:
+                score -= 10
                 is_crash_gate_fail = True
 
             # Clamp score

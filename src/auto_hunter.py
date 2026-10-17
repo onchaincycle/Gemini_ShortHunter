@@ -473,13 +473,12 @@ class AutoHuntSniper:
         elif cand["side"] == "LONG" and f_rate < -0.005:
             alpha += 3.0  # Shorts pay longs & potential squeeze pump
 
-        # Claude_Crypto Phase Confluence Bonus
-        phase = str(cand.get("phase", ""))
-        if "P7 DISTRIBUSI" in phase and cand["side"] == "SHORT":
-            alpha += 4.0
-        elif "P3/P4 AKUMULASI" in phase and cand["side"] == "LONG":
-            alpha += 4.0
-        elif cand.get("bms_score") is not None and float(cand["bms_score"]) < 30.0 and cand["side"] == "SHORT":
-            alpha += 3.0  # Claude_Crypto statistical short edge (BMS < 30, p=0.001)
+        # Claude_Crypto Phase Confluence Bonus (Hanya berlaku untuk SWING multi-hari, Intraday 15m dibebaskan)
+        if cand["stream"] == "SWING":
+            phase = str(cand.get("phase", ""))
+            if "P7 DISTRIBUSI" in phase and cand["side"] == "SHORT":
+                alpha += 2.0
+            elif "P3/P4 AKUMULASI" in phase and cand["side"] == "LONG":
+                alpha += 2.0
 
         return round(alpha, 1)

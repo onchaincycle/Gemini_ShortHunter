@@ -229,25 +229,24 @@ class ShortScreener:
             elif dilution_label == "MODERATE_DILUTION":
                 score += 5
 
-            # Pillar 8: Claude_Crypto Quantitative Intelligence (DRS, BMS, & Phase)
+            # Pillar 8: Claude_Crypto Macro Context & Safety Backdrop (Pagar Pengaman Pasif)
+            # Karena ShortHunter beroperasi pada horizon taktis 6h - 72h sementara Claude_Crypto berorientasi bulanan/tahunan,
+            # metrik Claude_Crypto difungsikan secara proporsional sebagai konfluensi latar belakang & pelindung risiko:
             from src.claude_crypto_engine import ClaudeCryptoEngine
             sector_data = ClaudeCryptoEngine.get_coin_sector(symbol)
             bms_data = ClaudeCryptoEngine.compute_bms(df_d)
             drs_data = ClaudeCryptoEngine.compute_drs(df_d, funding_rate=funding_rate, oi_vol_ratio=oi_vol_ratio)
             phase_data = ClaudeCryptoEngine.classify_phase(df_d, bms_data, drs_data)
 
-            # 8a. Distribution Phase & High DRS (Institutional Dump Confirmation)
-            if phase_data["phase"] == "P7 Distribution" or drs_data["is_distributing"]:
-                score += 15
-            elif drs_data["drs"] >= 50.0:
-                score += 8
+            # 8a. Konfluensi Makro Searah (Bonus ringan +4 jika fase makro sejalan dengan distribusi P7)
+            if phase_data["phase"] == "P7 Distribution":
+                score += 4
+            elif drs_data["drs"] >= 65.0:
+                score += 2
 
-            # 8b. Statistical Edge from Claude_Crypto: BMS < 30 (p=0.001) confirms zero-base freefall
-            if bms_data["is_breakdown_freefall"]:
-                score += 10
-            elif bms_data["is_solid_base"]:
-                # Danger: Multi-retest whale accumulation base present, penalize shorting into base
-                score -= 15
+            # 8b. Safety Veto: Jangan short koin yang sedang berada di atas base akumulasi paus masif (BMS >= 80)
+            if bms_data["is_solid_base"] and bms_data["bms"] >= 80.0:
+                score -= 10
 
             # Cap score if stale/oversold so it never masquerades as a top candidate
             if ex["is_stale_or_oversold"]:

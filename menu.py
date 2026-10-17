@@ -2218,6 +2218,123 @@ def menu_ai_war_room():
             print(f"     └─ Spesifikasi: {tk['technical_spec_for_antigravity']}")
 
 
+def menu_macro_spot_vault():
+    """
+    Sub-menu khusus Macro Spot Vault (1-24 Bulan) berbasis SCR v10.
+    Pengelolaan Spot & Hold tanpa leverage, zero liquidation risk.
+    """
+    from src.spot_macro_vault import SpotMacroVault
+    while True:
+        clear_screen()
+        cycle = SpotMacroVault.get_macro_cycle_status()
+        audit = SpotMacroVault.get_spot_portfolio_audit()
+        holdings = audit.get("holdings", [])
+
+        print("=" * 78)
+        print("   🏛️  MACRO SPOT VAULT (1-24 BULAN) — SCR v10 PORTFOLIO & HOLD MANAGER   ")
+        print("=" * 78)
+        print("💡 Disiplin: 100% SPOT & HOLD | Zero Leverage | Bebas Funding | Zero Liquidation")
+        print("   Prinsip SCR: \"Extended != Exit\" — Biarkan koin bertumbuh selama DRS < 55.")
+        print("-" * 78)
+
+        # Macro Cycle Box
+        print(f"🌍 Siklus 4-Tahunan BTC : Fase {cycle.get('phase', 'F')} — {cycle.get('phase_name', 'Pemulihan')} (Hari {cycle.get('days_since_halving', 910)}/1460 | {cycle.get('cycle_pct', 62.3)}% Siklus)")
+        print(f"📊 Metrik Siklus Makro  : Drawdown ATH: {cycle.get('drawdown_from_peak', -34.6):+.1f}% | Naik Dasar: {cycle.get('gain_from_bottom', +39.3):+.1f}% | Mayer: {cycle.get('mayer_multiple', 1.13)}")
+        print(f"🌡️  Sentimen Pasar Global : Fear & Greed: {cycle.get('fng', 55):.0f} ({cycle.get('fng_class', 'Greed')}) | Dominasi BTC: {cycle.get('btc_dom', 59.3):.1f}% | Rezim: {cycle.get('market_regime', 'NETRAL')}")
+        print("=" * 78)
+
+        # Portfolio Summary Table
+        print(f"\n📦 POSISI SPOT AKTIF ANDA ({len(holdings)} Koin) [Update SCR: {audit.get('asof_date', 'N/A')}]:")
+        if not holdings:
+            print("  [-] Belum ada posisi terdaftar di Claude_Crypto/SCR_v10/inputs/portfolio.csv")
+        else:
+            print("-" * 78)
+            print(f"{'KOIN':<8} {'BELI':>10} {'SEKARANG':>10} {'PNL (%)':>10} {'NILAI ($)':>11} {'WYCKOFF':<16} {'STATUS SCR':<18}")
+            print("-" * 78)
+            for h in holdings:
+                sym = h['symbol']
+                ep = f"${h['entry_price']:.4f}" if h['entry_price'] < 1 else f"${h['entry_price']:.2f}"
+                cp = f"${h['current_price']:.4f}" if h['current_price'] < 1 else f"${h['current_price']:.2f}"
+                pnl_str = f"{h['unrealized_pnl_pct']:+.1f}%"
+                val_str = f"${h['current_usd']:,.2f}"
+                ph_str = h['phase_label'][:15]
+                badge = "💎 TAHAN" if "TAHAN" in h['status_badge'] else "⚠️ PANEN" if "PANEN" in h['status_badge'] else "🚨 EXIT" if "EXIT" in h['status_badge'] else "👁️ PANTAU"
+                print(f"{sym:<8} {ep:>10} {cp:>10} {pnl_str:>10} {val_str:>11} {ph_str:<16} {badge:<18}")
+            print("-" * 78)
+            print(f"💰 Total Modal Beli : ${audit.get('total_invested', 0):,.2f} | Nilai Portofolio: ${audit.get('total_current_value', 0):,.2f}")
+            net_pnl = audit.get('total_unrealized_pnl', 0)
+            net_pct = audit.get('total_unrealized_pct', 0)
+            pnl_color = "🟢" if net_pnl >= 0 else "🔴"
+            print(f"📈 Total Unrealized : {pnl_color} ${net_pnl:+,.2f} ({net_pct:+.2f}%) | Distribusi: {audit['counts']['keep']}x Tahan, {audit['counts']['harvest']}x Panen Sebagian, {audit['counts']['watch']}x Pantau")
+
+        print("\n─── 🎯 MENU KENDALI SPOT MACRO VAULT ───────────────────────────────")
+        print("  [1] 🔍 Detail Analisis Portofolio & Logika Keputusan Tiap Koin (Deep Dive)")
+        print("  [2] 🌱 Radar Akumulasi Spot Baru (Kandidat Prime & Challenger SCR v10)")
+        print("  [3] ⚠️  Periksa Peringatan Panen / De-risking (DRS >= 55)")
+        print("  [4] 🌐 Sinkronkan ke Dashboard Web & HTML Reporter")
+        print("  [0] ↩️  Kembali ke Menu Utama")
+        print("-" * 78)
+
+        ch = input("Pilihan Anda [0-4]: ").strip()
+        if ch == "1":
+            clear_screen()
+            print("=" * 78)
+            print("   🔍 DETAIL DEEP DIVE PORTOFOLIO SPOT (EVALUASI RISIKO DISTRIBUSI)")
+            print("=" * 78)
+            for h in holdings:
+                print(f"\n🪙 [{h['symbol']}] — {h['name']}")
+                print(f"   • Masuk : ${h['entry_price']:.4f} ({h['qty']:,.2f} koin) ➔ Nilai: ${h['current_usd']:,.2f} ({h['unrealized_pnl_pct']:+.1f}%)")
+                print(f"   • Metrik: SS: {h['ss'] or '-'} | ES (Whale): {h['es'] or '-'} | DRS (Distribusi): {h['drs'] or '-'}")
+                print(f"   • Siklus: {h['phase_label']}")
+                print(f"   • Status: {h['status_badge']}")
+                print(f"   • Logika: {h['status_desc']}")
+                if h.get("note"):
+                    print(f"   • Catatan: {h['note']}")
+            input("\nTekan ENTER untuk kembali...")
+        elif ch == "2":
+            clear_screen()
+            print("=" * 78)
+            print("   🌱 RADAR AKUMULASI SPOT BARU (KANDIDAT PRIME & CHALLENGER SCR v10)")
+            print("=" * 78)
+            print("Mencari setup dasar matang (BMS >= 70, Base 45d+, Retest 3x, Crash Gate Lolos):")
+            cands = SpotMacroVault.get_top_accumulation_candidates(limit=10)
+            if not cands:
+                print("\n[-] Belum ada kandidat baru dengan skor tinggi di database SCR saat ini.")
+            else:
+                print("-" * 78)
+                print(f"{'KOIN':<8} {'HARGA':>10} {'SS':>6} {'ES':>6} {'DRS':>6} {'ATH CHG':>9} {'TIER AKUMULASI':<24}")
+                print("-" * 78)
+                for c in cands:
+                    es_str = f"{c['es']:.1f}" if isinstance(c['es'], (int, float)) else str(c['es'])
+                    port_tag = " (Di Portofolio)" if c['in_portfolio'] else ""
+                    print(f"{c['symbol']:<8} ${c['price']:>9.4f} {c['ss']:>6.1f} {es_str:>6} {c['drs']:>6.1f} {c['ath_chg_pct']:>8.1f}% {c['tier'][:24]}{port_tag}")
+            input("\nTekan ENTER untuk kembali...")
+        elif ch == "3":
+            clear_screen()
+            print("=" * 78)
+            print("   ⚠️  PERIKSA PERINGATAN PANEN & DE-RISKING SPOT (DRS >= 55)")
+            print("=" * 78)
+            high_drs = [h for h in holdings if (h.get("drs") or 0) >= 50 or "HARVEST" in h["status_badge"]]
+            if not high_drs:
+                print("\n[✓] AMAN! Tidak ada posisi spot yang terdeteksi mengalami distribusi masif (Semua DRS < 50).")
+                print("    Seluruh pemenang aman untuk terus ditahan (Conviction Hold).")
+            else:
+                print(f"\n[!] Ditemukan {len(high_drs)} koin dengan peringatan distribusi / panen:\n")
+                for h in high_drs:
+                    print(f"  • [{h['symbol']}] DRS: {h['drs']} | Status: {h['status_badge']}")
+                    print(f"    Rekomendasi: {h['status_desc']}")
+                    print(f"    PnL Saat Ini: {h['unrealized_pnl_pct']:+.1f}% (${h['unrealized_pnl_usd']:+.2f})\n")
+            input("\nTekan ENTER untuk kembali...")
+        elif ch == "4":
+            print("\n[*] Menghasilkan dashboard HTML terbaru dengan data Macro Spot Vault...")
+            from src.html_reporter import generate_html_report
+            hp = generate_html_report()
+            print(f"[✓] Berhasil di-generate di: {hp}")
+            input("\nTekan ENTER untuk kembali...")
+        elif ch in ["0", ""]:
+            break
+
+
 def main_menu():
     while True:
         clear_screen()
@@ -2228,6 +2345,8 @@ def main_menu():
         print("  [3] ⚡ Eksekusi Posisi Manual (Ketik Koin Sendiri | Server SL & TP)")
         print("  [4] 🤖 Pusat Komando AI Mandiri & Live Monitor (Zero-Touch 24/7, Self-Eval & Telemetri)")
         print("  [5] 📓 Jurnal Forward Test & Scorecard Per-Stream (Audit PnL)")
+        print("\n─── 🏛️  TRI-HORIZON & MACRO SPOT VAULT (1-24 BULAN) ──────────────────")
+        print("  [M] 🏛️  Macro Spot Vault (1-24 Bulan) — SCR v10 Portfolio & Hold Manager (Zero-Leverage)")
         print("\n─── 🧠 AI INTELLIGENCE, WAR ROOM & RISET ───────────────────────────")
         print("  [6] 🧠 Agentic AI Committee, Episodic Memory & Guardian Hub (6 Loops)")
         print("  [7] 🧪 Lab Backtest & Uji Sensitivitas (Intraday 15m & Swing Daily)")
@@ -2239,8 +2358,10 @@ def main_menu():
         print("  [0] 🚪 Keluar")
         print("-" * 68)
 
-        choice = input("Masukkan nomor pilihan [0-11, atau ketik C untuk Chat AI]: ").strip()
-        if choice in ["1", "2", "7", "8", "9"]:
+        choice = input("Masukkan nomor pilihan [0-11, atau ketik M untuk Macro Vault / C untuk Chat AI]: ").strip()
+        if choice.upper() in ["M", "MACRO", "SPOT", "VAULT"]:
+            menu_macro_spot_vault()
+        elif choice in ["1", "2", "7", "8", "9"]:
             # Gunakan read_only=True untuk query analitis DuckDB agar tidak konflik concurrency
             db = Database(read_only=(choice not in ["1", "8"]))
             try:
