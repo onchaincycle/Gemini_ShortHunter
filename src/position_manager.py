@@ -36,7 +36,7 @@ except ImportError:
     termios = None
     tty = None
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
@@ -58,6 +58,9 @@ class PositionManager:
         self.state_file = STATE_FILE
         self.ft = ForwardTestManager()
         self._ensure_dirs()
+        self._btc_history: List[Tuple[float, float]] = []  # [(timestamp, btc_price), ...]
+        self._last_macro_shock_ts: float = 0.0
+        self._last_macro_pulse_ts: float = 0.0
 
     def _ensure_dirs(self):
         os.makedirs(os.path.join(ROOT_DIR, "data"), exist_ok=True)
@@ -509,6 +512,33 @@ class PositionManager:
             if self._close_full(coin, state, pos_info, current_px, f"SWING_TIME_STOP_{max_hold}H", msg, "TIME_EXIT", actions):
                 return
 
+        # RULE 0.1: AI Dead-Momentum Buster (Scenario 1)
+        # Evaluasi posisi stagnan / jalan di tempat (age >= 36 jam, |move_pct| <= 1.5%)
+        age_h = self._age_hours(state)
+        if (age_h >= 36.0 and abs(profit_pct) <= 1.5 and
+                not state.get("trimmed_10pct") and not state.get("early_be_shield") and
+                not state.get("ai_stalemate_checked")):
+            state["ai_stalemate_checked"] = True
+            try:
+                from src.ai_engine import ai_advisor
+                market_info = {
+                    "current_px": current_px,
+                    "age_hours": age_h,
+                    "unrealized_pnl": state.get("unrealized_pnl", 0.0),
+                    "move_pct": profit_pct,
+                    "funding_rate": 0.0,
+                }
+                diag = ai_advisor.evaluate_position_stalemate(coin, state, market_info)
+                if diag.get("action") == "CLOSE_NOW" and diag.get("confidence", 0) >= 70:
+                    msg = (f"🧠 AI DEAD-MOMENTUM BUSTER: {coin} ({side}) jalan di tempat {age_h:.1f} jam (gerak {profit_pct:+.2f}%). "
+                           f"Posisi ditutup dini untuk daur ulang modal! ({diag.get('reasoning')})")
+                    if self._close_full(coin, state, pos_info, current_px, "AI_STALEMATE_EXIT", msg, "AI_EXIT", actions):
+                        return
+                else:
+                    self.log_event(f"🧠 AI STALEMATE CHECK: {coin} ({side}) dipertahankan (AI: {diag.get('action')}, {diag.get('confidence')}%) - {diag.get('reasoning')}", "SWING")
+            except Exception as e:
+                self.log_event(f"Warning: Gagal evaluasi AI stalemate {coin}: {e}", "SWING")
+
         # RULE 0.5: Early Breakeven Shield (±5.0% gerak / ±10% ROE)
         if early_be_hit and not state.get("early_be_shield") and not state.get("trimmed_10pct"):
             current_sz = float(pos_info.get("size", initial_sz))
@@ -533,17 +563,37 @@ class PositionManager:
                 self._ft_update(coin, state, pos_info, current_px, size=remaining, note=msg)
                 actions.append({"type": "TRIMMING_1", "coin": coin, "strategy": "SWING", "msg": msg})
 
-        # RULE 2: Target 2 (±18.0% gerak / ±36% ROE)
+        # RULE 2: Target 2 (±18.0% gerak / ±36% ROE) dengan AI Runner Extender (Scenario 2)
         elif tp2_hit and not state.get("tp_20pct"):
-            tp2_sz = initial_sz * 0.30
-            tp2_sz = round(tp2_sz, sz_dec) if sz_dec > 0 else int(tp2_sz)
-            ok, remaining = self._partial_close_and_move_sl(coin, state, tp2_sz, trailing_sl_px)
-            if ok:
-                state["tp_20pct"] = True
-                msg = f"🎯 TARGET 2 SUKSES (+{profit_pct:.1f}% gerak): 30% posisi ({tp2_sz} {coin} {side}) diamankan! Trailing SL dikunci di profit (${trailing_sl_px})."
-                self.log_event(msg, "SWING")
-                self._ft_update(coin, state, pos_info, current_px, size=remaining, note=msg)
-                actions.append({"type": "TARGET_2", "coin": coin, "strategy": "SWING", "msg": msg})
+            runner_decision = {"action": "EXTEND_RUNNER", "confidence": 75, "reasoning": "Standard swing policy: biarkan sisa runner."}
+            try:
+                from src.ai_engine import ai_advisor
+                runner_decision = ai_advisor.evaluate_runner_extension(coin, state, current_px, {"profit_pct": profit_pct})
+            except Exception:
+                pass
+
+            if runner_decision.get("action") == "FULL_HARVEST" and runner_decision.get("confidence", 0) >= 75:
+                # AI mendeteksi momentum jenuh/exhaustion -> kunci 100% cuan
+                msg = (f"🎯🧠 AI RUNNER HARVEST (+{profit_pct:.1f}% gerak): Trend melemah/jenuh! "
+                       f"Sisa posisi {coin} ({side}) ditutup penuh mengamankan 100% cuan! ({runner_decision.get('reasoning')})")
+                if self._close_full(coin, state, pos_info, current_px, "AI_FULL_HARVEST_TP2", msg, "TARGET_2", actions):
+                    state["tp_20pct"] = True
+                    state["runner_35pct"] = True
+            else:
+                tp2_sz = initial_sz * 0.30
+                tp2_sz = round(tp2_sz, sz_dec) if sz_dec > 0 else int(tp2_sz)
+                tightness = runner_decision.get("trailing_sl_tightness", "STANDARD")
+                if tightness == "TIGHT":
+                    tight_pct = (prof["trim_pct"] + prof["tp2_pct"]) / 2.0  # di tengah trim1 & tp2
+                    trailing_sl_px = self.trader.round_price(coin, entry_px * (1 + tight_pct / 100.0) if side == "LONG" else entry_px * (1 - tight_pct / 100.0))
+                ok, remaining = self._partial_close_and_move_sl(coin, state, tp2_sz, trailing_sl_px)
+                if ok:
+                    state["tp_20pct"] = True
+                    msg = (f"🎯 TARGET 2 SUKSES (+{profit_pct:.1f}% gerak): 30% posisi ({tp2_sz} {coin} {side}) diamankan! "
+                           f"Trailing SL dikunci di profit (${trailing_sl_px}). Sisa runner dikawal! ({runner_decision.get('reasoning')})")
+                    self.log_event(msg, "SWING")
+                    self._ft_update(coin, state, pos_info, current_px, size=remaining, note=msg)
+                    actions.append({"type": "TARGET_2", "coin": coin, "strategy": "SWING", "msg": msg})
 
         # RULE 3: Runner (±30.0% gerak / ±60% ROE)
         elif runner_hit and not state.get("runner_35pct"):
@@ -598,9 +648,55 @@ class PositionManager:
             self._close_full(coin, state, pos_info, current_px, f"INTRADAY_TIME_STOP_{max_hold}H", msg, "TIME_EXIT", actions)
             return
 
-        # RULE 1: Gap langsung tembus TP2 sebelum TP1 tereksekusi -> tutup penuh
+        # RULE 0.1: AI Dead-Momentum Buster (Scenario 1)
+        # Evaluasi intraday stagnan (age >= 3.0 jam, |move_pct| <= 0.8%)
+        if (age_h >= 3.0 and abs(profit_pct) <= 0.8 and
+                not state.get("trimmed_10pct") and not state.get("ai_stalemate_checked")):
+            state["ai_stalemate_checked"] = True
+            try:
+                from src.ai_engine import ai_advisor
+                market_info = {
+                    "current_px": current_px,
+                    "age_hours": age_h,
+                    "unrealized_pnl": state.get("unrealized_pnl", 0.0),
+                    "move_pct": profit_pct,
+                    "funding_rate": 0.0,
+                }
+                diag = ai_advisor.evaluate_position_stalemate(coin, state, market_info)
+                if diag.get("action") == "CLOSE_NOW" and diag.get("confidence", 0) >= 70:
+                    msg = (f"🧠 AI INTRADAY DEAD-MOMENTUM: {coin} ({side}) stagnan {age_h:.1f} jam (gerak {profit_pct:+.2f}%). "
+                           f"Posisi ditutup dini untuk daur ulang modal! ({diag.get('reasoning')})")
+                    if self._close_full(coin, state, pos_info, current_px, "AI_STALEMATE_EXIT", msg, "AI_EXIT", actions):
+                        return
+                else:
+                    self.log_event(f"🧠 AI STALEMATE CHECK: {coin} ({side}) dipertahankan (AI: {diag.get('action')}, {diag.get('confidence')}%) - {diag.get('reasoning')}", "DAYTRADE")
+            except Exception as e:
+                self.log_event(f"Warning: Gagal evaluasi AI stalemate {coin}: {e}", "DAYTRADE")
+
+        # RULE 1: TP2 tercapai (±5.6% gerak) dengan AI Runner Extender (Scenario 2)
         if tp2_hit and not state.get("tp_20pct"):
-            msg = f"🎯 INTRADAY TP2 ({prof['tp2_r']}R) TERCAPAI ({profit_pct:.1f}%): Sisa posisi {coin} ({side}) ditutup penuh!"
+            runner_decision = {"action": "FULL_HARVEST", "confidence": 80, "reasoning": "Standard intraday flat discipline"}
+            try:
+                from src.ai_engine import ai_advisor
+                runner_decision = ai_advisor.evaluate_runner_extension(coin, state, current_px, {"profit_pct": profit_pct})
+            except Exception:
+                pass
+
+            if runner_decision.get("action") == "EXTEND_RUNNER" and runner_decision.get("confidence", 0) >= 80:
+                current_sz = float(pos_info.get("size", initial_sz))
+                trim_sz = current_sz * 0.70
+                trim_sz = round(trim_sz, sz_dec) if sz_dec > 0 else int(trim_sz)
+                ok, remaining = self._partial_close_and_move_sl(coin, state, trim_sz, tp1_px)
+                if ok:
+                    state["tp_20pct"] = True
+                    msg = (f"🎯🚀 AI INTRADAY RUNNER EXTENDER (+{profit_pct:.1f}%): 70% sisa ({trim_sz} {coin}) diamankan! "
+                           f"Sisa runner ({remaining}) dikawal dengan Trailing SL di TP1 (${tp1_px})! ({runner_decision.get('reasoning')})")
+                    self.log_event(msg, "DAYTRADE")
+                    self._ft_update(coin, state, pos_info, current_px, size=remaining, note=msg)
+                    actions.append({"type": "TARGET_2", "coin": coin, "strategy": "DAYTRADE", "msg": msg})
+                    return
+
+            msg = f"🎯 INTRADAY TP2 ({prof['tp2_r']}R) TERCAPAI ({profit_pct:.1f}%): Sisa posisi {coin} ({side}) ditutup penuh! (AI: {runner_decision.get('reasoning')})"
             if self._close_full(coin, state, pos_info, current_px, "INTRADAY_TP2_2R", msg, "TARGET_2", actions):
                 state["tp_20pct"] = True
             return
@@ -627,6 +723,128 @@ class PositionManager:
                              "INTRADAY_BE_DEFENSE" if is_be else "INTRADAY_SL_HIT", msg, "STOP_LOSS", actions)
 
     # ------------------------------------------------------------------
+    # AI MACRO DEFENDER & PULSE AUDIT (SCENARIOS 3 & 4)
+    # ------------------------------------------------------------------
+    def _audit_macro_pulse_if_needed(self, now_ts: float):
+        """
+        Scenario 4: Periodic 4-hour AI Market Regime Pulse Check.
+        Updates SQLite trade_db and recalibrates global risk multiplier.
+        """
+        try:
+            latest = trade_db.get_latest_market_regime()
+            should_run = False
+            if not latest or not latest.get("timestamp"):
+                should_run = True
+            else:
+                try:
+                    last_dt = datetime.fromisoformat(latest["timestamp"])
+                    age_seconds = (datetime.now() - last_dt).total_seconds()
+                    if age_seconds >= (4 * 3600):
+                        should_run = True
+                except Exception:
+                    should_run = True
+
+            if should_run and (now_ts - self._last_macro_pulse_ts) >= (4 * 3600):
+                self._last_macro_pulse_ts = now_ts
+                from src.database import Database
+                from src.market_regime import MarketRegime
+                db = Database(read_only=True)
+                mr = MarketRegime(db)
+                regime = mr.get_ai_synthesized_regime()
+                self.log_event(
+                    f"🌐 AI MACRO PULSE CHECK (4H): Status={regime.get('regime_status')}, "
+                    f"BTC Trend={regime.get('btc_trend')}, Multiplier={regime.get('risk_multiplier')}x - {regime.get('reasoning')}"
+                )
+        except Exception as e:
+            self.log_event(f"Warning: Gagal audit AI Macro Pulse: {e}")
+
+    def _check_macro_shock(self, all_mids: Dict[str, float], lifecycle: Dict, live_positions: Dict, actions: List[Dict]):
+        """
+        Scenario 3: Rapid Macro Shock Defender.
+        Triggered when BTC moves > 2.8% within 60 minutes.
+        Tightens on-chain stop-losses on counter-trend positions.
+        """
+        now_ts = time.time()
+        btc_px = float(all_mids.get("BTC", 0.0))
+        if btc_px <= 0:
+            return
+
+        self._btc_history.append((now_ts, btc_px))
+        # Keep 1 hour (3600s) window
+        self._btc_history = [x for x in self._btc_history if (now_ts - x[0]) <= 3600]
+
+        if len(self._btc_history) < 2:
+            return
+
+        oldest_ts, oldest_btc = self._btc_history[0]
+        # Require at least 5 minutes of data span to avoid microsecond noise
+        if (now_ts - oldest_ts) < 300:
+            return
+
+        btc_move_pct = ((btc_px - oldest_btc) / oldest_btc) * 100.0
+
+        if abs(btc_move_pct) >= 2.8 and (now_ts - self._last_macro_shock_ts) >= 3600:
+            self._last_macro_shock_ts = now_ts
+            try:
+                from src.ai_engine import ai_advisor
+                open_summary = []
+                for c, s in lifecycle.items():
+                    if c in live_positions:
+                        open_summary.append({
+                            "coin": c,
+                            "side": s.get("side", "SHORT"),
+                            "strategy": s.get("strategy", "SWING"),
+                            "entry_px": s.get("entry_px"),
+                            "current_px": float(all_mids.get(c, 0.0)),
+                            "roe_pct": s.get("roe_pct", 0.0),
+                            "unrealized_pnl": s.get("unrealized_pnl", 0.0),
+                        })
+
+                diag = ai_advisor.evaluate_macro_shock(btc_move_pct, btc_px, open_summary)
+                self.log_event(
+                    f"🚨 AI MACRO SHOCK DEFENDER: BTC {btc_move_pct:+.2f}% dlm {int((now_ts - oldest_ts)/60)}m! "
+                    f"Level: {diag.get('shock_level')}. Tighten SL: {diag.get('tighten_sl')} - {diag.get('reasoning')}"
+                )
+
+                if diag.get("tighten_sl"):
+                    target_mode = diag.get("target_sl_mode", "KEEP_CURRENT")
+                    is_btc_surge = btc_move_pct > 0
+                    for c, s in lifecycle.items():
+                        if c not in live_positions:
+                            continue
+                        pos_side = s.get("side", "SHORT")
+                        is_vulnerable = (is_btc_surge and pos_side == "SHORT") or (not is_btc_surge and pos_side == "LONG")
+                        if not is_vulnerable:
+                            continue
+
+                        cur_sz = float(live_positions[c].get("size", s["initial_sz"]))
+                        entry = float(s["entry_px"])
+                        cur_sl = float(s.get("current_sl_px", entry))
+                        cur_px = float(all_mids.get(c, 0.0))
+
+                        new_sl = None
+                        if target_mode == "BREAKEVEN":
+                            fee_buf = 0.0009
+                            be_px = self.trader.round_price(c, entry * (1 + fee_buf if pos_side == "LONG" else 1 - fee_buf))
+                            if pos_side == "SHORT" and be_px < cur_sl:
+                                new_sl = be_px
+                            elif pos_side == "LONG" and be_px > cur_sl:
+                                new_sl = be_px
+                        elif target_mode == "TIGHT_50PCT":
+                            mid_sl = (cur_px + cur_sl) / 2.0
+                            new_sl = self.trader.round_price(c, mid_sl)
+
+                        if new_sl and new_sl != cur_sl:
+                            ok = self._move_sl_on_chain(c, s, new_sl, cur_sz)
+                            if ok:
+                                s["current_sl_px"] = new_sl
+                                msg = f"🛡️ MACRO SHOCK DEFENSE: SL {c} ({pos_side}) diperketat on-chain ke ${new_sl} untuk proteksi modal!"
+                                self.log_event(msg)
+                                actions.append({"type": "MACRO_SHOCK_SL_TIGHTEN", "coin": c, "msg": msg})
+            except Exception as e:
+                self.log_event(f"Warning: Gagal eksekusi Macro Shock Defender: {e}")
+
+    # ------------------------------------------------------------------
     # MAIN CYCLE
     # ------------------------------------------------------------------
     def check_and_execute(self) -> List[Dict]:
@@ -634,6 +852,10 @@ class PositionManager:
         Performs one check cycle across all monitored positions.
         Setiap posisi dikelola oleh stream strateginya sendiri (SWING / DAYTRADE).
         """
+        now_ts = time.time()
+        # Scenario 4: Periodic 4-hour AI Market Regime Pulse Check
+        self._audit_macro_pulse_if_needed(now_ts)
+
         lifecycle = self.sync_active_positions()
         if not lifecycle:
             return []
@@ -645,6 +867,9 @@ class PositionManager:
         all_mids = self.trader.get_all_mids()
 
         actions_taken = []
+
+        # Scenario 3: AI Macro Shock Defender (Rapid BTC Volatility Surge > 2.8%/1h)
+        self._check_macro_shock(all_mids, lifecycle, live_positions, actions_taken)
 
         for coin, state in list(lifecycle.items()):
             if coin not in live_positions:

@@ -109,6 +109,45 @@ class ExperimentBatch(BaseModel):
     proposals: List[ExperimentProposal]
 
 
+# --- Event-Driven Autopilot Schemas ---
+class StalemateDiagnosis(BaseModel):
+    action: Literal["CLOSE_NOW", "HOLD"] = Field(
+        description="Whether to close stagnant trade immediately to recycle capital or continue holding"
+    )
+    urgency: Literal["HIGH", "MEDIUM", "LOW"] = Field(
+        default="MEDIUM",
+        description="Urgency of the action"
+    )
+    confidence: int = Field(ge=0, le=100, description="Confidence score from 0 to 100")
+    reasoning: str = Field(description="1-2 sentences explaining momentum exhaustion or continuation outlook")
+
+
+class RunnerDecision(BaseModel):
+    action: Literal["FULL_HARVEST", "EXTEND_RUNNER"] = Field(
+        description="Whether to take full 100% profit at TP2 or leave runner"
+    )
+    trailing_sl_tightness: Literal["TIGHT", "STANDARD", "WIDE"] = Field(
+        default="STANDARD",
+        description="Trailing stop tightness if runner is kept"
+    )
+    confidence: int = Field(ge=0, le=100)
+    reasoning: str = Field(description="1-2 sentences analyzing volume climax vs trend continuation potential")
+
+
+class MacroShockAssessment(BaseModel):
+    shock_level: Literal["CRITICAL", "MODERATE", "FALSE_ALARM"] = Field(
+        description="Severity of the rapid BTC market shock"
+    )
+    tighten_sl: bool = Field(
+        description="Whether daemon should immediately tighten on-chain stop losses on open counter-trend positions"
+    )
+    target_sl_mode: Literal["BREAKEVEN", "TIGHT_50PCT", "KEEP_CURRENT"] = Field(
+        default="KEEP_CURRENT",
+        description="How much to tighten SL on exposed counter-trend positions"
+    )
+    reasoning: str = Field(description="1-2 sentences explaining contagion and squeeze risk")
+
+
 class GeminiTradeAdvisor:
     def __init__(self, api_key: Optional[str] = None, model_name: Optional[str] = None):
         self.api_key = api_key or os.getenv("GEMINI_API_KEY")
@@ -572,6 +611,158 @@ Return proposals in structured format.
             return batch.get("proposals", default_fallback)
         except Exception as e:
             print(f"[!] Warning: Gagal propose experiments Gemini: {e}")
+            return default_fallback
+
+    # -------------------------------------------------------------------------
+    # EVENT-DRIVEN AUTOPILOT AI SCENARIOS (LOW TOKEN, HIGH VALUE)
+    # -------------------------------------------------------------------------
+    def evaluate_position_stalemate(self, coin: str, state: Dict, market_info: Optional[Dict] = None) -> Dict:
+        """
+        Scenario 1: Evaluates stagnant / dead-momentum position to decide early exit vs hold.
+        Triggered at most ONCE per position lifecycle.
+        """
+        default_fallback = {
+            "action": "HOLD",
+            "urgency": "LOW",
+            "confidence": 70,
+            "reasoning": "Fallback deterministik: lanjutkan holding sesuai time-stop default.",
+            "ai_generated": False
+        }
+        if not self.is_available():
+            return default_fallback
+
+        from google.genai import types
+
+        strat = state.get("strategy", "DAYTRADE")
+        side = state.get("side", "SHORT")
+        entry = float(state.get("entry_px", 0.0))
+        cur_px = float((market_info or {}).get("current_px") or state.get("last_px", entry))
+        age_h = float((market_info or {}).get("age_hours", 0.0))
+        pnl = float((market_info or {}).get("unrealized_pnl", 0.0))
+        move_pct = float((market_info or {}).get("move_pct", 0.0))
+        f_rate = float((market_info or {}).get("funding_rate", 0.0))
+
+        prompt = f"""
+You are the Lead Risk Officer for a high-frequency crypto fund reviewing a STAGNANT position.
+Coin: {coin} | Strategy: {strat} | Side: {side}
+Entry: ${entry} | Current Price: ${cur_px} | Move: {move_pct:+.2f}% | PnL: ${pnl:+.2f}
+Age: {age_h:.1f} hours | Funding Rate: {f_rate:+.4f}%
+
+The position has been floating sideways near entry with flat momentum.
+Determine:
+- action: CLOSE_NOW (cut position immediately to free up margin for high-alpha setups) or HOLD (momentum likely to resume before max hold).
+- urgency: HIGH, MEDIUM, or LOW.
+- confidence: 0-100.
+- reasoning: 1-2 concise sentences.
+"""
+        try:
+            response = self._client.models.generate_content(
+                model=self.model_name,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    response_schema=StalemateDiagnosis,
+                    temperature=0.1,
+                )
+            )
+            res = json.loads(response.text)
+            res["ai_generated"] = True
+            return res
+        except Exception as e:
+            return default_fallback
+
+    def evaluate_runner_extension(self, coin: str, state: Dict, current_px: float, market_info: Optional[Dict] = None) -> Dict:
+        """
+        Scenario 2: Evaluates whether to take 100% full harvest at TP2 or extend runner.
+        Triggered strictly ONCE when TP2 target is reached.
+        """
+        default_fallback = {
+            "action": "EXTEND_RUNNER" if state.get("strategy") == "SWING" else "FULL_HARVEST",
+            "trailing_sl_tightness": "STANDARD",
+            "confidence": 75,
+            "reasoning": "Fallback deterministik: ikuti aturan default profil.",
+            "ai_generated": False
+        }
+        if not self.is_available():
+            return default_fallback
+
+        from google.genai import types
+
+        strat = state.get("strategy", "SWING")
+        side = state.get("side", "SHORT")
+        entry = float(state.get("entry_px", 0.0))
+        profit_pct = float((market_info or {}).get("profit_pct", 0.0))
+
+        prompt = f"""
+You are a quantitative trader managing a WINNING position that just hit Target 2 (TP2).
+Coin: {coin} | Strategy: {strat} | Side: {side}
+Entry: ${entry} | Current Price: ${current_px} | Profit Move: +{profit_pct:.2f}%
+
+Decide:
+- action: FULL_HARVEST (close 100% now to lock realized gains if trend is exhausting) or EXTEND_RUNNER (keep remaining runner size for deep profit target).
+- trailing_sl_tightness: TIGHT, STANDARD, or WIDE.
+- confidence: 0-100.
+- reasoning: 1-2 concise sentences analyzing momentum exhaustion vs continuation.
+"""
+        try:
+            response = self._client.models.generate_content(
+                model=self.model_name,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    response_schema=RunnerDecision,
+                    temperature=0.1,
+                )
+            )
+            res = json.loads(response.text)
+            res["ai_generated"] = True
+            return res
+        except Exception as e:
+            return default_fallback
+
+    def evaluate_macro_shock(self, btc_move_pct: float, current_btc_px: float, open_positions_summary: List[Dict]) -> Dict:
+        """
+        Scenario 3: Rapid Macro Shock Defender.
+        Triggered when BTC moves > 2.8% within 1 hour.
+        """
+        default_fallback = {
+            "shock_level": "MODERATE",
+            "tighten_sl": False,
+            "target_sl_mode": "KEEP_CURRENT",
+            "reasoning": "Fallback deterministik: pertahankan stop loss on-chain yang ada.",
+            "ai_generated": False
+        }
+        if not self.is_available():
+            return default_fallback
+
+        from google.genai import types
+
+        prompt = f"""
+EMERGENCY MACRO RISK AUDIT:
+Bitcoin just moved {btc_move_pct:+.2f}% rapidly in the last 60 minutes! Current BTC Price: ${current_btc_px:,.1f}.
+Open Altcoin Positions ({len(open_positions_summary)}):
+{json.dumps(open_positions_summary[:6], indent=2)}
+
+Determine:
+- shock_level: CRITICAL (severe squeeze/cascade underway), MODERATE, or FALSE_ALARM.
+- tighten_sl: true if daemon should immediately tighten on-chain stop losses on counter-trend positions to prevent drawdown.
+- target_sl_mode: BREAKEVEN, TIGHT_50PCT, or KEEP_CURRENT.
+- reasoning: 1-2 decisive sentences.
+"""
+        try:
+            response = self._client.models.generate_content(
+                model=self.model_name,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    response_schema=MacroShockAssessment,
+                    temperature=0.1,
+                )
+            )
+            res = json.loads(response.text)
+            res["ai_generated"] = True
+            return res
+        except Exception as e:
             return default_fallback
 
 
