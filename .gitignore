@@ -7,5 +7,14 @@ __pycache__/
 data/*.db*
 data/*.duckdb*
 data/intraday_cache/
+data/war_room_chat_history.json
+data/antigravity_bridge.json
+data/guardian_report.json
+AGENTS.md
+data/*.bak
+data/*.tmp
 logs/*.log
 .DS_Store
+
+
+

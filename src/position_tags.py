@@ -87,9 +87,15 @@ def build_plan(strategy: str, entry_px: float, sl_px: Optional[float] = None,
         sl_pct_eff = (entry_px - sl_px) / entry_px * 100.0 if entry_px > 0 else prof["sl_pct"]
 
         if prof.get("exit_model") == "R_MULTIPLE":
+            sl_min = float(prof.get("sl_min_pct", 2.5))
+            sl_max = float(prof.get("sl_max_pct", 4.5))
+            tp2_max = float(prof.get("tp2_max_pct", 9.0))
+            if sl_pct_eff < sl_min or sl_pct_eff > sl_max:
+                sl_pct_eff = max(sl_min, min(sl_max, sl_pct_eff if sl_pct_eff > 0 else float(prof["sl_pct"])))
+                sl_px = entry_px * (1 - sl_pct_eff / 100.0)
             risk = entry_px - sl_px
             tp1_px = entry_px + prof.get("tp1_r", 1.0) * risk
-            tp2_px = entry_px + prof.get("tp2_r", 2.0) * risk
+            tp2_px = min(entry_px * (1 + tp2_max / 100.0), entry_px + prof.get("tp2_r", 2.0) * risk)
             runner_px = None
         else:
             tp1_px = entry_px * (1 + prof["trim_pct"] / 100.0)
@@ -117,9 +123,15 @@ def build_plan(strategy: str, entry_px: float, sl_px: Optional[float] = None,
         sl_pct_eff = (sl_px - entry_px) / entry_px * 100.0 if entry_px > 0 else prof["sl_pct"]
 
         if prof.get("exit_model") == "R_MULTIPLE":
+            sl_min = float(prof.get("sl_min_pct", 2.5))
+            sl_max = float(prof.get("sl_max_pct", 4.5))
+            tp2_max = float(prof.get("tp2_max_pct", 9.0))
+            if sl_pct_eff < sl_min or sl_pct_eff > sl_max:
+                sl_pct_eff = max(sl_min, min(sl_max, sl_pct_eff if sl_pct_eff > 0 else float(prof["sl_pct"])))
+                sl_px = entry_px * (1 + sl_pct_eff / 100.0)
             risk = sl_px - entry_px
             tp1_px = entry_px - prof.get("tp1_r", 1.0) * risk
-            tp2_px = entry_px - prof.get("tp2_r", 2.0) * risk
+            tp2_px = max(entry_px * (1 - tp2_max / 100.0), entry_px - prof.get("tp2_r", 2.0) * risk)
             runner_px = None
         else:
             tp1_px = entry_px * (1 - prof["trim_pct"] / 100.0)

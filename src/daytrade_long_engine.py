@@ -119,16 +119,16 @@ class IntradayLongEngine:
         # 6. Dynamic Technical Stop Loss (Placed BELOW the 3-candle rejection low - 0.35% buffer)
         rejection_low = local_low_3
         raw_sl_px = rejection_low * (1 - 0.0035)
-        sl_pct = ((curr_px - raw_sl_px) / curr_px) * 100.0
+        raw_sl_pct = ((curr_px - raw_sl_px) / curr_px) * 100.0
 
-        is_sl_too_wide = sl_pct > 5.5
-        if sl_pct < 2.8:
-            sl_pct = 2.8
-            raw_sl_px = curr_px * (1 - (sl_pct / 100.0))
+        # Safety clamps on Intraday SL (2.5% to 4.5%) so TP2 never stretches to Swing levels (~20%)
+        is_sl_too_wide = raw_sl_pct > 5.0
+        sl_pct = max(2.5, min(4.5, raw_sl_pct))
+        raw_sl_px = curr_px * (1 - (sl_pct / 100.0))
 
-        # 7. Targets with Positive Mathematical Expected Value (1.0R and 2.0R)
+        # 7. Targets with Positive Mathematical Expected Value (1.0R and 2.0R -> 5.0% to 9.0% max)
         tp1_pct = round(sl_pct * 1.00, 2)
-        tp2_pct = round(sl_pct * 2.00, 2)
+        tp2_pct = round(min(9.0, sl_pct * 2.00), 2)
         tp1_px = curr_px * (1 + (tp1_pct / 100.0))
         tp2_px = curr_px * (1 + (tp2_pct / 100.0))
         rrr = round(tp2_pct / sl_pct, 2) if sl_pct > 0 else 0.0

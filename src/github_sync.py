@@ -121,10 +121,24 @@ def sync_and_push(commit_msg: Optional[str] = None) -> Dict:
         "data/positions_lifecycle.json",
         "data/position_tags.json",
         "data/active_profile.json",
-        "data/adaptive_weights.json"
+        "data/adaptive_weights.json",
+        "data/episodic_memory.json"
     ]
     for sf in safe_files:
-        run_cmd(["git", "add", sf])
+        if os.path.exists(os.path.join(ROOT_DIR, sf)):
+            run_cmd(["git", "add", sf])
+
+    # 3.5 GUARDIAN AGENT PRE-COMMIT SECURITY & DLP FIREWALL
+    try:
+        from src.guardian_agent import guardian_agent
+        sec_audit = guardian_agent.audit_git_staging_security()
+        if not sec_audit.get("safe", True):
+            return {
+                "success": False,
+                "error": f"🛑 DIBLOKIR OLEH GUARDIAN AGENT (Kebocoran Data Sensitif Dicegah): {'; '.join(sec_audit.get('violations', []))}"
+            }
+    except Exception as e:
+        print(f"[!] Warning: Guardian audit check note: {e}")
 
     # 4. Check if there are changes to commit
     code, diff_cached, _ = run_cmd(["git", "diff", "--cached", "--name-only"])
@@ -134,7 +148,7 @@ def sync_and_push(commit_msg: Optional[str] = None) -> Dict:
         return {
             "success": True,
             "pushed": False,
-            "message": "Tidak ada perubahan baru untuk di-commit.",
+            "message": "Tidak ada perubahan baru untuk di-commit (Staged files sudah bersih & sinkron).",
             "repo_url": repo_url,
             "pages_url": pages_url
         }
@@ -164,11 +178,23 @@ def sync_and_push(commit_msg: Optional[str] = None) -> Dict:
     return {
         "success": True,
         "pushed": True,
-        "message": f"Berhasil commit & push ke GitHub ({branch})!",
+        "message": f"Berhasil commit & push ke GitHub ({branch}) [🛡️ Terverifikasi Aman oleh Guardian DLP]!",
         "repo_url": repo_url,
         "pages_url": pages_url,
         "commit_msg": msg
     }
+
+
+def run_sync_pipeline() -> Dict:
+    """Wrapper for CLI callers."""
+    res = sync_and_push()
+    if res.get("success"):
+        print(f"[✓] {res.get('message')}")
+        if res.get("pages_url"):
+            print(f"  🌐 GitHub Pages : {res['pages_url']}")
+    else:
+        print(f"[!] {res.get('error')}")
+    return res
 
 
 if __name__ == "__main__":

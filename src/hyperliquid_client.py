@@ -142,3 +142,92 @@ class HyperliquidClient:
         df.sort_values(by="timestamp", inplace=True)
         df.reset_index(drop=True, inplace=True)
         return df
+
+    # Rolling 5-minute spread memory across calls: {coin: [(timestamp, spread_bps, total_book_usd), ...]}
+    _SPREAD_HISTORY_5M: Dict[str, List[tuple]] = {}
+
+    def get_l2_orderbook(self, coin: str, depth: int = 15) -> Dict:
+        """
+        Fetches real-time L2 Orderbook snapshot for a coin from Hyperliquid Info API.
+        Computes bid/ask notional walls, imbalance ratio, current spread, and 5-minute
+        rolling average spread (in bps & %) for $200+ equity slippage protection.
+        """
+        try:
+            payload = {"type": "l2Book", "coin": coin}
+            data = self._post(payload)
+            levels = data.get("levels", [])
+            if not levels or len(levels) < 2:
+                return {"coin": coin, "available": False, "reason": "No L2 levels returned"}
+
+            bids_raw = levels[0][:depth]
+            asks_raw = levels[1][:depth]
+
+            bid_usd = sum(float(b["px"]) * float(b["sz"]) for b in bids_raw)
+            ask_usd = sum(float(a["px"]) * float(a["sz"]) for a in asks_raw)
+            best_bid = float(bids_raw[0]["px"]) if bids_raw else 0.0
+            best_ask = float(asks_raw[0]["px"]) if asks_raw else 0.0
+            mid_px = (best_bid + best_ask) / 2.0 if (best_bid > 0 and best_ask > 0) else 0.0
+            spread_bps = ((best_ask - best_bid) / mid_px * 10000.0) if mid_px > 0 else 0.0
+
+            total_book = bid_usd + ask_usd
+            bid_ratio_pct = round((bid_usd / total_book * 100.0), 1) if total_book > 0 else 50.0
+            ask_ratio_pct = round(100.0 - bid_ratio_pct, 1)
+
+            # Update 5-minute (300s) rolling spread tracker
+            now_ts = time.time()
+            hist = [x for x in self._SPREAD_HISTORY_5M.get(coin, []) if (now_ts - x[0]) <= 300.0]
+            hist.append((now_ts, spread_bps, total_book))
+            self._SPREAD_HISTORY_5M[coin] = hist[-30:]
+
+            avg_spread_5m_bps = sum(x[1] for x in hist) / len(hist) if hist else spread_bps
+            avg_spread_5m_pct = avg_spread_5m_bps / 100.0
+            avg_depth_5m_usd = sum(x[2] for x in hist) / len(hist) if hist else total_book
+
+            if avg_spread_5m_bps <= 5.0 and total_book >= 15000.0:
+                liquidity_grade = "INSTITUTIONAL_TIGHT (Zero Slippage)"
+            elif avg_spread_5m_bps <= 12.0 and total_book >= 4000.0:
+                liquidity_grade = "HEALTHY_LIQUIDITY"
+            else:
+                liquidity_grade = "WIDE_SPREAD_SLIPPAGE_RISK"
+
+            # Find largest single wall on bid and ask side
+            max_bid_wall = max(
+                ({"px": float(b["px"]), "usd": round(float(b["px"]) * float(b["sz"]), 2)} for b in bids_raw),
+                key=lambda x: x["usd"],
+                default={"px": 0.0, "usd": 0.0}
+            )
+            max_ask_wall = max(
+                ({"px": float(a["px"]), "usd": round(float(a["px"]) * float(a["sz"]), 2)} for a in asks_raw),
+                key=lambda x: x["usd"],
+                default={"px": 0.0, "usd": 0.0}
+            )
+
+            if bid_ratio_pct >= 62.0:
+                pressure = "STRONG_BID_SUPPORT (Buyers/Absorption Dominant)"
+            elif ask_ratio_pct >= 62.0:
+                pressure = "STRONG_ASK_RESISTANCE (Sellers/Supply Wall Dominant)"
+            else:
+                pressure = "BALANCED_ORDERBOOK"
+
+            return {
+                "coin": coin,
+                "available": True,
+                "mid_px": round(mid_px, 6),
+                "spread_bps": round(spread_bps, 2),
+                "avg_spread_5m_bps": round(avg_spread_5m_bps, 2),
+                "avg_spread_5m_pct": round(avg_spread_5m_pct, 4),
+                "avg_depth_5m_usd": round(avg_depth_5m_usd, 2),
+                "samples_5m": len(hist),
+                "liquidity_grade": liquidity_grade,
+                "top_depth_levels": depth,
+                "bid_liquidity_usd": round(bid_usd, 2),
+                "ask_liquidity_usd": round(ask_usd, 2),
+                "bid_share_pct": bid_ratio_pct,
+                "ask_share_pct": ask_ratio_pct,
+                "largest_bid_wall": max_bid_wall,
+                "largest_ask_wall": max_ask_wall,
+                "orderbook_pressure": pressure
+            }
+        except Exception as e:
+            return {"coin": coin, "available": False, "error": str(e)}
+

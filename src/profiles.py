@@ -30,8 +30,10 @@ PROFILES = {
         # --- Exit model: persentase tetap dari harga entry ---
         "exit_model": "FIXED_PCT",
         "sl_pct": 10.0,
-        "early_be_pct": 5.0,        # Early Breakeven Shield at +5% price move (10% ROE)
-        "trim_pct": 7.0,            # Trim 1 at +7% price move (14% ROE) for faster profit harvests
+        "half_risk_step_pct": 2.2,  # Step 1 (+2.2% move / +4.4% ROE): Compress on-chain SL from -10% to -5.0%
+        "early_be_pct": 4.0,        # Step 2 (+4.0% move / +8.0% ROE): Early Breakeven Shield (0% risk + fee)
+        "trim_pct": 7.0,            # Step 3 (+7.0% move / +14% ROE): Trim 50% + lock SL at +2.0% profit
+        "periodic_trail_start_pct": 8.5,  # Step 4 (>= +8.5% move): Periodic HWM ratchet locking 55% of peak move
         "tp2_pct": 18.0,            # TP2 at +18% price move (36% ROE)
         "runner_pct": 30.0,         # Runner at +30% price move (60% ROE)
         "max_hold_hours": 72,
@@ -48,25 +50,28 @@ PROFILES = {
         "session_gate": False,
         "poll_seconds": 25,
         "fee_roundtrip_pct": 0.09,  # taker 0.045% x 2
-        "target_desc": "Early BE @ ±5% ➔ Trim 50% @ ±7% ➔ TP 30% @ ±18% ➔ Runner @ ±30% | SL: ±10% | Max Hold: 72 Jam"
+        "target_desc": "Half-Risk @ ±2.2% ➔ Early BE @ ±4% ➔ Trim 50% @ ±7% (+Periodic Trail) ➔ TP @ ±18% ➔ Runner @ ±30%"
     },
     "DAYTRADE": {
         "key": "DAYTRADE",
-        "name": "Mode Intraday Day-Trade (Precision v2.2)",
+        "name": "Mode Intraday Day-Trade (Precision v2.3)",
         "badge": "⚡ INTRADAY",
-        "description": "Eksekusi intraday 15m: Dynamic 2x-3x leverage (Grade A), SL teknis pucuk jarum, TP berbasis R, auto-close 6 jam.",
+        "description": "Eksekusi intraday 15m: Dynamic 2x-3x leverage (Grade A), SL teknis 2.5-4.5%, TP1 1.0R (2.5-4.5%), TP2 2.0R (5.0-9.0%), auto-close 6 jam.",
         # --- Screening ---
         "timeframe": "15m / 1H",
         "min_score": 75.0,
         # --- Exit model: kelipatan risiko (R) dari SL dinamis per posisi ---
         "exit_model": "R_MULTIPLE",
-        "sl_pct": 3.8,              # default bila SL dinamis tidak tersedia
-        "sl_min_pct": 2.8,
-        "sl_max_pct": 5.5,
-        "tp1_r": 1.0,               # Trim 50% & SL ke BE
-        "tp2_r": 2.0,               # Tutup sisa
-        "trim_pct": 3.8,            # = 1.0R dari default SL (fallback)
-        "tp2_pct": 7.6,             # = 2.0R dari default SL (fallback)
+        "sl_pct": 3.2,              # default bila SL dinamis tidak tersedia
+        "sl_min_pct": 2.5,
+        "sl_max_pct": 4.5,
+        "half_risk_r": 0.45,        # Step 1 (0.45R / ~1.4% move): Perketat SL on-chain 50%
+        "early_be_r": 0.65,         # Step 2 (0.65R / ~2.1% move): Geser SL on-chain ke Breakeven + Fee
+        "tp1_r": 1.0,               # Step 3 (1.0R / 2.5-4.5% move): Trim 50% & kunci SL di profit +0.3R
+        "tp2_r": 2.0,               # Step 4 (2.0R / 5.0-9.0% move): Tutup sisa (Hard Cap 9.0% gerak harga)
+        "trim_pct": 3.2,            # = 1.0R dari default SL (fallback)
+        "tp2_pct": 6.4,             # = 2.0R dari default SL (fallback)
+        "tp2_max_pct": 9.0,         # Hard cap TP2 gerak harga spot (maks 9.0% / 18-27% ROE)
         "runner_pct": None,
         "max_hold_hours": 6,
         "time_exit_enabled": True,
@@ -83,7 +88,7 @@ PROFILES = {
         "session_gate": True,       # hanya London/NY (14:00-23:59 WIB)
         "poll_seconds": 10,
         "fee_roundtrip_pct": 0.09,
-        "target_desc": "TP1 1.0R (Trim 50% + SL ke BE) ➔ TP2 2.0R | SL Teknis 2.8-5.5% | Auto-Close: 6 Jam"
+        "target_desc": "Half-Risk @ 0.45R ➔ Early BE @ 0.65R ➔ TP1 1.0R (2.5-4.5% | Trim 50%) ➔ TP2 2.0R (5.0-9.0% | ~10-18% ROE) | Auto-Close: 6 Jam"
     }
 }
 

@@ -530,8 +530,25 @@ def menu_auto_hunt_sniper(db):
         rec_margin = audit.get("final_margin", 15.0)
         risk_usd = audit.get("max_risk_usd", 1.5)
 
-        print(f"  AI Gatekeeper Status : 🟢 APPROVED (Keyakinan: {conf_score}/100 | Grade: {grade})")
-        print(f"  Analisis AI Advisor  : {reasons}")
+        print(f"  AI Committee Status  : 🟢 APPROVED (Keyakinan: {conf_score}/100 | Grade: {grade})")
+        sniper_th = audit.get("sniper_thesis", "")
+        pros_crit = audit.get("prosecutor_critique", "")
+        tools_inv = audit.get("tools_invoked") or {}
+        if sniper_th:
+            print(f"  🎯 Argumen Sniper    : {sniper_th}")
+        if pros_crit:
+            print(f"  ⚖️  Kritik Prosecutor : {pros_crit}")
+        print(f"  👨‍⚖️ Putusan CRO Judge : {reasons}")
+        if tools_inv:
+            ob_info = tools_inv.get("orderbook") or {}
+            corr_info = tools_inv.get("portfolio_correlation") or {}
+            hist_info = tools_inv.get("coin_history") or {}
+            print(
+                f"  🛠️  Investigasi Tools : "
+                f"Orderbook Bid {ob_info.get('bid_share_pct', 50):.0f}%/Ask {ob_info.get('ask_share_pct', 50):.0f}% | "
+                f"Histori: {hist_info.get('trauma_status', 'CLEAN')[:28]} | "
+                f"Portofolio: {corr_info.get('hedge_status', 'BALANCED')[:30]}"
+            )
         if risk_factors:
             print("  Daftar Faktor Risiko Terdeteksi:")
             for idx, rf in enumerate(risk_factors, 1):
@@ -1852,29 +1869,39 @@ def menu_forward_test_journal():
 
 
 def menu_ai_hub():
-    from src.ai_engine import ai_advisor
+    from src.ai_engine import ai_advisor, episodic_memory
+    from src.guardian_agent import guardian_agent
     from src.trade_db import trade_db
     from src.adaptive_weights import get_weights, run_calibration
     from src.auto_optimizer import AutoOptimizer
 
     while True:
         clear_screen()
-        status_str = "🟢 AKTIF (Gemini 2.5 Flash)" if ai_advisor.is_available() else "⚪ OFF / FALLBACK (Set GEMINI_API_KEY di .env)"
-        print("=" * 68)
-        print("       🧠 AI ADVISOR & SELF-IMPROVING HUB (GEMINI FLASH)       ")
-        print("=" * 68)
+        status_str = "🟢 AKTIF (Gemini Flash Multi-Agent Committee)" if ai_advisor.is_available() else "⚪ DETERMINISTIC COMMITTEE FALLBACK (Set GEMINI_API_KEY di .env)"
+        mem_data = episodic_memory.load_memory()
+        rules_list = mem_data.get("rules", [])
+        g_rep = guardian_agent.run_full_health_and_security_audit(force=False)
+        print("=" * 74)
+        print("   🧠 AGENTIC AI COMMITTEE, EPISODIC MEMORY & DEVSECOPS GUARDIAN HUB   ")
+        print("=" * 74)
         print(f"Status Engine AI       : {status_str}")
-        print("Arsitektur             : 5 Feedback Loops (Audit, Weights, Gatekeeper, Regime, Optimizer)")
-        print("-" * 68)
+        print("Komite Trading (3-Sub) : 🎯 The Sniper vs ⚖️  The Prosecutor vs 👨‍⚖️ CRO Judge")
+        print("Autonomous Tools       : 🛠️  query_coin_history | inspect_orderbook | check_correlation")
+        print(f"Episodic Memory Bank   : 🧠 {len(rules_list)} Aturan Mandiri Aktif (Diperbarui: {mem_data.get('updated_at', '-')})")
+        print(f"System Guardian Agent  : {g_rep.get('status_badge')}")
+        print("-" * 74)
         print("Pilih opsi:")
         print("  [1] 📋 Tampilkan Review & Grade AI Terhadap Trade Terakhir (Loop 1 Post-Mortem)")
         print("  [2] 🌐 Cek Sintesis Rezim Makro Pasar Versi AI (Loop 4 Regime Synthesizer)")
         print("  [3] ⚖️  Lihat & Kalibrasi Bobot Sinyal Screener Mandiri (Loop 2 Adaptive Weights)")
         print("  [4] 🧪 Jalankan Optimasi Hipotesis Backtest Mandiri (Loop 5 Auto Optimizer)")
+        print("  [5] 🧠 Lihat & Tambah Aturan di Episodic Memory Bank (Memori Jangka Panjang)")
+        print("  [6] 🛡️  Jalankan Audit Kesolidan, Anti-Crash & Firewall Privasi (Guardian Agent)")
+        print("  [7] 💬 Masuk ke AI War Room (Bicara Bebas, Review Pendapat & Auto Follow-Up)")
         print("  [0] Kembali ke Menu Utama")
-        print("-" * 68)
+        print("-" * 74)
 
-        choice = input("Masukkan pilihan [0-4]: ").strip()
+        choice = input("Masukkan pilihan [0-7]: ").strip()
         if choice == "1":
             journal = trade_db.load_journal()
             closed_trades = [v for v in journal.values() if v.get("status") == "CLOSED"]
@@ -1950,8 +1977,157 @@ def menu_ai_hub():
                 print(f"  Hasil Backtest: PF {exp.get('profit_factor', 0)} ({exp.get('pf_delta', 0):+.2f}) | WinRate {exp.get('win_rate_pct', 0)}% | Net {exp.get('net_return_pct', 0):+.1f}% ({exp.get('total_trades', 0)} trade)")
                 print("-" * 75)
             input("\nTekan ENTER untuk lanjut...")
+        elif choice == "5":
+            print("\n🧠 EPISODIC MEMORY BANK (ATURAN MANDIRI HASIL BELAJAR DARI RIWAYAT TRADE):")
+            print("=" * 76)
+            for r in rules_list:
+                print(f"  • [{r.get('id')}] ({r.get('stream')}/{r.get('side')} | Sumber: {r.get('source_coin')} | {r.get('root_cause')}):")
+                print(f"    └─ \"{r.get('rule')}\"")
+            print("-" * 76)
+            new_rule = input("Ketik aturan baru untuk ditambahkan ke Episodic Memory (atau ENTER untuk kembali): ").strip()
+            if new_rule and len(new_rule) >= 10:
+                episodic_memory.record_lesson_from_trade(
+                    {"coin": "MANUAL_USER", "strategy": "ALL", "side": "ALL"},
+                    {"root_cause": "USER_DIRECTIVE", "episodic_rule_to_remember": new_rule}
+                )
+                print("[✓] Aturan baru berhasil disimpan ke Episodic Memory Bank dan langsung di-inject ke Komite Agent!")
+                input("Tekan ENTER untuk lanjut...")
+        elif choice == "6":
+            print("\n🛡️  MENJALANKAN AUDIT PENUH DEVSECOPS & SELF-HEALING GUARDIAN AGENT...")
+            rep = guardian_agent.run_full_health_and_security_audit(force=True)
+            ast_r = rep.get("codebase_ast", {})
+            db_r = rep.get("sqlite_wal", {})
+            git_r = rep.get("git_security", {})
+            rt_r = rep.get("runtime_telemetry", {})
+            healed = rep.get("healed_json_actions", [])
+            print("=" * 76)
+            print(f"  Status Keseluruhan   : {rep.get('status_badge')}")
+            print(f"  1. Integritas Kode   : {'🟢 LULUS' if ast_r.get('healthy') else '🔴 ERROR'} ({ast_r.get('checked_files', 0)} modul Python diverifikasi AST 0 syntax error)")
+            print(f"  2. Database SQLite   : {'🟢 SEHAT' if db_r.get('healthy') else '⚠️ WARNING'} ({db_r.get('status')})")
+            print(f"  3. Git & Privasi DLP : {'🟢 AMAN 100%' if git_r.get('safe') else '🛑 BLOCKED'} ({git_r.get('action_taken')})")
+            print(f"  4. Shadow JSON State : {'🟢 AKTIF (.bak siap auto-recovery)' if not healed else f'🔧 Auto-Healed {len(healed)} file'}")
+            print(f"  5. Monitor Log Daemon: 429 Hits={rt_r.get('rate_limit_hits', 0)} | 503 Hits={rt_r.get('api_overloads', 0)} | Exceptions={rt_r.get('recent_exceptions_count', 0)}")
+            if rt_r.get("remedies_applied"):
+                for rem in rt_r["remedies_applied"]:
+                    print(f"     └─ 🔧 Self-Heal: {rem}")
+            print("=" * 76)
+            input("\nTekan ENTER untuk lanjut...")
+        elif choice == "7":
+            menu_ai_war_room()
         elif choice in ["0", ""]:
             break
+
+
+def menu_ai_war_room():
+    """
+    Interactive Conversational War Room with the Multi-Agent Trading Committee.
+    Listens to user opinions, verifies against live data/tools, reviews objectively,
+    responds in natural language, and executes follow-up actions when AI agrees.
+    """
+    from src.agent_chat import war_room
+    from src.autonomous_engine import AutonomousEngine
+    from src.ai_engine import episodic_memory
+    from src.antigravity_bridge import antigravity_bridge
+
+    clear_screen()
+    auto_eng = AutonomousEngine()
+    gov = auto_eng.get_live_governor_snapshot()
+    mem_cnt = len(episodic_memory.load_memory().get("rules", []))
+    bridge_st = antigravity_bridge.load_bridge()
+    open_dev_cnt = len([t for t in bridge_st.get("trading_ai_to_antigravity_tickets", []) if t.get("status") == "OPEN_FOR_ANTIGRAVITY"])
+
+    print("=" * 78)
+    print("   💬 AI WAR ROOM — DISKUSI BEBAS, REVIEW PENDAPAT & AUTO FOLLOW-UP   ")
+    print("=" * 78)
+    print(f"  • Status Portofolio : Ekuitas ${gov.get('equity', 0):.2f} USDC | Bebas Di Atas Cadangan: ${gov.get('free_above_reserve', 0):.2f}")
+    print(f"  • Posisi Terbuka    : {gov.get('active_count', 0)}/{gov.get('max_positions', 5)} Slot (🟢 Long: {gov.get('long_count', 0)} | 🔴 Short: {gov.get('short_count', 0)})")
+    print(f"  • Thermostat & Mem  : {gov.get('thermostat', {}).get('badge')} | 🧠 {mem_cnt} Aturan Episodic Memory")
+    print(f"  • Jembatan Antigrav : 🔗 AKTIF 2-ARAH ({bridge_st.get('total_qa_captured', 0)} Log Q&A Tercatat | {open_dev_cnt} Tiket Dev untuk Antigravity)")
+    print("-" * 78)
+    print("💡 Anda bebas menyampaikan pendapat, strategi, hipotesis koin, atau ide fitur baru:")
+    print("   Contoh 1: \"Menurut saya market lagi rawan squeeze, naikkan cadangan kas ke 25%\"")
+    print("   Contoh 2: \"Coba cek koin SOL sekarang, menurut saya sudah pucuk dan layak di-short\"")
+    print("   Contoh 3: \"Tolong ingat aturan: jangan ambil intraday short kalau orderbook bid > 65%\"")
+    print("   Contoh 4: \"Tolong sampaikan ke Antigravity: buatkan fitur filter volume spike 5m\"")
+    print("   (Ketik [0] atau [EXIT] untuk kembali ke Menu Utama)")
+    print("=" * 78)
+
+    while True:
+        try:
+            user_msg = input("\n🗣️  Pendapat / Pesan Anda ➔ ").strip()
+        except (KeyboardInterrupt, EOFError):
+            print("\n[✓] Keluar dari AI War Room...")
+            break
+
+        if not user_msg:
+            continue
+        if user_msg.upper() in ["0", "Q", "EXIT", "KELUAR", "BACK"]:
+            print("\n[✓] Kembali ke Menu...")
+            break
+
+        print("\n[*] 🧠 Komite AI sedang mendengarkan, menarik data live (Orderbook L2/Portofolio), & mereview pendapat Anda...")
+        res = war_room.consult_and_review(user_msg)
+
+        verdict = res.get("agreement_verdict", "DISCUSSION_INSIGHT")
+        conf = res.get("confidence_in_review", 80)
+        evidence = res.get("data_evidence_used", [])
+        review_txt = res.get("opinion_review", "-")
+        resp_txt = res.get("ai_response", "-")
+        follow_up = res.get("follow_up_action") or {}
+        act_type = str(follow_up.get("action_type", "NONE")).upper()
+
+        verdict_badges = {
+            "AGREE_AND_FOLLOW_UP": "🟢 SETUJU PENUH & SIAP FOLLOW-UP",
+            "PARTIAL_AGREE_REFINED": "🟡 SETUJU DENGAN PENYESUAIAN RISIKO AMAN",
+            "RESPECTFUL_DISAGREE": "🔴 TIDAK SETUJU (BERBEDA DENGAN DATA LIVE / PROTEKSI MODAL)",
+            "DISCUSSION_INSIGHT": "💬 DISKUSI & ANALISIS KUANTITATIF"
+        }
+        v_badge = verdict_badges.get(verdict, verdict)
+
+        print("\n" + "┌" + "─" * 76 + "┐")
+        print(f"│ 🤖 REVIEW & RESPONS KOMITE AI (Keyakinan Evaluasi: {conf}/100)" + " " * 19 + "│")
+        print("├" + "─" * 76 + "┤")
+        print(f"  📌 Inti Pendapat Anda : {res.get('user_opinion_summary', user_msg)}")
+        if evidence:
+            print("  📊 Bukti Data Real-Time yang Diperiksa AI:")
+            for ev in evidence:
+                print(f"     • {ev}")
+        print(f"\n  ⚖️  Status Review AI   : {v_badge}")
+        print(f"  🔍 Evaluasi Objektif  : {review_txt}")
+        print(f"\n  💬 Respons Komite AI  :\n     \"{resp_txt}\"")
+        print("└" + "─" * 76 + "┘")
+
+        exec_log_note = "NONE"
+
+        # Step 4: Follow-Up Execution if AI Agrees
+        if verdict in ("AGREE_AND_FOLLOW_UP", "PARTIAL_AGREE_REFINED") and act_type != "NONE":
+            act_summary = follow_up.get("action_summary") or f"Menjalankan {act_type}"
+            print(f"\n🚀 RENCANA FOLLOW-UP AI: [{act_type}] ➔ {act_summary}")
+
+            # Non-destructive config/memory/audit actions auto-execute immediately when AI agrees
+            auto_safe_types = {"ADD_EPISODIC_RULE", "UPDATE_THERMOSTAT", "EVALUATE_COIN_SETUP", "RUN_GUARDIAN_AUDIT", "PAUSE_OR_RESUME_AUTONOMOUS"}
+            if act_type in auto_safe_types:
+                exec_res = war_room.execute_follow_up(follow_up)
+                print(f"   {exec_res.get('message')}")
+                exec_log_note = exec_res.get("message", "EXECUTED")
+            else:
+                # On-chain position/order actions ask for 1-click ENTER confirmation
+                confirm = input("   👉 Konfirmasi jalankan aksi on-chain ini sekarang? [Tekan ENTER / Y = Ya | N = Batal]: ").strip().upper()
+                if confirm in ["", "Y", "YES", "YA"]:
+                    exec_res = war_room.execute_follow_up(follow_up)
+                    print(f"   {exec_res.get('message')}")
+                    exec_log_note = exec_res.get("message", "EXECUTED")
+                else:
+                    print("   [ℹ️] Follow-up on-chain dilewati atas permintaan Anda.")
+                    exec_log_note = "SKIPPED_BY_USER"
+
+        bridge_sync = war_room.append_chat_history(user_msg, res, exec_result=exec_log_note)
+        if bridge_sync.get("qa_id"):
+            print(f"\n  📡 [Antigravity Bridge] Log Q&A [{bridge_sync['qa_id']}] otomatis diteruskan ke Antigravity (AGENTS.md & JSONL)")
+        if bridge_sync.get("ticket_created"):
+            tk = bridge_sync["ticket_created"]
+            print(f"  🛠️  [Tiket Dev untuk Antigravity: {tk['ticket_id']}] ({tk['priority']}): {tk['title']}")
+            print(f"     └─ Spesifikasi: {tk['technical_spec_for_antigravity']}")
 
 
 def main_menu():
@@ -1964,9 +2140,10 @@ def main_menu():
         print("  [3] ⚡ Eksekusi Posisi Manual (Ketik Koin Sendiri | Server SL & TP)")
         print("  [4] 🤖 Pusat Komando AI Mandiri & Live Monitor (Zero-Touch 24/7, Self-Eval & Telemetri)")
         print("  [5] 📓 Jurnal Forward Test & Scorecard Per-Stream (Audit PnL)")
-        print("\n─── 🧠 AI INTELLIGENCE & RISET ───────────────────────────────────")
-        print("  [6] 🧠 AI Advisor Hub & Auto-Optimizer (Gemini Flash - 5 Feedback Loops)")
+        print("\n─── 🧠 AI INTELLIGENCE, WAR ROOM & RISET ───────────────────────────")
+        print("  [6] 🧠 Agentic AI Committee, Episodic Memory & Guardian Hub (6 Loops)")
         print("  [7] 🧪 Lab Backtest & Uji Sensitivitas (Intraday 15m & Swing Daily)")
+        print("  [11] 💬 AI War Room — Bicara Bebas, Review Pendapat & Auto Follow-Up Bersama AI")
         print("\n─── ⚙️  DATA & KONFIGURASI SISTEM ─────────────────────────────────")
         print("  [8] ⬇️  Perbarui Data Candlestick Hyperliquid (Daily, 4H, & 15m)")
         print("  [9] 📦 Status Database & Penyimpanan (DuckDB & SQLite WAL)")
@@ -1974,7 +2151,7 @@ def main_menu():
         print("  [0] 🚪 Keluar")
         print("-" * 68)
 
-        choice = input("Masukkan nomor pilihan [0-10]: ").strip()
+        choice = input("Masukkan nomor pilihan [0-11, atau ketik C untuk Chat AI]: ").strip()
         if choice in ["1", "2", "7", "8", "9"]:
             # Gunakan read_only=True untuk query analitis DuckDB agar tidak konflik concurrency
             db = Database(read_only=(choice not in ["1", "8"]))
@@ -2001,6 +2178,8 @@ def main_menu():
             menu_ai_hub()
         elif choice == "10":
             menu_hyperliquid_setup()
+        elif choice.upper() in ["11", "C", "CHAT", "W", "WAR"]:
+            menu_ai_war_room()
         elif choice in ["0", "q", "exit"]:
             print("\nTerima kasih! Semoga trading kuantitatif Anda menghasilkan profit maksimal. 🚀\n")
             sys.exit(0)
@@ -2014,3 +2193,4 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         print("\n\nKeluar dari program...")
         sys.exit(0)
+

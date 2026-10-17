@@ -61,24 +61,28 @@ class AutoHuntSniper:
         equity = float(account_state.get("equity", 0.0))
         available = float(account_state.get("available", 0.0))
 
+        slot_plan = HyperliquidTrader.get_equity_slot_plan(equity=equity)
+        DUST_THRESHOLD_USD = float(slot_plan.get("dust_threshold_usd", 3.0))
+        RUNNER_EXEMPT_USD = float(slot_plan.get("runner_exempt_margin_usd", 6.0))
+
         lifecycle = self.pm.sync_active_positions()
-        DUST_THRESHOLD_USD = 3.0
         active_positions_map = {}
         for p in account_state.get("positions", []):
             coin = p.get("coin")
             if coin and float(p.get("size", 0)) > 0:
                 side = p.get("side", "SHORT")
-                strat = (lifecycle.get(coin, {}).get("strategy") or 
-                         position_tags.get_strategy(coin) or "SWING")
+                lc = lifecycle.get(coin, {})
+                strat = lc.get("strategy") or position_tags.get_strategy(coin) or "SWING"
                 margin_used = float(p.get("margin_used", 0.0))
+                is_risk_free_runner = bool(lc.get("trimmed_10pct") or lc.get("early_be_shield")) and margin_used <= RUNNER_EXEMPT_USD
                 active_positions_map[coin] = {
                     "strategy": strat,
                     "side": side,
                     "margin_used": margin_used,
-                    "is_dust": margin_used < DUST_THRESHOLD_USD
+                    "is_dust": (margin_used < DUST_THRESHOLD_USD) or is_risk_free_runner
                 }
 
-        # 3. Check Stream & Direction slot limits from live positions map (excluding dust)
+        # 3. Check Stream & Direction slot limits from live positions map (excluding dust & risk-free runners)
         dt_short_coins = [c for c, s in active_positions_map.items() if s.get("strategy") == "DAYTRADE" and s.get("side") == "SHORT" and not s.get("is_dust")]
         dt_long_coins = [c for c, s in active_positions_map.items() if s.get("strategy") == "DAYTRADE" and s.get("side") == "LONG" and not s.get("is_dust")]
         sw_short_coins = [c for c, s in active_positions_map.items() if s.get("strategy") == "SWING" and s.get("side") == "SHORT" and not s.get("is_dust")]
@@ -94,10 +98,13 @@ class AutoHuntSniper:
         prof_dt = get_profile("DAYTRADE")
         prof_sw = get_profile("SWING")
 
-        max_dt_short = prof_dt.get("max_concurrent_short", 2)
-        max_dt_long = prof_dt.get("max_concurrent_long", 2)
-        max_sw_short = prof_sw.get("max_concurrent_short", 3)
-        max_sw_long = prof_sw.get("max_concurrent_long", 3)
+        # Scale directional quotas dynamically with equity slot plan
+        dyn_max_sw = slot_plan.get("max_swing", 5) + (1 if (dt_short_count + dt_long_count) == 0 else 0)
+        dyn_max_dt = slot_plan.get("max_intraday", 3)
+        max_dt_short = max(prof_dt.get("max_concurrent_short", 2), (dyn_max_dt + 1) // 2)
+        max_dt_long = max(prof_dt.get("max_concurrent_long", 2), (dyn_max_dt + 1) // 2)
+        max_sw_short = max(prof_sw.get("max_concurrent_short", 3), (dyn_max_sw + 1) // 2)
+        max_sw_long = max(prof_sw.get("max_concurrent_long", 3), (dyn_max_sw + 1) // 2)
 
         # 4. Check Market Session & Intraday Circuit Breaker
         day_engine = IntradayDaytradeEngine()
@@ -109,8 +116,8 @@ class AutoHuntSniper:
         slot_status = {
             "dt_short": {"active": dt_short_count, "max": max_dt_short, "coins": dt_short_coins, "open": dt_short_count < max_dt_short and not circuit_breaker_active},
             "dt_long": {"active": dt_long_count, "max": max_dt_long, "coins": dt_long_coins, "open": dt_long_count < max_dt_long and not circuit_breaker_active},
-            "sw_short": {"active": sw_short_count, "max": max_sw_short, "coins": sw_short_coins, "open": sw_short_count < max_sw_short},
-            "sw_long": {"active": sw_long_count, "max": max_sw_long, "coins": sw_long_coins, "open": sw_long_count < max_sw_long},
+            "sw_short": {"active": sw_short_count, "max": max_sw_short, "coins": sw_short_coins, "open": sw_short_count < max_sw_short and (sw_short_count + sw_long_count) < dyn_max_sw},
+            "sw_long": {"active": sw_long_count, "max": max_sw_long, "coins": sw_long_coins, "open": sw_long_count < max_sw_long and (sw_short_count + sw_long_count) < dyn_max_sw},
             "circuit_breaker": circuit_breaker_active,
             "losses_today": losses_today,
             "session": session_info,
@@ -119,7 +126,7 @@ class AutoHuntSniper:
 
         print("\n🔍 PRA-SCAN RADAR: AUDIT POSISI AKTIF & STATUS SLOT:")
         if dust_coins:
-            print(f"  • 🧹 Posisi Dust (< $3): {', '.join(dust_coins)} ➔ Kuota slot dibypass otomatis")
+            print(f"  • 🧹 Posisi Dust / Free-Runner (< ${DUST_THRESHOLD_USD:.2f} / BE-Locked): {', '.join(dust_coins)} ➔ Kuota slot dibypass otomatis")
         if not slot_status["dt_short"]["open"]:
             reason = "Circuit Breaker Aktif" if circuit_breaker_active else f"Slot Penuh ({dt_short_count}/{max_dt_short}: {', '.join(dt_short_coins)})"
             print(f"  • [⚡ Intraday Short] : 🛑 {reason} ➔ SCREENER DILEWATI (BYPASS)")
@@ -212,11 +219,31 @@ class AutoHuntSniper:
                 "waterfall_log": ["Tidak ada koin yang memenuhi kriteria setup pada kuadran yang slotnya masih terbuka."]
             }
 
-        # 6. Compute Unified Alpha Score & Rank Top 3 Leaderboard
+        # 6. Compute Unified Alpha Score & Enrich Top Candidates with 5-Minute Orderbook Spread Filter
         for cand in all_candidates:
             cand["alpha_score"] = self._compute_alpha_score(cand, session_info)
 
-        # Sort descending by alpha_score
+        all_candidates.sort(key=lambda x: x["alpha_score"], reverse=True)
+
+        # Check live L2 Orderbook 5-minute spread & depth on top 5 finalists ($200+ equity slippage guard)
+        try:
+            from src.hyperliquid_client import HyperliquidClient
+            hl_client = HyperliquidClient()
+            for cand in all_candidates[:5]:
+                ob = hl_client.get_l2_orderbook(cand["coin"], depth=15)
+                if ob.get("available"):
+                    sp_bps = float(ob.get("avg_spread_5m_bps", ob.get("spread_bps", 5.0)))
+                    liq_grade = ob.get("liquidity_grade", "HEALTHY_LIQUIDITY")
+                    cand["avg_spread_5m_bps"] = sp_bps
+                    cand["liquidity_grade"] = liq_grade
+                    if sp_bps <= 5.0:
+                        cand["alpha_score"] = round(cand["alpha_score"] * 1.03, 2)  # Tight spread bonus
+                    elif sp_bps > 15.0:
+                        cand["alpha_score"] = round(cand["alpha_score"] * 0.85, 2)  # Wide spread slippage penalty
+        except Exception:
+            pass
+
+        # Re-sort descending by spread-adjusted alpha_score
         all_candidates.sort(key=lambda x: x["alpha_score"], reverse=True)
         leaderboard = all_candidates[:3]
 

@@ -251,11 +251,17 @@ class HyperliquidTrader:
                     if statuses and "error" in statuses[0]:
                         return {"success": False, "error": f"Order Rejected: {statuses[0]['error']}"}
 
+                # Calculate stop & targets according to the strategy's exit model and pre-tag immediately
+                # BEFORE sleeping so background daemon never sees an untagged DAYTRADE position and defaults it to SWING!
+                from src.position_tags import build_plan, tag_position
+                plan = build_plan(strategy, mark_px, sl_px=sl_px, sl_pct=sl_pct, side="SHORT")
+                try:
+                    tag_position(coin, plan["strategy"], plan, meta={"side": "SHORT", "source": "TRADER_EXEC_PRETAG"})
+                except Exception:
+                    pass
+
                 time.sleep(0.2)
 
-                # Calculate stop & targets according to the strategy's exit model
-                from src.position_tags import build_plan
-                plan = build_plan(strategy, mark_px, sl_px=sl_px, sl_pct=sl_pct)
                 sl_price = self.round_price(coin, plan["sl_px"])
                 trim_price = self.round_price(coin, plan["tp1_px"])
                 tp2_price = self.round_price(coin, plan["tp2_px"])
@@ -367,8 +373,8 @@ class HyperliquidTrader:
     @staticmethod
     def get_equity_slot_plan(equity: float, reserve_pct: float = 15.0, thermostat_mult: float = 1.0) -> Dict:
         """
-        Computes dynamic slot capacity N_max(E), reserve floor (%), and per-slot margin allocation
-        as a pure mathematical function of Total Account Equity (USDC).
+        Computes dynamic slot capacity N_max(E), reserve floor (%), dynamic dust/runner threshold,
+        and per-slot margin allocation as a pure mathematical function of Total Account Equity (USDC).
         """
         if equity <= 0:
             return {
@@ -382,23 +388,40 @@ class HyperliquidTrader:
                 "slot_base_margin": 14.0,
                 "min_slot_margin": 10.5,
                 "max_slot_margin": 17.5,
+                "dust_threshold_usd": 3.0,
+                "runner_exempt_margin_usd": 6.0,
             }
 
-        # Dynamic Max Open Positions: N_max(E) = clamp(floor(4 + E/60), min=5, max=10)
-        raw_slots = int(4 + (equity / 60.0))
-        min_slots = 4 if equity < 75.0 else 5
-        max_positions = max(min_slots, min(10, raw_slots))
+        # Tiered High-Conviction Slot Curve (prevents slot dilution when equity doubles from $100 to $200):
+        # - Equity < $120  -> 5 slots (e.g., $100 -> ~$17/slot base)
+        # - Equity $120-$260 -> 6 slots (e.g., $200 -> ~$28.10/slot base, Grade A/A+ -> $32-$40/slot!)
+        # - Equity $260-$420 -> 7 slots
+        # - Equity > $420  -> 8 to 10 slots
+        if equity < 120.0:
+            max_positions = 5
+        elif equity < 260.0:
+            max_positions = 6
+        elif equity < 420.0:
+            max_positions = 7
+        else:
+            max_positions = min(10, int(5 + (equity / 110.0)))
 
-        # Split between Swing (~60%) and Intraday (~40%)
-        max_swing = max(2, int(round(max_positions * 0.60)))
+        # Split between Swing (~65%) and Intraday (~35%)
+        max_swing = max(3, int(round(max_positions * 0.65)))
         max_intraday = max(2, max_positions - max_swing)
 
         reserve_usd = round(equity * (reserve_pct / 100.0), 2)
         deployable_usd = round(max(0.0, equity - reserve_usd), 2)
         slot_base_margin = round(deployable_usd / max_positions, 2)
 
-        min_slot_margin = round(max(10.0, slot_base_margin * 0.75), 2)
-        max_slot_margin = round(max(14.0, slot_base_margin * 1.20 * thermostat_mult), 2)
+        min_slot_margin = round(max(12.0, slot_base_margin * 0.80), 2)
+        # Allow Grade A / A+ & Under-Deployed Portfolio Boost up to 1.45x of slot_base_margin
+        max_slot_margin = round(max(18.0, slot_base_margin * 1.45 * thermostat_mult), 2)
+
+        # Dynamic dust threshold (2.5% of equity, clamped [$3.0, $8.0]) -> ~$4.96 at $198 equity
+        dust_threshold_usd = round(max(3.0, min(8.0, equity * 0.025)), 2)
+        # Risk-free runner exemption ceiling (50% of slot_base_margin) for positions already trimmed / BE-locked
+        runner_exempt_margin_usd = round(slot_base_margin * 0.50, 2)
 
         return {
             "equity": round(equity, 2),
@@ -411,6 +434,8 @@ class HyperliquidTrader:
             "slot_base_margin": slot_base_margin,
             "min_slot_margin": min_slot_margin,
             "max_slot_margin": max_slot_margin,
+            "dust_threshold_usd": dust_threshold_usd,
+            "runner_exempt_margin_usd": runner_exempt_margin_usd,
         }
 
     def calculate_risk_margin(self,
@@ -419,11 +444,16 @@ class HyperliquidTrader:
                               sl_pct: float = 10.0,
                               leverage: int = 2,
                               multiplier: float = 1.0,
-                              reserve_pct: float = 15.0) -> Dict:
+                              reserve_pct: float = 15.0,
+                              free_above_reserve: Optional[float] = None,
+                              open_slots_remaining: Optional[int] = None) -> Dict:
         """
         Calculates mathematically sound margin sizing as a function of Total Equity (E),
-        bounded by the dynamic Equity-Scaled Slot Allocation so no single position
-        ever over-concentrates capital (even when intraday SL% is tight).
+        anchored directly to the Equity-Scaled Slot Base (`slot_base_margin`) so that
+        when account equity doubles (e.g. $100 -> $200), position sizing scales 2x
+        proportionally ($17 -> $32-$40 for Grade A/A+) instead of being artificially
+        capped at $19.80 by static unadjusted SL risk formulas.
+        Also incorporates an Idle-Capital Recycler Boost when legacy positions are small.
         """
         if equity <= 0:
             return {"recommended_margin": 12.0, "base_margin": 12.0, "max_risk_usd": 1.2, "pos_value": 24.0}
@@ -433,17 +463,29 @@ class HyperliquidTrader:
         min_slot = slot_plan["min_slot_margin"]
         max_slot = slot_plan["max_slot_margin"]
 
-        # Risk-derived raw margin (1.0x anchor)
-        base_risk_usd = equity * (risk_pct / 100.0)
-        base_pos_value = base_risk_usd / max(0.005, (sl_pct / 100.0))
+        # Effective Risk % accounts for Periodic Step-Trailing SL (Half-Risk @ +2.2% & Early BE @ +4.0%),
+        # which reduces realized average loss distance by ~35% compared to raw initial SL.
+        effective_sl_pct = max(2.5, sl_pct * 0.68)
+        scaled_risk_pct = max(risk_pct, 2.8 if sl_pct >= 8.0 else 1.5)
+        base_risk_usd = equity * (scaled_risk_pct / 100.0)
+        base_pos_value = base_risk_usd / max(0.005, (effective_sl_pct / 100.0))
         raw_base_margin = base_pos_value / max(1, leverage)
 
-        # Anchor base_margin to the Equity-Scaled Slot Base (prevents tight SL from inflating margin to 40% equity)
-        base_margin = max(min_slot, min(raw_base_margin, slot_base))
+        # Primary Anchor: Use slot_base directly for standard/high-conviction trades so sizing scales 1:1 with equity!
+        base_margin = max(min_slot, min(max(raw_base_margin, slot_base), max_slot))
+
+        # Idle-Capital Recycler: If existing positions were opened when balance was smaller ($10-$15),
+        # and there is abundant free margin above the 15% reserve, blend in the fair share of idle capital!
+        if free_above_reserve is not None and open_slots_remaining is not None and open_slots_remaining > 0:
+            fair_idle_slot = free_above_reserve / max(1, open_slots_remaining)
+            if fair_idle_slot > base_margin:
+                # Blend 50% of the excess idle slot capacity into base_margin (capped by max_slot)
+                base_margin = min(max_slot, round((base_margin * 0.55) + (fair_idle_slot * 0.45), 2))
 
         # Apply AI conviction & thermostat multiplier, clamped to [min_slot, max_slot]
-        recommended_margin = max(min_slot, min(base_margin * multiplier, max_slot))
-        pos_value = recommended_margin * leverage
+        recommended_margin = round(max(min_slot, min(base_margin * multiplier, max_slot)), 2)
+        pos_value = round(recommended_margin * leverage, 2)
+        # Nominal initial SL risk and step-compressed effective risk
         actual_risk_usd = pos_value * (sl_pct / 100.0)
         effective_risk_pct = (actual_risk_usd / equity) * 100.0 if equity > 0 else risk_pct
 
@@ -556,10 +598,15 @@ class HyperliquidTrader:
                     if statuses and "error" in statuses[0]:
                         return {"success": False, "error": f"Order Rejected: {statuses[0]['error']}"}
 
+                from src.position_tags import build_plan, tag_position
+                plan = build_plan(strategy, mark_px, sl_px=sl_px, sl_pct=sl_pct, side="LONG")
+                try:
+                    tag_position(coin, plan["strategy"], plan, meta={"side": "LONG", "source": "TRADER_EXEC_PRETAG"})
+                except Exception:
+                    pass
+
                 time.sleep(0.2)
 
-                from src.position_tags import build_plan
-                plan = build_plan(strategy, mark_px, sl_px=sl_px, sl_pct=sl_pct, side="LONG")
                 sl_price = self.round_price(coin, plan["sl_px"])
                 trim_price = self.round_price(coin, plan["tp1_px"])
                 tp2_price = self.round_price(coin, plan["tp2_px"])

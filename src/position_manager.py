@@ -167,27 +167,45 @@ class PositionManager:
         }
 
     def _backfill_strategy(self, coin: str, state: Dict, side: str = "SHORT") -> Dict:
-        """Upgrades legacy lifecycle entries (sebelum dual-stream) dengan field strategi & plan."""
+        """Upgrades legacy lifecycle entries & reconciles strategy if position_tags was updated right after execution."""
         side = state.get("side", side)
         state["side"] = side
-        if state.get("strategy") and state.get("tp1_px"):
+        tag = position_tags.get_tag(coin) or {}
+        tag_strat = position_tags.get_strategy(coin) if tag else None
+        tag_source = (tag.get("meta") or {}).get("source", "")
+
+        # Reconcile if position_tags has an explicit strategy (not AUTO_DETECTED_UNTAGGED) that differs from state,
+        # OR if DAYTRADE state accidentally has a Swing-sized tp2_pct (> 9.0%)
+        needs_reconcile = (
+            not state.get("strategy")
+            or not state.get("tp1_px")
+            or (tag_strat and tag_source != "AUTO_DETECTED_UNTAGGED" and tag_strat != state.get("strategy"))
+            or (state.get("strategy") == "DAYTRADE" and float(state.get("tp2_pct") or 0) > 9.0)
+        )
+        if not needs_reconcile:
             return state
-        strategy = position_tags.get_strategy(coin)
+
+        strategy = tag_strat or state.get("strategy") or "SWING"
         entry = float(state["entry_px"])
-        plan = position_tags.build_plan(strategy, entry, sl_px=float(state.get("initial_sl_px") or 0) or None, side=side)
-        if not position_tags.get_tag(coin):
+        tag_sl = float((tag.get("plan") or {}).get("sl_px") or state.get("initial_sl_px") or 0) or None
+        plan = position_tags.build_plan(strategy, entry, sl_px=tag_sl, side=side)
+        if not tag:
             position_tags.tag_position(coin, strategy, plan, meta={"source": "LEGACY_BACKFILL", "side": side})
         state.update({
             "strategy": strategy,
             "side": side,
+            "sl_pct": plan["sl_pct"],
             "tp1_px": plan["tp1_px"],
             "tp2_px": plan["tp2_px"],
             "runner_px": plan.get("runner_px"),
-            "sl_pct": plan["sl_pct"],
             "tp1_pct": plan["tp1_pct"],
             "tp2_pct": plan["tp2_pct"],
             "max_hold_hours": plan["max_hold_hours"],
         })
+        if not state.get("trimmed_10pct") and not state.get("early_be_shield") and not state.get("half_risk_shield"):
+            sl_rounded = self.trader.round_price(coin, plan["sl_px"])
+            state["initial_sl_px"] = sl_rounded
+            state["current_sl_px"] = sl_rounded
         return state
 
     def sync_active_positions(self) -> Dict:
@@ -284,19 +302,21 @@ class PositionManager:
             # 1b. Deduplicate & size-sync Native Server-Side SL orders
             coin_sl_orders = sl_orders_by_coin.get(coin, [])
             target_sl_px = float(state.get("current_sl_px") or state.get("initial_sl_px") or 0.0)
+            is_profit_sl_allowed = bool(
+                state.get("trimmed_10pct") or state.get("early_be_shield") or state.get("periodic_sl_trailed")
+            )
 
-            # Guardrails: For SHORT, SL must never be lower than entry_px unless trimmed_10pct.
-            #             For LONG, SL must never be higher than entry_px unless trimmed_10pct.
+            # Guardrails: Unless BE/Profit-Trail is active, for SHORT SL must be > entry_px, for LONG SL must be < entry_px.
             from src.position_tags import build_plan
             if side == "SHORT":
-                if not state.get("trimmed_10pct") and target_sl_px < entry_px:
+                if not is_profit_sl_allowed and target_sl_px < entry_px:
                     target_sl_px = float(state.get("initial_sl_px") or 0.0)
                     if target_sl_px < entry_px:
                         plan = build_plan(strategy, entry_px, side="SHORT")
                         target_sl_px = self.trader.round_price(coin, plan["sl_px"])
                     state["current_sl_px"] = target_sl_px
             else:  # LONG
-                if not state.get("trimmed_10pct") and (target_sl_px > entry_px or target_sl_px <= 0):
+                if not is_profit_sl_allowed and (target_sl_px > entry_px or target_sl_px <= 0):
                     target_sl_px = float(state.get("initial_sl_px") or 0.0)
                     if target_sl_px > entry_px or target_sl_px <= 0:
                         plan = build_plan(strategy, entry_px, side="LONG")
@@ -304,7 +324,7 @@ class PositionManager:
                     state["current_sl_px"] = target_sl_px
 
             # Filter out any anomalous SL orders
-            if not state.get("trimmed_10pct") and coin_sl_orders:
+            if not is_profit_sl_allowed and coin_sl_orders:
                 valid_sl_orders = []
                 for o in coin_sl_orders:
                     tpx_val = float(o.get("triggerPx") or 0.0)
@@ -550,29 +570,93 @@ class PositionManager:
             except Exception as e:
                 self.log_event(f"Warning: Gagal evaluasi AI stalemate {coin}: {e}", "SWING")
 
-        # RULE 0.5: Early Breakeven Shield (±5.0% gerak / ±10% ROE)
-        if early_be_hit and not state.get("early_be_shield") and not state.get("trimmed_10pct"):
-            current_sz = float(pos_info.get("size", initial_sz))
-            ok = self._move_sl_on_chain(coin, state, be_px, current_sz)
-            if ok:
-                state["early_be_shield"] = True
-                state["current_sl_px"] = be_px
-                msg = f"🛡️ SWING EARLY BREAKEVEN SHIELD (+{profit_pct:.1f}% gerak / +{profit_pct*2:.1f}% ROE): SL digeser ke Breakeven (${be_px}) di Hyperliquid! 0% Risiko!"
-                self.log_event(msg, "SWING")
-                actions.append({"type": "EARLY_BREAKEVEN", "coin": coin, "strategy": "SWING", "msg": msg})
+        # Track Peak Profit % (High-Water Mark) for Periodic On-Chain SL Ratcheting ([MEM-004])
+        peak_profit_pct = max(float(state.get("peak_profit_pct", 0.0)), profit_pct)
+        state["peak_profit_pct"] = round(peak_profit_pct, 2)
+        current_sz = float(pos_info.get("size", initial_sz))
+        cur_sl = float(state.get("current_sl_px", 0.0))
 
-        # RULE 1: Trimming 1 (±7.0% gerak / ±14% ROE)
+        # Helper to verify SL only tightens (never widens) and sits safely on the stop side of current_px
+        def _is_better_sl(candidate_sl: float) -> bool:
+            if candidate_sl <= 0:
+                return False
+            if side == "LONG":
+                return (candidate_sl > cur_sl) and (candidate_sl < current_px * 0.996)
+            else:
+                return (cur_sl <= 0 or candidate_sl < cur_sl) and (candidate_sl > current_px * 1.004)
+
+        # RULE 0.2: Periodic Step 1 — Half-Risk Cushion Compress (+2.2% move / +4.4% ROE -> compress SL from -10% to -5%)
+        half_risk_step = float(prof.get("half_risk_step_pct", 2.2))
+        if (profit_pct >= half_risk_step and not state.get("half_risk_shield")
+                and not state.get("early_be_shield") and not state.get("trimmed_10pct")):
+            half_sl_pct = float(prof.get("sl_pct", 10.0)) * 0.50  # 5.0%
+            half_sl_px = self.trader.round_price(
+                coin, entry_px * (1 - half_sl_pct / 100.0) if side == "LONG" else entry_px * (1 + half_sl_pct / 100.0)
+            )
+            if _is_better_sl(half_sl_px):
+                if self._move_sl_on_chain(coin, state, half_sl_px, current_sz):
+                    state["half_risk_shield"] = True
+                    state["current_sl_px"] = half_sl_px
+                    cur_sl = half_sl_px
+                    msg = (f"🛡️ SWING STEP-1 SL COMPRESS (+{profit_pct:.1f}% gerak / +{profit_pct*2:.1f}% ROE): "
+                           f"SL on-chain diperketat 50% ke ${half_sl_px} (-{half_sl_pct:.1f}%) untuk pangkas risiko separuh!")
+                    self.log_event(msg, "SWING")
+                    actions.append({"type": "SL_STEP_HALF_RISK", "coin": coin, "strategy": "SWING", "msg": msg})
+
+        # RULE 0.5: Periodic Step 2 — Early Breakeven Shield (+4.0% gerak / +8.0% ROE)
+        if early_be_hit and not state.get("early_be_shield") and not state.get("trimmed_10pct"):
+            if _is_better_sl(be_px):
+                ok = self._move_sl_on_chain(coin, state, be_px, current_sz)
+                if ok:
+                    state["early_be_shield"] = True
+                    state["half_risk_shield"] = True
+                    state["current_sl_px"] = be_px
+                    cur_sl = be_px
+                    msg = f"🛡️ SWING EARLY BREAKEVEN SHIELD (+{profit_pct:.1f}% gerak / +{profit_pct*2:.1f}% ROE): SL digeser ke Breakeven (${be_px}) di Hyperliquid! 0% Risiko!"
+                    self.log_event(msg, "SWING")
+                    actions.append({"type": "EARLY_BREAKEVEN", "coin": coin, "strategy": "SWING", "msg": msg})
+
+        # RULE 1: Trimming 1 (±7.0% gerak / ±14% ROE) -> Trim 50% & Lock +2.0% Profit Cushion on-chain
         if tp1_hit and not state.get("trimmed_10pct"):
             trim_sz = initial_sz * 0.50
             trim_sz = round(trim_sz, sz_dec) if sz_dec > 0 else int(trim_sz)
-            ok, remaining = self._partial_close_and_move_sl(coin, state, trim_sz, be_px)
+            lock_pct = 0.020  # Lock +2.0% price move (+4.0% ROE) after TP1
+            tp1_lock_sl = self.trader.round_price(
+                coin, entry_px * (1 + lock_pct) if side == "LONG" else entry_px * (1 - lock_pct)
+            )
+            target_post_tp1_sl = tp1_lock_sl if _is_better_sl(tp1_lock_sl) else be_px
+            ok, remaining = self._partial_close_and_move_sl(coin, state, trim_sz, target_post_tp1_sl)
             if ok:
                 state["trimmed_10pct"] = True
                 state["early_be_shield"] = True
-                msg = f"✂️ TRIMMING 1 SUKSES (+{profit_pct:.1f}% gerak): 50% posisi ({trim_sz} {coin} {side}) diamankan! SL dikunci di Breakeven (${be_px})."
+                state["periodic_sl_trailed"] = True
+                state["locked_profit_pct"] = 2.0
+                msg = f"✂️ TRIMMING 1 SUKSES (+{profit_pct:.1f}% gerak): 50% posisi ({trim_sz} {coin} {side}) diamankan! SL dikunci di profit +2.0% (${target_post_tp1_sl})."
                 self.log_event(msg, "SWING")
                 self._ft_update(coin, state, pos_info, current_px, size=remaining, note=msg)
                 actions.append({"type": "TRIMMING_1", "coin": coin, "strategy": "SWING", "msg": msg})
+
+        # RULE 1.5: Periodic Step 4 — High-Water Mark Profit Ratchet (after TP1, for profit_pct >= 8.5%)
+        periodic_start = float(prof.get("periodic_trail_start_pct", 8.5))
+        if state.get("trimmed_10pct") and not state.get("tp_20pct") and peak_profit_pct >= periodic_start:
+            # Lock 55% of the peak profit move on-chain whenever it improves by >= 1.0% price move
+            desired_lock_pct = round(peak_profit_pct * 0.55, 2)
+            prev_lock_pct = float(state.get("locked_profit_pct", 0.0))
+            if (desired_lock_pct - prev_lock_pct) >= 1.0:
+                ratchet_sl = self.trader.round_price(
+                    coin,
+                    entry_px * (1 + desired_lock_pct / 100.0) if side == "LONG" else entry_px * (1 - desired_lock_pct / 100.0)
+                )
+                if _is_better_sl(ratchet_sl):
+                    rem_sz = float(pos_info.get("size", state.get("remaining_sz", initial_sz)))
+                    if self._move_sl_on_chain(coin, state, ratchet_sl, rem_sz):
+                        state["periodic_sl_trailed"] = True
+                        state["locked_profit_pct"] = desired_lock_pct
+                        state["current_sl_px"] = ratchet_sl
+                        msg = (f"📈 SWING PERIODIC SL RATCHET (Peak +{peak_profit_pct:.1f}% gerak): "
+                               f"SL on-chain digeser naik mengunci +{desired_lock_pct:.1f}% profit (${ratchet_sl})!")
+                        self.log_event(msg, "SWING")
+                        actions.append({"type": "PERIODIC_SL_RATCHET", "coin": coin, "strategy": "SWING", "msg": msg})
 
         # RULE 2: Target 2 (±18.0% gerak / ±36% ROE) dengan AI Runner Extender (Scenario 2)
         elif tp2_hit and not state.get("tp_20pct"):
@@ -600,6 +684,7 @@ class PositionManager:
                 ok, remaining = self._partial_close_and_move_sl(coin, state, tp2_sz, trailing_sl_px)
                 if ok:
                     state["tp_20pct"] = True
+                    state["periodic_sl_trailed"] = True
                     msg = (f"🎯 TARGET 2 SUKSES (+{profit_pct:.1f}% gerak): 30% posisi ({tp2_sz} {coin} {side}) diamankan! "
                            f"Trailing SL dikunci di profit (${trailing_sl_px}). Sisa runner dikawal! ({runner_decision.get('reasoning')})")
                     self.log_event(msg, "SWING")
@@ -615,7 +700,7 @@ class PositionManager:
         # RULE 4: Local SL check (backup dari SL on-chain)
         elif sl_hit:
             is_be = state.get("trimmed_10pct", False) or state.get("early_be_shield", False)
-            msg = (f"🛡️ BREAKEVEN DEFENSE: Harga kembali ke modal (${entry_px}). Sisa {coin} ({side}) ditutup tanpa rugi!"
+            msg = (f"🛡️ BREAKEVEN DEFENSE: Harga kembali ke batas proteksi (${state.get('current_sl_px', entry_px)}). Sisa {coin} ({side}) ditutup aman!"
                    if is_be else f"🛑 STOP LOSS HIT (-{adverse_pct:.1f}%): Cut loss {coin} ({side}) otomatis dieksekusi.")
             self._close_full(coin, state, pos_info, current_px,
                              "BREAKEVEN_DEFENSE" if is_be else "STOP_LOSS_HIT", msg, "STOP_LOSS", actions)
@@ -684,7 +769,43 @@ class PositionManager:
             except Exception as e:
                 self.log_event(f"Warning: Gagal evaluasi AI stalemate {coin}: {e}", "DAYTRADE")
 
-        # RULE 1: TP2 tercapai (±5.6% gerak) dengan AI Runner Extender (Scenario 2)
+        # Periodic Intraday On-Chain SL Step-Trailing (0.45R Half-Risk & 0.65R Early BE)
+        r_dist_pct = abs(tp1_px - entry_px) / entry_px * 100.0 if entry_px > 0 else float(prof.get("sl_pct", 3.2))
+        current_sz = float(pos_info.get("size", initial_sz))
+        cur_sl = float(state.get("current_sl_px", 0.0))
+        half_risk_r = float(prof.get("half_risk_r", 0.45))
+        early_be_r = float(prof.get("early_be_r", 0.65))
+
+        def _is_better_dt_sl(candidate_sl: float) -> bool:
+            if candidate_sl <= 0:
+                return False
+            if side == "LONG":
+                return (candidate_sl > cur_sl) and (candidate_sl < current_px * 0.997)
+            else:
+                return (cur_sl <= 0 or candidate_sl < cur_sl) and (candidate_sl > current_px * 1.003)
+
+        if not state.get("trimmed_10pct") and not state.get("early_be_shield"):
+            if profit_pct >= (early_be_r * r_dist_pct):
+                if _is_better_dt_sl(be_px) and self._move_sl_on_chain(coin, state, be_px, current_sz):
+                    state["early_be_shield"] = True
+                    state["half_risk_shield"] = True
+                    state["current_sl_px"] = be_px
+                    msg = f"🛡️ INTRADAY EARLY BE SHIELD (+{profit_pct:.1f}% / {early_be_r:.2f}R): SL {coin} ({side}) digeser ke Breakeven (${be_px})!"
+                    self.log_event(msg, "DAYTRADE")
+                    actions.append({"type": "EARLY_BREAKEVEN", "coin": coin, "strategy": "DAYTRADE", "msg": msg})
+            elif profit_pct >= (half_risk_r * r_dist_pct) and not state.get("half_risk_shield"):
+                half_r_pct = r_dist_pct * 0.50
+                half_sl_px = self.trader.round_price(
+                    coin, entry_px * (1 - half_r_pct / 100.0) if side == "LONG" else entry_px * (1 + half_r_pct / 100.0)
+                )
+                if _is_better_dt_sl(half_sl_px) and self._move_sl_on_chain(coin, state, half_sl_px, current_sz):
+                    state["half_risk_shield"] = True
+                    state["current_sl_px"] = half_sl_px
+                    msg = f"🛡️ INTRADAY STEP-1 SL COMPRESS (+{profit_pct:.1f}% / {half_risk_r:.2f}R): SL {coin} ({side}) diperketat 50% ke ${half_sl_px}!"
+                    self.log_event(msg, "DAYTRADE")
+                    actions.append({"type": "SL_STEP_HALF_RISK", "coin": coin, "strategy": "DAYTRADE", "msg": msg})
+
+        # RULE 1: TP2 tercapai (±5.0-9.0% gerak) dengan AI Runner Extender (Scenario 2)
         if tp2_hit and not state.get("tp_20pct"):
             runner_decision = {"action": "FULL_HARVEST", "confidence": 80, "reasoning": "Standard intraday flat discipline"}
             try:
@@ -700,6 +821,7 @@ class PositionManager:
                 ok, remaining = self._partial_close_and_move_sl(coin, state, trim_sz, tp1_px)
                 if ok:
                     state["tp_20pct"] = True
+                    state["periodic_sl_trailed"] = True
                     msg = (f"🎯🚀 AI INTRADAY RUNNER EXTENDER (+{profit_pct:.1f}%): 70% sisa ({trim_sz} {coin}) diamankan! "
                            f"Sisa runner ({remaining}) dikawal dengan Trailing SL di TP1 (${tp1_px})! ({runner_decision.get('reasoning')})")
                     self.log_event(msg, "DAYTRADE")
@@ -712,23 +834,42 @@ class PositionManager:
                 state["tp_20pct"] = True
             return
 
-        # RULE 2: TP1 (1.0R) -> Trim 50% & SL ke BE (+ buffer fee agar benar-benar 0 rugi)
+        # RULE 2: TP1 (1.0R) -> Trim 50% & kunci SL di profit +0.30R (atau minimal BE+fee)
         if tp1_hit and not state.get("trimmed_10pct"):
             trim_sz = initial_sz * 0.50
             trim_sz = round(trim_sz, sz_dec) if sz_dec > 0 else int(trim_sz)
-            ok, remaining = self._partial_close_and_move_sl(coin, state, trim_sz, be_px)
+            lock_dt_pct = max(fee_buf * 100.0, 0.30 * r_dist_pct)
+            tp1_lock_px = self.trader.round_price(
+                coin, entry_px * (1 + lock_dt_pct / 100.0) if side == "LONG" else entry_px * (1 - lock_dt_pct / 100.0)
+            )
+            post_tp1_sl = tp1_lock_px if _is_better_dt_sl(tp1_lock_px) else be_px
+            ok, remaining = self._partial_close_and_move_sl(coin, state, trim_sz, post_tp1_sl)
             if ok:
                 state["trimmed_10pct"] = True
-                msg = f"✂️ INTRADAY TP1 ({prof['tp1_r']}R) SUKSES ({profit_pct:.1f}%): 50% {coin} ({side}) ditutup! SL digeser ke BE+fee (${be_px})."
+                state["early_be_shield"] = True
+                msg = f"✂️ INTRADAY TP1 ({prof['tp1_r']}R) SUKSES ({profit_pct:.1f}%): 50% {coin} ({side}) ditutup! SL dikunci di profit (${post_tp1_sl})."
                 self.log_event(msg, "DAYTRADE")
                 self._ft_update(coin, state, pos_info, current_px, size=remaining, note=msg)
                 actions.append({"type": "TRIMMING_1", "coin": coin, "strategy": "DAYTRADE", "msg": msg})
             return
 
+        # RULE 2.5: Post-TP1 Intraday Periodic Profit Ratchet (>= 1.45R -> lock +0.50R profit on-chain)
+        if state.get("trimmed_10pct") and not state.get("tp_20pct") and not state.get("periodic_sl_trailed") and profit_pct >= (1.45 * r_dist_pct):
+            lock_dt_pct = 0.50 * r_dist_pct
+            ratchet_dt_sl = self.trader.round_price(
+                coin, entry_px * (1 + lock_dt_pct / 100.0) if side == "LONG" else entry_px * (1 - lock_dt_pct / 100.0)
+            )
+            if _is_better_dt_sl(ratchet_dt_sl) and self._move_sl_on_chain(coin, state, ratchet_dt_sl, current_sz):
+                state["periodic_sl_trailed"] = True
+                state["current_sl_px"] = ratchet_dt_sl
+                msg = f"📈 INTRADAY PERIODIC SL RATCHET (+{profit_pct:.1f}% / 1.45R): SL {coin} ({side}) digeser mengunci +0.5R profit (${ratchet_dt_sl})!"
+                self.log_event(msg, "DAYTRADE")
+                actions.append({"type": "PERIODIC_SL_RATCHET", "coin": coin, "strategy": "DAYTRADE", "msg": msg})
+
         # RULE 3: Local SL check (backup dari SL on-chain)
         if sl_hit:
-            is_be = state.get("trimmed_10pct", False)
-            msg = (f"🛡️ INTRADAY BE DEFENSE: {coin} ({side}) kembali ke modal setelah TP1. Sisa ditutup tanpa rugi."
+            is_be = state.get("trimmed_10pct", False) or state.get("early_be_shield", False)
+            msg = (f"🛡️ INTRADAY BE DEFENSE: {coin} ({side}) kembali ke modal setelah proteksi. Sisa ditutup tanpa rugi."
                    if is_be else f"🛑 INTRADAY SL TEKNIS HIT (-{adverse_pct:.1f}%): Cut loss {coin} ({side}).")
             self._close_full(coin, state, pos_info, current_px,
                              "INTRADAY_BE_DEFENSE" if is_be else "INTRADAY_SL_HIT", msg, "STOP_LOSS", actions)
@@ -944,6 +1085,13 @@ class PositionManager:
 
         # Scenario 5: Check if Autonomous Hunter & Self-Evaluation cycle is due
         self._run_autonomous_cycle_if_due(actions_taken)
+
+        # Keep Two-Way Bridge (AGENTS.md) synchronized with live Trading Tools state & War Room chats
+        try:
+            from src.antigravity_bridge import antigravity_bridge
+            antigravity_bridge.sync_agents_md()
+        except Exception:
+            pass
 
         if actions_taken:
             try:

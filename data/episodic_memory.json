@@ -1,0 +1,52 @@
+{
+  "updated_at": "2026-10-17 11:43:11",
+  "total_rules_learned": 5,
+  "rules": [
+    {
+      "id": "MEM-001",
+      "created_at": "2026-10-16 12:00:00",
+      "stream": "DAYTRADE",
+      "side": "SHORT",
+      "root_cause": "FUNDING_SQUEEZE",
+      "rule": "Jangan ambil Intraday SHORT apabila funding rate negatif ekstrem (< -0.02%/jam) kecuali ada tembok Ask Orderbook yang dominan.",
+      "source_coin": "GLOBAL"
+    },
+    {
+      "id": "MEM-002",
+      "created_at": "2026-10-16 18:00:00",
+      "stream": "SWING",
+      "side": "SHORT",
+      "root_cause": "CLEAN_WIN",
+      "rule": "Prioritaskan Swing SHORT dengan konfluensi 4H Breakdown + Upper Wick Exhaustion dan rasio Orderbook Ask >= 50%.",
+      "source_coin": "GLOBAL"
+    },
+    {
+      "id": "MEM-003",
+      "created_at": "2026-10-17 01:00:00",
+      "stream": "ALL",
+      "side": "ALL",
+      "root_cause": "PORTFOLIO_HEDGE",
+      "rule": "Berikan prioritas (Auto-Hedge Boost) pada sinyal Grade A yang menyeimbangkan ketimpangan arah Long vs Short portofolio.",
+      "source_coin": "GLOBAL"
+    },
+    {
+      "id": "MEM-004",
+      "created_at": "2026-10-17 09:06:49",
+      "stream": "ALL",
+      "side": "ALL",
+      "root_cause": "WAR_ROOM_CONSENSUS",
+      "rule": "[MEM-006] (ALL/ALL): Berikan jeda waktu (throttling interval) pada sinkronisasi log trade close ke GitHub apabila terjadi penutupan posisi secara beruntun untuk menghindari rate-limit API.",
+      "source_coin": "GLOBAL",
+      "updated_at": "2026-10-17 11:43:11"
+    },
+    {
+      "id": "MEM-005",
+      "created_at": "2026-10-17 10:55:05",
+      "stream": "DAYTRADE",
+      "side": "SHORT",
+      "root_cause": "NORMAL_SL",
+      "rule": "Terapkan stop loss yang ketat saat melakukan short intraday jika volatilitas melawan arah tren.",
+      "source_coin": "DOT"
+    }
+  ]
+}

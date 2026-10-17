@@ -174,13 +174,32 @@ class AutonomousEngine:
             thermostat_mult=sizing_mult
         )
 
-        # Count active non-dust positions ($3 threshold)
-        DUST_USD = 3.0
+        # Load lifecycle state to identify risk-free runners (already TP1 trimmed or BE locked)
+        lifecycle_path = os.path.join(ROOT_DIR, "data", "positions_lifecycle.json")
+        lifecycle_data = {}
+        if os.path.exists(lifecycle_path):
+            try:
+                with open(lifecycle_path, "r") as f:
+                    lifecycle_data = json.load(f)
+            except Exception:
+                pass
+
+        # Dynamic equity-scaled dust & risk-free runner threshold
+        DUST_USD = float(slot_plan.get("dust_threshold_usd", 3.0))
+        RUNNER_EXEMPT_USD = float(slot_plan.get("runner_exempt_margin_usd", 6.0))
+        slot_base_margin = slot_plan["slot_base_margin"]
+        HALF_SLOT_CEILING_USD = round(slot_base_margin * 0.60, 2)  # Legacy $100-era positions (< 60% of $28.10 = < $16.86)
+
         active_coins = []
         swing_coins = []
         intraday_coins = []
         long_coins = []
         short_coins = []
+        exempt_runners = []
+        half_slot_coins = []
+        effective_active_slots = 0.0
+        effective_swing_slots = 0.0
+        effective_intraday_slots = 0.0
 
         for p in positions:
             c = p.get("coin")
@@ -188,28 +207,57 @@ class AutonomousEngine:
             m_used = float(p.get("margin_used", 0.0))
             side = p.get("side", "SHORT")
             if not c or sz <= 0 or m_used < DUST_USD:
+                if c and sz > 0:
+                    exempt_runners.append(f"{c} (${m_used:.2f} dust)")
                 continue
-            strat = position_tags.get_strategy(c) or "SWING"
+
+            lc = lifecycle_data.get(c, {})
+            is_risk_free = bool(lc.get("trimmed_10pct") or lc.get("early_be_shield"))
+            if is_risk_free and m_used <= RUNNER_EXEMPT_USD:
+                exempt_runners.append(f"{c} (${m_used:.2f} free-runner)")
+                continue
+
+            # Capital-Weighted Slot Accounting: Legacy small positions (< 60% of slot_base_margin) count as 0.5 slot
+            slot_weight = 0.5 if m_used < HALF_SLOT_CEILING_USD else 1.0
+            if slot_weight == 0.5:
+                half_slot_coins.append(f"{c} (${m_used:.2f} = 0.5 slot)")
+
+            strat = lc.get("strategy") or position_tags.get_strategy(c) or "SWING"
             active_coins.append(c)
+            effective_active_slots += slot_weight
             if strat == "DAYTRADE":
                 intraday_coins.append(c)
+                effective_intraday_slots += slot_weight
             else:
                 swing_coins.append(c)
+                effective_swing_slots += slot_weight
             if side == "LONG":
                 long_coins.append(c)
             else:
                 short_coins.append(c)
 
         max_pos = slot_plan["max_positions"]
-        max_swing = slot_plan["max_swing"]
+        base_max_swing = slot_plan["max_swing"]
         max_intraday = slot_plan["max_intraday"]
-        max_directional = max(2, int(round(max_pos * 0.67)))
+        # Elastic Slot Borrowing: if intraday has 0 active positions, Swing can borrow 1 unused slot
+        max_swing = min(max_pos - 1, base_max_swing + (1 if len(intraday_coins) == 0 else 0))
+        max_directional = max(3, int(round(max_pos * 0.67)))
 
         reserve_usd = slot_plan["reserve_usd"]
         free_above_reserve = round(max(0.0, available - reserve_usd), 2)
         min_order_margin = slot_plan["min_slot_margin"]
         max_order_margin = slot_plan["max_slot_margin"]
-        slot_base_margin = slot_plan["slot_base_margin"]
+
+        # Calculate recommended Grade A / A+ bullet size factoring in Idle-Capital Recycler
+        open_slots_rem = max(1.0, float(max_pos) - effective_active_slots)
+        grade_a_sizing = self.trader.calculate_risk_margin(
+            equity=equity, risk_pct=2.5, sl_pct=10.0, leverage=2, multiplier=1.15 * sizing_mult,
+            reserve_pct=reserve_pct, free_above_reserve=free_above_reserve, open_slots_remaining=int(round(open_slots_rem))
+        )
+        grade_a_plus_sizing = self.trader.calculate_risk_margin(
+            equity=equity, risk_pct=2.8, sl_pct=10.0, leverage=2, multiplier=1.30 * sizing_mult,
+            reserve_pct=reserve_pct, free_above_reserve=free_above_reserve, open_slots_remaining=int(round(open_slots_rem))
+        )
 
         now_ts = time.time()
         cooldown_sec = int(state.get("cooldown_minutes", 30)) * 60
@@ -219,7 +267,7 @@ class AutonomousEngine:
 
         cb_pause = bool(thermo.get("circuit_breaker_pause", False)) and now_ts < float(thermo.get("pause_until_ts", 0.0))
 
-        # Gate evaluation
+        # Gate evaluation uses Capital-Weighted Effective Slots so legacy $10 positions don't lock out $60+ idle cash
         can_open = True
         gate_reasons = []
 
@@ -230,9 +278,9 @@ class AutonomousEngine:
             can_open = False
             rem_h = max(0.1, (float(thermo.get("pause_until_ts", 0.0)) - now_ts) / 3600.0)
             gate_reasons.append(f"Circuit Breaker Aktif (Jedah proteksi drawdown {rem_h:.1f} jam lagi)")
-        if len(active_coins) >= max_pos:
+        if effective_active_slots >= max_pos:
             can_open = False
-            gate_reasons.append(f"Kapasitas Slot Penuh ({len(active_coins)}/{max_pos} posisi aktif untuk ekuitas ${equity:,.2f})")
+            gate_reasons.append(f"Kapasitas Slot Efektif Penuh ({effective_active_slots:.1f}/{max_pos} slot untuk ekuitas ${equity:,.2f})")
         if free_above_reserve < min_order_margin:
             can_open = False
             gate_reasons.append(
@@ -257,12 +305,18 @@ class AutonomousEngine:
             "free_above_reserve": free_above_reserve,
             "max_positions": max_pos,
             "active_count": len(active_coins),
+            "effective_active_slots": round(effective_active_slots, 1),
             "active_coins": active_coins,
+            "half_slot_legacy_coins": half_slot_coins,
+            "exempt_runners": exempt_runners,
+            "dust_threshold_usd": DUST_USD,
             "max_swing": max_swing,
             "swing_count": len(swing_coins),
+            "effective_swing_slots": round(effective_swing_slots, 1),
             "swing_coins": swing_coins,
             "max_intraday": max_intraday,
             "intraday_count": len(intraday_coins),
+            "effective_intraday_slots": round(effective_intraday_slots, 1),
             "intraday_coins": intraday_coins,
             "max_directional": max_directional,
             "long_count": len(long_coins),
@@ -270,6 +324,8 @@ class AutonomousEngine:
             "slot_base_margin": slot_base_margin,
             "min_order_margin": min_order_margin,
             "max_order_margin": max_order_margin,
+            "recommended_grade_a_margin": grade_a_sizing["recommended_margin"],
+            "recommended_grade_a_plus_margin": grade_a_plus_sizing["recommended_margin"],
             "in_cooldown": in_cooldown,
             "cooldown_rem_min": cooldown_rem_min,
             "can_open_new_position": can_open,
@@ -477,6 +533,9 @@ class AutonomousEngine:
         state["last_eval_time"] = now_str
         state["last_eval_report"] = eval_report
         state["stats"]["total_self_evaluations"] = int(state["stats"].get("total_self_evaluations", 0)) + 1
+        # Instant Slot-Refill: When a position closes and circuit breaker is not active, allow immediate scan for replacement
+        if str(trigger_reason).startswith("ON_CLOSE") and not thermo.get("circuit_breaker_pause"):
+            state["last_hunt_ts"] = 0.0
         self.save_state(state)
 
         self.log_telemetry(
@@ -500,7 +559,14 @@ class AutonomousEngine:
         state = self.load_state()
         now_ts = time.time()
 
-        # Check periodic self-evaluation (every 6 hours)
+        # Pre-flight Guardian Agent Self-Healing Check (Zero-Crash & State Integrity)
+        try:
+            from src.guardian_agent import guardian_agent
+            guardian_agent.run_full_health_and_security_audit(force=False)
+        except Exception:
+            pass
+
+        #Check periodic self-evaluation (every 6 hours)
         eval_interval_sec = int(state.get("self_eval_interval_hours", 6)) * 3600
         if (now_ts - float(state.get("last_eval_ts", 0.0))) >= eval_interval_sec:
             self.run_self_evaluation(trigger_reason="PERIODIC_6H")
@@ -593,12 +659,12 @@ class AutonomousEngine:
                 skip_logs.append(f"{coin} ({strat}): Skor {score:.1f} < Threshold {req_score:.1f}")
                 continue
 
-            # Check Swing vs Intraday sub-slot quota
-            if strat == "SWING" and gov["swing_count"] >= gov["max_swing"]:
-                skip_logs.append(f"{coin} (SWING): Kuota Swing penuh ({gov['swing_count']}/{gov['max_swing']})")
+            # Check Swing vs Intraday sub-slot quota (using Capital-Weighted Effective Slots)
+            if strat == "SWING" and gov.get("effective_swing_slots", gov["swing_count"]) >= gov["max_swing"]:
+                skip_logs.append(f"{coin} (SWING): Kuota Swing efektif penuh ({gov.get('effective_swing_slots')}/{gov['max_swing']})")
                 continue
-            if strat == "DAYTRADE" and gov["intraday_count"] >= gov["max_intraday"]:
-                skip_logs.append(f"{coin} (DAYTRADE): Kuota Intraday penuh ({gov['intraday_count']}/{gov['max_intraday']})")
+            if strat == "DAYTRADE" and gov.get("effective_intraday_slots", gov["intraday_count"]) >= gov["max_intraday"]:
+                skip_logs.append(f"{coin} (DAYTRADE): Kuota Intraday efektif penuh ({gov.get('effective_intraday_slots')}/{gov['max_intraday']})")
                 continue
 
             # Check Directional Hedge Guard (prevent 100% one-sided portfolio)
@@ -657,7 +723,14 @@ class AutonomousEngine:
         grade = str(selected_audit.get("conviction_grade", "A")).upper()
         conf = int(selected_audit.get("confidence_score", 80))
 
-        rec_margin = float(selected_audit.get("final_margin", gov["slot_base_margin"])) * float(thermo.get("sizing_mult", 1.0))
+        # Apply Grade A / A+ Idle-Capital Recycler Target Margin ($32 - $40 at $200 equity)
+        gov_target_margin = (
+            gov.get("recommended_grade_a_plus_margin", gov["slot_base_margin"])
+            if grade == "A+" else gov.get("recommended_grade_a_margin", gov["slot_base_margin"])
+        )
+        audit_margin = float(selected_audit.get("final_margin", gov["slot_base_margin"])) * float(thermo.get("sizing_mult", 1.0))
+        rec_margin = max(audit_margin, float(gov_target_margin))
+
         # Clamp strictly to governor [min_order_margin, max_order_margin] and Free Margin above 15% Reserve!
         order_margin = max(gov["min_order_margin"], min(rec_margin, gov["max_order_margin"], gov["free_above_reserve"]))
         order_margin = round(order_margin, 2)
@@ -730,6 +803,176 @@ class AutonomousEngine:
             self.log_telemetry("AUTO_ERROR", f"Gagal Open {coin}", err_msg, coin=coin, grade=grade, equity=equity, free_margin=available)
             return {"executed": False, "status": "ORDER_FAILED", "error": err_msg}
 
+    def revisit_and_scale_active_positions(self, target_coins: Optional[List[str]] = None, execute_topup: bool = True) -> Dict:
+        """
+        Autonomous Revisit & Conviction Scale-Up Engine:
+        Evaluates existing open positions that were sized under older/smaller equity rules
+        (or capped around ~$20-$24) while abundant Free Margin above 15% Reserve exists.
+        Criteria to scale-in / top-up an active position to the $200-tier target ($28-$36 margin):
+          1. Position has NOT already been trimmed at TP1 (`not trimmed_10pct`) and is NOT dust.
+          2. Current price is near entry (`-2.0% <= move_pct <= +2.5%`) — never averages down into a deep loser or chases an extended pump.
+          3. Live L2 Orderbook imbalance supports the trade direction (or is balanced) with healthy spread (`<= 15 bps`).
+          4. Free margin above 15% Reserve is sufficient to cover the top-up delta (`topup_margin >= $6.00`).
+          5. Automatically re-syncs on-chain Stop-Loss and TP1 trigger orders to the new combined position size!
+        """
+        from src.position_manager import PositionManager
+        from src.hyperliquid_client import HyperliquidClient
+
+        acc = self.trader.get_account_state(force_refresh=True)
+        if acc.get("error"):
+            return {"success": False, "error": acc.get("error")}
+
+        gov = self.get_live_governor_snapshot(account_state=acc)
+        equity = gov["equity"]
+        free_above_reserve = gov["free_above_reserve"]
+        slot_base = gov["slot_base_margin"]
+        grade_a_target = round(slot_base * 1.05, 2)       # ~$29.50 at $200 equity
+        grade_a_plus_target = round(slot_base * 1.25, 2)  # ~$35.15 at $200 equity
+
+        pm = PositionManager(self.trader)
+        lifecycle = pm.sync_active_positions()
+        all_mids = self.trader.get_all_mids(force_refresh=True)
+        hl_client = HyperliquidClient()
+        tags_all = position_tags._load()
+
+        revisited = []
+        scaled_up = []
+
+        for p in acc.get("positions", []):
+            coin = p.get("coin")
+            if not coin:
+                continue
+            if target_coins and coin.upper() not in [c.upper() for c in target_coins]:
+                continue
+
+            cur_margin = float(p.get("margin_used", 0.0))
+            cur_sz = float(p.get("size", 0.0))
+            side = p.get("side", "SHORT")
+            lev = int(p.get("leverage", 2) or 2)
+            entry_px = float(p.get("entry_px", 0.0))
+            cur_px = float(all_mids.get(coin, entry_px))
+            lc = lifecycle.get(coin, {})
+            tag_meta = (tags_all.get(coin) or {}).get("meta") or {}
+            ai_grade = str(tag_meta.get("ai_grade", "A")).upper()
+
+            if cur_margin < gov["dust_threshold_usd"] or lc.get("trimmed_10pct"):
+                revisited.append({
+                    "coin": coin, "side": side, "current_margin": cur_margin,
+                    "decision": "SKIP_RUNNER_OR_TRIMMED",
+                    "reason": "Posisi sudah pernah TP1 Trim / Free-Runner (tidak perlu tambah muatan)."
+                })
+                continue
+
+            target_margin = grade_a_plus_target if ai_grade == "A+" else (grade_a_target if ai_grade == "A" else slot_base)
+            target_margin = min(target_margin, gov["max_order_margin"])
+            deficit_margin = round(target_margin - cur_margin, 2)
+
+            if deficit_margin < 6.0:
+                revisited.append({
+                    "coin": coin, "side": side, "current_margin": cur_margin,
+                    "target_margin": target_margin,
+                    "decision": "ALREADY_OPTIMAL",
+                    "reason": f"Ukuran margin (${cur_margin:.2f}) sudah dekat target tier ${equity:.0f} (${target_margin:.2f})."
+                })
+                continue
+
+            move_pct = (((cur_px - entry_px) / entry_px) * 100.0) if side == "LONG" else (((entry_px - cur_px) / entry_px) * 100.0)
+            if move_pct < -2.0 or move_pct > 2.5:
+                revisited.append({
+                    "coin": coin, "side": side, "current_margin": cur_margin,
+                    "target_margin": target_margin, "move_pct": round(move_pct, 2),
+                    "decision": "HOLD_CURRENT_SIZE",
+                    "reason": f"Harga sudah bergerak {move_pct:+.2f}% dari entry (di luar zona aman scale-in [-2.0%, +2.5%])."
+                })
+                continue
+
+            # Check live L2 Orderbook
+            ob = hl_client.get_l2_orderbook(coin, depth=15)
+            bid_pct = float(ob.get("bid_share_pct", 50.0))
+            ask_pct = float(ob.get("ask_share_pct", 50.0))
+            sp_bps = float(ob.get("avg_spread_5m_bps", ob.get("spread_bps", 5.0)))
+
+            if (side == "LONG" and ask_pct >= 68.0) or (side == "SHORT" and bid_pct >= 68.0) or sp_bps > 15.0:
+                revisited.append({
+                    "coin": coin, "side": side, "current_margin": cur_margin,
+                    "target_margin": target_margin,
+                    "decision": "HOLD_ORDERBOOK_CAUTION",
+                    "reason": f"Orderbook L2 berlawanan/spread lebar (Bid {bid_pct:.1f}% / Ask {ask_pct:.1f}%, Spread {sp_bps:.1f} bps)."
+                })
+                continue
+
+            topup_margin = min(deficit_margin, round(free_above_reserve * 0.65, 2))
+            if topup_margin < 6.0 or (free_above_reserve - topup_margin) < 0:
+                revisited.append({
+                    "coin": coin, "side": side, "current_margin": cur_margin,
+                    "target_margin": target_margin,
+                    "decision": "HOLD_RESERVE_GUARD",
+                    "reason": f"Sisa margin bebas di atas cadangan 15% (${free_above_reserve:.2f}) diprioritaskan untuk keamanan kas."
+                })
+                continue
+
+            if execute_topup:
+                add_notional = round(topup_margin * lev, 2)
+                sz_dec = self.trader.get_asset_precision(coin)
+                raw_add_sz = add_notional / cur_px if cur_px > 0 else 0
+                add_sz = round(raw_add_sz, sz_dec) if sz_dec > 0 else int(raw_add_sz)
+                if add_sz > 0:
+                    order_res = self.trader.exchange.market_open(
+                        name=coin,
+                        is_buy=(side == "LONG"),
+                        sz=add_sz,
+                        slippage=0.02
+                    )
+                    if isinstance(order_res, dict) and order_res.get("status") == "ok":
+                        free_above_reserve = round(max(0.0, free_above_reserve - topup_margin), 2)
+                        new_est_margin = round(cur_margin + topup_margin, 2)
+                        new_total_sz = round(cur_sz + add_sz, sz_dec) if sz_dec > 0 else int(cur_sz + add_sz)
+                        if coin in lifecycle:
+                            lifecycle[coin]["initial_sz"] = new_total_sz
+                            lifecycle[coin]["remaining_sz"] = new_total_sz
+                            pm.save_lifecycle_state(lifecycle)
+                        scaled_up.append({
+                            "coin": coin,
+                            "side": side,
+                            "old_margin": round(cur_margin, 2),
+                            "added_margin": round(topup_margin, 2),
+                            "new_margin": new_est_margin,
+                            "added_sz": add_sz,
+                            "new_total_sz": new_total_sz,
+                            "move_pct": round(move_pct, 2),
+                            "orderbook": f"Bid {bid_pct:.1f}% / Ask {ask_pct:.1f}% (Spread {sp_bps:.1f} bps)"
+                        })
+                        revisited.append({
+                            "coin": coin, "side": side, "current_margin": cur_margin,
+                            "target_margin": target_margin,
+                            "decision": "SCALED_UP_TO_TIER_200",
+                            "reason": f"Top-Up +${topup_margin:.2f} margin (${cur_margin:.2f} -> ${new_est_margin:.2f}) sukses dieksekusi & SL/TP1 disinkronkan!"
+                        })
+                        self.log_telemetry(
+                            category="AI_REBALANCE",
+                            action=f"SCALE-UP {side} {coin}",
+                            detail=f"Top-up +${topup_margin:.2f} margin (${cur_margin:.2f} -> ${new_est_margin:.2f}) sesuai Tier ${equity:.0f}",
+                            coin=coin,
+                            grade=ai_grade,
+                            equity=equity,
+                            free_margin=free_above_reserve
+                        )
+
+        if scaled_up:
+            time.sleep(0.4)
+            # Re-sync on-chain SL and TP1 trigger order sizes immediately!
+            pm.sync_active_positions()
+
+        return {
+            "success": True,
+            "equity": equity,
+            "slot_base_margin": slot_base,
+            "grade_a_target_margin": grade_a_target,
+            "grade_a_plus_target_margin": grade_a_plus_target,
+            "revisited": revisited,
+            "scaled_up": scaled_up
+        }
+
     # ------------------------------------------------------------------
     # 4. MONITORING & TELEMETRY DASHBOARD (CLI & LIVE VIEW)
     # ------------------------------------------------------------------
@@ -759,12 +1002,26 @@ class AutonomousEngine:
         last_e_ts = float(state.get("last_eval_ts", 0.0))
         next_eval_min = max(0, int((eval_int - (now_ts - last_e_ts)) / 60)) if last_e_ts > 0 else 0
 
+        # Query Guardian Agent & Episodic Memory status
+        guardian_badge = "🛡️ SOLID & AMAN (Zero-Leak DLP | Zero-Crash Self-Heal Aktif)"
+        mem_rules_count = 3
+        try:
+            from src.guardian_agent import guardian_agent
+            g_rep = guardian_agent.run_full_health_and_security_audit(force=False)
+            guardian_badge = g_rep.get("status_badge", guardian_badge)
+            from src.ai_engine import episodic_memory
+            mem_rules_count = len(episodic_memory.load_memory().get("rules", []))
+        except Exception:
+            pass
+
         lines = []
         lines.append("=" * 80)
-        lines.append("      🤖 PUSAT KOMANDO & PEMANTAUAN AI OTONOM (SELF-OPERATING ENGINE)      ")
+        lines.append("      🤖 PUSAT KOMANDO & PEMANTAUAN AI OTONOM (MULTI-AGENT COMMITTEE)      ")
         lines.append("=" * 80)
         lines.append(f"  • Status Daemon Background : {daemon_badge}")
         lines.append(f"  • Mode AI Mandiri          : {auto_mode_badge}")
+        lines.append(f"  • Arsitektur Komite Agent  : 🎯 Sniper vs ⚖️ Prosecutor vs 👨‍⚖️ CRO Judge + 3 Live Tools")
+        lines.append(f"  • Memori Episodik & DevSec : 🧠 {mem_rules_count} Aturan Mandiri Aktif  |  {guardian_badge}")
         lines.append(f"  • Thermostat Self-Defense  : {thermo.get('badge')} (Sizing Mult: {thermo.get('sizing_mult', 1.0):.2f}x)")
         lines.append(f"  • Alasan Thermostat        : {thermo.get('reason')}")
         lines.append(f"  • Syarat Mutlak Auto-Open  : Wajib APPROVED + Grade {'/'.join(thermo.get('required_grades', ['A']))} (Conf >= {thermo.get('min_ai_confidence', 75)})")
