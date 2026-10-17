@@ -529,14 +529,29 @@ class ForwardTestManager:
         return out
 
     def count_losses_today(self, strategy: str = "DAYTRADE") -> int:
-        """Jumlah trade rugi hari ini untuk satu stream (dipakai circuit breaker intraday)."""
+        """
+        Jumlah trade rugi signifikan / Stop Loss hit hari ini untuk satu stream.
+        Scratch trade / AI Stalemate Exit mikro mendekati breakeven (rugi sen fee < 0.5R atau < $0.40)
+        TIDAK dihitung sebagai loss event pembobol Circuit Breaker agar terhindar dari false alarm.
+        """
         today = datetime.now().strftime("%Y-%m-%d")
         n = 0
         for p in self.load_journal().values():
             if self._strategy_of(p) != strategy or p.get("status") != "CLOSED":
                 continue
-            if str(p.get("exit_time", "")).startswith(today) and float(p.get("final_pnl_usd", 0.0)) < 0:
-                n += 1
+            if str(p.get("exit_time", "")).startswith(today):
+                pnl = float(p.get("final_pnl_usd", 0.0))
+                if pnl >= 0:
+                    continue
+                exit_reason = str(p.get("exit_reason", "")).upper()
+                sl_hit = bool(p.get("milestones", {}).get("sl_hit", False))
+                current_r = float(p.get("current_r") or 0.0)
+
+                # Dihitung sebagai loss event pembobol Circuit Breaker jika:
+                # 1. Terkena STOP_LOSS atau milestone sl_hit aktif
+                # 2. Atau kerugian riil yang signifikan (R <= -0.5R atau rugi dolar <= -$0.40)
+                if "STOP_LOSS" in exit_reason or sl_hit or current_r <= -0.5 or pnl <= -0.40:
+                    n += 1
         return n
 
     def render_summary_dashboard(self, stream_filter: Optional[str] = None) -> str:
