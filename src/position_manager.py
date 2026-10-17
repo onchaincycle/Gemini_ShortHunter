@@ -789,9 +789,10 @@ class PositionManager:
 
             t1_done = s.get("trimmed_10pct", False)
             t2_done = s.get("tp_20pct", False)
+            early_be = s.get("early_be_shield", False)
 
-            trim_p = float(s.get("tp1_pct", 10.0 if strat == "SWING" else 3.0))
-            tp2_p = float(s.get("tp2_pct", 20.0 if strat == "SWING" else 6.0))
+            trim_p = float(s.get("tp1_pct", 7.0 if strat == "SWING" else 3.0))
+            tp2_p = float(s.get("tp2_pct", 18.0 if strat == "SWING" else 6.0))
             sl_p = float(s.get("sl_pct", 10.0 if strat == "SWING" else 3.0))
 
             t1_target = float(s.get("tp1_px", 0.0))
@@ -801,6 +802,8 @@ class PositionManager:
             srv = "🟢" if s.get("native_sl_active") else "🟡"
             if t1_done:
                 sl_label = f"${self._fmt_price(sl_px)} [BE {srv}]"
+            elif early_be:
+                sl_label = f"${self._fmt_price(sl_px)} [🛡️BE {srv}]"
             else:
                 sl_sign = "-" if is_long else "+"
                 sl_label = f"${self._fmt_price(sl_px)} [{sl_sign}{sl_p:.1f}% {srv}]"
@@ -810,7 +813,7 @@ class PositionManager:
             pos_badge = f"{side_icon} {st_icon}"
 
             sz_fmt = f"{sz:,.4f}".rstrip('0').rstrip('.') if sz < 1 else f"{sz:,.1f}"
-            margin_str = f"${margin:,.2f} ({sz_fmt})"
+            margin_str = f"${margin:,.2f} 🧹DUST" if margin < 3.0 else f"${margin:,.2f} ({sz_fmt})"
 
             e_str = self._fmt_price(entry)
             c_str = self._fmt_price(cur_px)

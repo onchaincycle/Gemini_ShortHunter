@@ -195,13 +195,14 @@ def print_header():
                     else:
                         sl_px = life.get("current_sl_px", round(plan["sl_px"], 5))
 
+                    early_be = life.get("early_be_shield", False)
                     # Safety check
-                    if side == "SHORT" and not t1_done and float(sl_px) < entry:
+                    if side == "SHORT" and not t1_done and not early_be and float(sl_px) < entry:
                         sl_px = life.get("initial_sl_px", round(plan["sl_px"], 5))
-                    elif side == "LONG" and not t1_done and float(sl_px) > entry:
+                    elif side == "LONG" and not t1_done and not early_be and float(sl_px) > entry:
                         sl_px = life.get("initial_sl_px", round(plan["sl_px"], 5))
 
-                    early_be = life.get("early_be_shield", False)
+                    sl_badge = "🟢" if is_on_chain_sl else "🟡"
                     if t1_done:
                         sl_label = f"${fmt_price(float(sl_px))} [BE {sl_badge}]"
                     elif early_be:
