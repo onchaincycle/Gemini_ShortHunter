@@ -42,9 +42,9 @@ PROFILES = {
         # --- Risk & portfolio ---
         "leverage": 2,
         "risk_pct": 2.0,            # % ekuitas yang dirisikokan per trade
-        "max_concurrent": 6,        # maksimal total posisi swing terbuka bersamaan
+        "max_concurrent": 5,        # maksimal 5 slot swing terbuka bersamaan
         "max_concurrent_short": 3,  # batas slot swing short
-        "max_concurrent_long": 3,   # batas slot swing long
+        "max_concurrent_long": 2,   # batas slot swing long
         "max_daily_losses": None,   # swing tidak pakai circuit breaker harian
         # --- Eksekusi & monitoring ---
         "session_gate": False,
@@ -80,7 +80,7 @@ PROFILES = {
         "leverage": 2,              # Baseline 2x (auto-boost ke 3x untuk Grade A / A+)
         "dynamic_leverage_enabled": True,
         "risk_pct": 1.0,            # risiko per trade lebih kecil (frekuensi tinggi)
-        "max_concurrent": 4,        # maksimal total posisi intraday terbuka bersamaan
+        "max_concurrent": 3,        # maksimal 3 slot intraday terbuka bersamaan
         "max_concurrent_short": 2,  # alokasi slot intraday short
         "max_concurrent_long": 2,   # alokasi slot intraday long
         "max_daily_losses": 2,      # circuit breaker: stop entry intraday setelah 2 loss/hari

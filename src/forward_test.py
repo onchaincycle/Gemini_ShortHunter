@@ -122,7 +122,7 @@ class ForwardTestManager:
             except Exception:
                 strategy = "SWING"
         plan = plan or {}
-        side = plan.get("side") or pos.get("side", "SHORT") if 'pos' in locals() else plan.get("side", "SHORT")
+        side = plan.get("side", "SHORT") or "SHORT"
 
         # Favorable / adverse movements (drop_pct represents favorable gain for both sides)
         if side == "LONG":
@@ -370,6 +370,7 @@ class ForwardTestManager:
         # 2. Check Hyperliquid user_fills to reconcile any position that closed on-chain
         journal = self.load_journal()
         try:
+            raw_fills = self.trader.info.user_fills(self.trader.account_address) if (hasattr(self.trader, 'info') and self.trader.account_address) else []
             # Sesi forward test aktif dimulai sejak batch posisi live saat ini (2026-10-16 19:56:40)
             # Fills sebelum timestamp ini diabaikan agar trade riwayat lama yang sudah close tidak masuk kembali.
             SESSION_START_MS = 1792155400000

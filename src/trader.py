@@ -112,8 +112,23 @@ class HyperliquidTrader:
             # - spot_hold represents margin currently in use by active Perp positions
             # - Free margin available to open new trades = max(0, spot_total - spot_hold)
             free_margin = max(0.0, spot_total - spot_hold)
-            total_equity = max(perp_equity, spot_total)
+            hl_equity = max(perp_equity, spot_total)
             available_trade = free_margin
+
+            # External Spot & On-Chain Holdings Integration (portfolio.csv / luar Hyperliquid)
+            spot_external_invested = 0.0
+            spot_external_value = 0.0
+            spot_holdings_count = 0
+            try:
+                from src.spot_macro_vault import SpotMacroVault
+                audit = SpotMacroVault.get_spot_portfolio_audit()
+                spot_external_invested = float(audit.get("total_invested", 0.0))
+                spot_external_value = float(audit.get("total_current_value", 0.0) or spot_external_invested)
+                spot_holdings_count = len(audit.get("holdings", []))
+            except Exception:
+                pass
+
+            grand_total_equity = round(hl_equity + spot_external_value, 2)
 
             positions = []
             for p in user_state.get("assetPositions", []):
@@ -136,7 +151,13 @@ class HyperliquidTrader:
             res = {
                 "configured": True,
                 "testnet": self.testnet,
-                "equity": round(total_equity, 2),
+                "equity": round(hl_equity, 2),  # Saldo Tradable Murni di Hyperliquid (dasar sizing & margin bursa)
+                "hl_equity": round(hl_equity, 2),
+                "total_portfolio_equity": grand_total_equity,  # Net Worth Portofolio Gabungan (HL + Spot Luar)
+                "grand_total_equity": grand_total_equity,
+                "spot_external_value": round(spot_external_value, 2),
+                "spot_external_invested": round(spot_external_invested, 2),
+                "spot_holdings_count": spot_holdings_count,
                 "spot_usdc": round(spot_total, 2),
                 "perp_equity": round(perp_equity, 2),
                 "margin_used": round(perp_margin_used, 2),
@@ -371,7 +392,7 @@ class HyperliquidTrader:
         return {"coin": coin, "funding_hourly": 0.0, "risk_level": "NOT_FOUND", "description": "Coin not found in perp universe"}
 
     @staticmethod
-    def get_equity_slot_plan(equity: float, reserve_pct: float = 15.0, thermostat_mult: float = 1.0) -> Dict:
+    def get_equity_slot_plan(equity: float, reserve_pct: float = 15.0, thermostat_mult: float = 1.0, strategy: str = "SWING", **kwargs) -> Dict:
         """
         Computes dynamic slot capacity N_max(E), reserve floor (%), dynamic dust/runner threshold,
         and per-slot margin allocation as a pure mathematical function of Total Account Equity (USDC).
@@ -444,9 +465,12 @@ class HyperliquidTrader:
                               sl_pct: float = 10.0,
                               leverage: int = 2,
                               multiplier: float = 1.0,
-                              reserve_pct: float = 15.0,
+                              reserve_pct: float = 65.0,
                               free_above_reserve: Optional[float] = None,
-                              open_slots_remaining: Optional[int] = None) -> Dict:
+                              open_slots_remaining: Optional[int] = None,
+                              strategy: Optional[str] = None,
+                              available: Optional[float] = None,
+                              **kwargs) -> Dict:
         """
         Calculates mathematically sound margin sizing as a function of Total Equity (E),
         anchored directly to the Equity-Scaled Slot Base (`slot_base_margin`) so that
@@ -458,7 +482,8 @@ class HyperliquidTrader:
         if equity <= 0:
             return {"recommended_margin": 12.0, "base_margin": 12.0, "max_risk_usd": 1.2, "pos_value": 24.0}
 
-        slot_plan = self.get_equity_slot_plan(equity, reserve_pct=reserve_pct)
+        strat = strategy or ("DAYTRADE" if (risk_pct <= 1.2 or sl_pct < 6.0) else "SWING")
+        slot_plan = self.get_equity_slot_plan(equity, reserve_pct=reserve_pct, strategy=strat)
         slot_base = slot_plan["slot_base_margin"]
         min_slot = slot_plan["min_slot_margin"]
         max_slot = slot_plan["max_slot_margin"]
@@ -484,6 +509,21 @@ class HyperliquidTrader:
 
         # Apply AI conviction & thermostat multiplier, clamped to [min_slot, max_slot]
         recommended_margin = round(max(min_slot, min(base_margin * multiplier, max_slot)), 2)
+
+        # Hard Constraint Sizing: Selalu aware & monitor Total Saldo Available vs Buffer 10%
+        avail_val = available if available is not None else kwargs.get("available")
+        if avail_val is not None:
+            try:
+                avail_float = float(avail_val)
+                buffer_floor = equity * 0.10
+                safe_deployable = max(0.0, avail_float - buffer_floor)
+                if safe_deployable < recommended_margin and safe_deployable >= min_slot:
+                    recommended_margin = round(safe_deployable, 2)
+                elif safe_deployable < min_slot and avail_float >= min_slot:
+                    recommended_margin = min_slot
+            except Exception:
+                pass
+
         pos_value = round(recommended_margin * leverage, 2)
         # Nominal initial SL risk and step-compressed effective risk
         actual_risk_usd = pos_value * (sl_pct / 100.0)

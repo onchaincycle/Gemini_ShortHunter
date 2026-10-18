@@ -1,6 +1,6 @@
 {
-  "updated_at": "2026-10-17 11:43:11",
-  "total_rules_learned": 5,
+  "updated_at": "2026-10-18 07:31:06",
+  "total_rules_learned": 8,
   "rules": [
     {
       "id": "MEM-001",
@@ -35,9 +35,9 @@
       "stream": "ALL",
       "side": "ALL",
       "root_cause": "WAR_ROOM_CONSENSUS",
-      "rule": "[MEM-006] (ALL/ALL): Berikan jeda waktu (throttling interval) pada sinkronisasi log trade close ke GitHub apabila terjadi penutupan posisi secara beruntun untuk menghindari rate-limit API.",
+      "rule": "[MEM-007] (ALL/ALL): Pastikan seluruh transkrip dan konteks percakapan di War Room terdokumentasi secara transparan agar dapat dibaca dan ditindaklanjuti oleh Hermes maupun Antigravity.",
       "source_coin": "GLOBAL",
-      "updated_at": "2026-10-17 11:43:11"
+      "updated_at": "2026-10-18 00:13:29"
     },
     {
       "id": "MEM-005",
@@ -47,6 +47,34 @@
       "root_cause": "NORMAL_SL",
       "rule": "Terapkan stop loss yang ketat saat melakukan short intraday jika volatilitas melawan arah tren.",
       "source_coin": "DOT"
+    },
+    {
+      "id": "MEM-006",
+      "created_at": "2026-10-17 23:26:46",
+      "stream": "DAYTRADE",
+      "side": "LONG",
+      "root_cause": "CLEAN_WIN",
+      "rule": "Gunakan sinyal AI stalemate exit untuk mengamankan profit ketika momentum mulai mendatar setelah pergerakan positif.",
+      "source_coin": "INIT",
+      "updated_at": "2026-10-17 23:26:48"
+    },
+    {
+      "id": "MEM-007",
+      "created_at": "2026-10-18 04:30:06",
+      "stream": "DAYTRADE",
+      "side": "LONG",
+      "root_cause": "NORMAL_SL",
+      "rule": "Gunakan trailing stop atau ambil sebagian profit ketika MFE mencapai mendekati 1% untuk menghindari pembalikan arah menjadi kerugian.",
+      "source_coin": "BERA"
+    },
+    {
+      "id": "MEM-008",
+      "created_at": "2026-10-18 07:31:06",
+      "stream": "DAYTRADE",
+      "side": "SHORT",
+      "root_cause": "CLEAN_WIN",
+      "rule": "Gunakan AI_STALEMATE_EXIT secara konsisten untuk mengamankan profit saat momentum mulai melambat.",
+      "source_coin": "HYPE"
     }
   ]
 }

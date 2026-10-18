@@ -314,7 +314,55 @@ class AgentWarRoom:
         ]
 
         from src.profiles import PROFILES
+        from src.portfolio_sizer import PortfolioSizer
+        from src.spot_macro_vault import SpotMacroVault
+
+        equity = float(gov.get("equity", 0.0))
+        available = float(gov.get("available", 0.0))
+        margin_used = float(gov.get("margin_used", 0.0))
+
+        core_satellite = PortfolioSizer.calculate_allocation(equity)
+        spot_audit = SpotMacroVault.get_spot_portfolio_audit()
+
+        buffer_floor = equity * 0.10
+        deployable_cash = max(0.0, available - buffer_floor)
+        spot_invested = float(spot_audit.get("total_invested", 0.0))
+        spot_budget = float(core_satellite["spot"]["budget_usd"])
+        spot_remaining = max(0.0, spot_budget - spot_invested)
+
+        capital_awareness = {
+            "total_saldo_equity_usd": round(equity, 2),
+            "total_saldo_available_usd": round(available, 2),
+            "margin_used_usd": round(margin_used, 2),
+            "free_margin_buffer_10pct_usd": round(buffer_floor, 2),
+            "effective_deployable_cash_usd": round(deployable_cash, 2),
+            "core_satellite_targets": {
+                "spot_vault_55pct_usd": spot_budget,
+                "spot_invested_usd": spot_invested,
+                "spot_remaining_quota_usd": round(spot_remaining, 2),
+                "spot_budget_per_coin_usd": core_satellite["spot"]["budget_per_coin"],
+                "spot_3_tranches": {
+                    "t1_scout_30pct": core_satellite["spot"]["tranche_1_scout_usd"],
+                    "t2_pullback_40pct": core_satellite["spot"]["tranche_2_pullback_usd"],
+                    "t3_breakout_30pct": core_satellite["spot"]["tranche_3_breakout_usd"]
+                },
+                "swing_25pct_usd": core_satellite["swing"]["budget_usd"],
+                "swing_margin_per_slot_usd": core_satellite["swing"]["margin_per_slot"],
+                "swing_slots_max": core_satellite["swing"]["max_slots"],
+                "intraday_10pct_usd": core_satellite["intraday"]["budget_usd"],
+                "intraday_margin_per_slot_usd": core_satellite["intraday"]["margin_per_slot"],
+                "intraday_slots_max": core_satellite["intraday"]["max_slots"],
+                "buffer_10pct_usd": core_satellite["buffer"]["budget_usd"]
+            },
+            "spot_holdings": spot_audit.get("holdings", []),
+            "capital_constraint_status": (
+                "ADEQUATE_LIQUIDITY" if deployable_cash >= 15.0
+                else ("TIGHT_LIQUIDITY_USE_CAUTION" if deployable_cash > 0 else "ZERO_AVAILABLE_MARGIN")
+            )
+        }
+
         return {
+            "live_capital_monitoring": capital_awareness,
             "portfolio_governor": {
                 "equity_usdc": gov.get("equity"),
                 "free_margin_usdc": gov.get("available"),
@@ -388,6 +436,18 @@ You are the Interactive AI Quantitative Committee of ShortHunter (consisting of 
 You are also directly linked via a 2-way bridge (`antigravity_bridge`) to **Antigravity** (the Lead AI Software Architect & Coding Agent that builds and upgrades ShortHunter's Python codebase).
 The user (Fund Principal & Portfolio Owner) is speaking freely with you in the War Room.
 
+=== CRITICAL CAPITAL & SIZING AWARENESS (TOTAL SALDO & SALDO AVAILABLE) ===
+You MUST continuously monitor and strictly respect BOTH metrics provided in `live_capital_monitoring`:
+1. TOTAL SALDO (Total Equity $E$): The master anchor for Core-Satellite target allocations:
+   - Spot Vault: 55% of $E$ (Hold 1-24 Bulan, target 5 koin @ 11% $E$, Smart 3-Tranche DCA: 30% Scout, 40% Pullback, 30% Breakout).
+   - Futures Swing 3D: 25% of $E$ (Max 5 slots @ 5% $E$ margin per trade, 2x leverage).
+   - Futures Intraday: 10% of $E$ (Max 3 slots @ 3.33% $E$ margin per trade, 2x-3x leverage).
+   - Free Margin Buffer: 10% of $E$ (Cadangan likuiditas kas aman).
+2. SALDO AVAILABLE (Total Saldo Bebas / Free Margin $A$): The hard real-time execution constraint.
+   - NEVER recommend or approve position sizing that exceeds `total_saldo_available_usd` or violates the 10% cash buffer floor (`free_margin_buffer_10pct_usd`).
+   - If available margin is tight or partially deployed in floating positions, dynamically adjust and scale down position recommendations to fit within `effective_deployable_cash_usd`.
+   - In your conversational response (`ai_response`) and opinion review (`opinion_review`), ALWAYS actively state and reference BOTH Total Saldo ($E$) and Saldo Available ($A$) so the user knows your position recommendations dynamically reflect their live wallet balance!
+
 Your 5 core duties:
 1. LISTEN carefully to the user's opinion, hypothesis, question, or instruction.
 2. REVIEW their opinion objectively against the LIVE SYSTEM & MARKET DATA below:
@@ -449,8 +509,13 @@ Your 5 core duties:
         gov = live_ctx.get("portfolio_governor", {})
         mentioned = list((live_ctx.get("mentioned_coins_tool_data") or {}).keys())
 
+        cap_mon = live_ctx.get("live_capital_monitoring", {})
+        eq_val = cap_mon.get("total_saldo_equity_usd", gov.get("equity_usdc", 0))
+        avail_val = cap_mon.get("total_saldo_available_usd", gov.get("free_margin_usdc", 0))
+        deploy_val = cap_mon.get("effective_deployable_cash_usd", 0)
+
         evidence = [
-            f"Ekuitas Akun: ${gov.get('equity_usdc', 0):.2f} USDC (Bebas di atas cadangan: ${gov.get('free_above_reserve_usdc', 0):.2f})",
+            f"Total Saldo (Equity): ${eq_val:,.2f} USDC | Saldo Available: ${avail_val:,.2f} USDC (Siap Tembak di atas Buffer: ${deploy_val:,.2f} USDC)",
             f"Posisi Aktif: {gov.get('active_slots')} ({gov.get('long_count', 0)} Long vs {gov.get('short_count', 0)} Short)"
         ]
         for mc in mentioned:

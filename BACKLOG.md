@@ -38,3 +38,8 @@ Daftar fitur dan peningkatan yang dijadwalkan untuk tahap berikutnya:
 * **Status:** `OPEN_FOR_ANTIGRAVITY` | **Kategori:** `UI_UX_IMPROVEMENT` | **Prioritas:** `MEDIUM`
 * **Kutipan User (`QA-0013`):** "gak ada tampilannya"
 * **Spesifikasi Teknis untuk Antigravity:** Tambahkan komponen widget tabel interaktif atau format card Markdown yang rapi pada agent_chat.py / html_reporter.py untuk menampilkan riwayat log perdagangan secara langsung di layar chat War Room ketika Principal meminta data log.
+
+### [DEV-003] Sinkronisasi Konteks War Room untuk Integrasi Agen Hermes *(Captured via AI War Room 2026-10-18 00:13:29)*
+* **Status:** `OPEN_FOR_ANTIGRAVITY` | **Kategori:** `NEW_FEATURE` | **Prioritas:** `HIGH`
+* **Kutipan User (`QA-0016`):** "saat ini saya juga sudah implementasi Hermes, jadi bot ini akan di edit akan lebih sering oleh Hermes, pastikan percakapan kita juga bisa dibaca oleh Hermes"
+* **Spesifikasi Teknis untuk Antigravity:** Tambahkan modul atau endpoint sinkronisasi transkrip chat War Room ke direktori khusus (misal inputs/hermes_bridge_context.json) agar agen Hermes dapat membaca riwayat diskusi, keputusan komite, dan backlog aktif secara real-time.

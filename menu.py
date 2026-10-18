@@ -7,11 +7,68 @@ Stream 2: ⚡ INTRADAY (Day-Trade Precision | 15m/1H | Dynamic Pinbar SL 2.8-5.5
 
 import os
 import sys
+import time
+import sqlite3
 import unicodedata
+from datetime import datetime, timezone
+from typing import Optional, List, Dict, Any
+
 from src.database import Database
 from src.downloader import DataDownloader
 from src.screener import ShortScreener
 from src.backtester import ShortBacktester
+from src.spot_strategy_engine import SpotStrategyEngine
+from src.portfolio_sizer import PortfolioSizer
+from src.spot_macro_vault import SpotMacroVault
+from src.daily_payout_manager import DailyPayoutManager
+
+# Global ANSI escape codes for terminal color styling
+green = "\033[92m"
+red = "\033[91m"
+yellow = "\033[93m"
+cyan = "\033[96m"
+bold = "\033[1m"
+reset = "\033[0m"
+
+# Rich components with graceful terminal fallback
+try:
+    from rich.console import Console
+    from rich.prompt import Prompt, Confirm
+    from rich.table import Table
+    console = Console()
+except ImportError:
+    class Prompt:
+        @staticmethod
+        def ask(prompt: str, default: str = "", choices: Optional[List[str]] = None) -> str:
+            ans = input(f"{prompt} [{default}]: " if default else f"{prompt}: ").strip()
+            return ans if ans else default
+    class Confirm:
+        @staticmethod
+        def ask(prompt: str, default: bool = True) -> bool:
+            d_str = "Y/n" if default else "y/N"
+            ans = input(f"{prompt} ({d_str}): ").strip().lower()
+            if not ans:
+                return default
+            return ans in ("y", "yes")
+    class Table:
+        def __init__(self, title: str = ""):
+            self.title = title
+            self.columns = []
+            self.rows = []
+        def add_column(self, name: str, justify: str = "left"):
+            self.columns.append(name)
+        def add_row(self, *args):
+            self.rows.append(args)
+    class Console:
+        def print(self, table: Table):
+            if hasattr(table, "title") and table.title:
+                print(f"\n--- {table.title} ---")
+            if hasattr(table, "columns"):
+                print(" | ".join(str(c) for c in table.columns))
+            if hasattr(table, "rows"):
+                for r in table.rows:
+                    print(" | ".join(str(c) for c in r))
+    console = Console()
 
 
 def clear_screen():
@@ -111,9 +168,14 @@ def print_header():
 
             from src.ai_engine import ai_advisor
             ai_str = "🟢 AKTIF (Gemini Flash | Self-Eval & Gatekeeper Wajib Grade A)" if ai_advisor.is_available() else "⚪ OFF / FALLBACK"
+            tradable_eq = float(state.get("equity", 0.0))
+            hl_eq = float(state.get("hl_equity", tradable_eq))
+            spot_ext = float(state.get("spot_external_value", 0.0))
+            total_net_worth = float(state.get("total_portfolio_equity", tradable_eq + spot_ext))
+            spot_info = f" [Net Worth Portofolio: ${total_net_worth:,.2f} (inkl. Spot Luar: ${spot_ext:,.2f})]" if spot_ext > 0 else ""
             print(
-                f"💼 Saldo Akun ({net_label}): ${eq:,.2f} USDC "
-                f"(Bebas: ${avail:,.2f} | Cadangan {gov['reserve_pct']:.0f}%: ${gov['reserve_usd']:,.2f} | Siap Tembak: ${gov['free_above_reserve']:,.2f})"
+                f"💼 Saldo Tradable HL ({net_label}): ${hl_eq:,.2f} USDC "
+                f"(Bebas: ${avail:,.2f} | Cadangan {gov['reserve_pct']:.0f}%: ${gov['reserve_usd']:,.2f} | Siap Tembak: ${gov['free_above_reserve']:,.2f}){spot_info}"
             )
             print(f"🤖 Status AI Mandiri   : {daemon_str}")
             print(f"🧠 AI Advisor & Eval   : {ai_str}")
@@ -357,14 +419,20 @@ def print_header():
                     print("│" + "│".join(f" {pad_str(c[0], c[1], 'center')} " for c in s_cols) + "│")
                     print(s_mid)
                     for sh in spot_holdings:
-                        s_sym = f"{sh['symbol']} [{sh.get('tier', 'SPOT')}]"
-                        s_amt = f"{sh['amount']:,.4f}"
-                        s_inv = f"${sh['invested_usd']:,.2f}"
-                        s_pxs = f"${sh['avg_buy_price']:,.4f} ➔ ${sh['current_price']:,.4f}"
-                        s_pnl = sh['unrealized_pnl']
-                        s_pnl_pct = sh['unrealized_pnl_pct']
+                        sym = sh.get('symbol', 'UNKNOWN')
+                        s_sym = f"{sym} [SPOT]"
+                        qty = float(sh.get('qty', 0.0))
+                        s_amt = f"{qty:,.4f}".rstrip('0').rstrip('.') if qty < 10 else f"{qty:,.1f}"
+                        inv = float(sh.get('invested_usd', 0.0))
+                        s_inv = f"${inv:,.2f}"
+                        ent_px = float(sh.get('entry_price', 0.0))
+                        cur_px = float(sh.get('current_price', 0.0))
+                        s_pxs = f"${ent_px:,.4f} ➔ ${cur_px:,.4f}" if cur_px < 1.0 else f"${ent_px:,.2f} ➔ ${cur_px:,.2f}"
+                        s_pnl = float(sh.get('unrealized_pnl_usd', 0.0))
+                        s_pnl_pct = float(sh.get('unrealized_pnl_pct', 0.0))
                         s_clr = green if s_pnl >= 0 else red
-                        s_alert = sh.get('status_alert', '🟢 HOLD')
+                        s_badge = sh.get('status_badge', '💎 KEEP')
+                        s_alert = s_badge.split('(')[0].strip() if '(' in s_badge else s_badge
                         s_cells = [
                             f" {pad_str(s_sym, s_cols[0][1], s_cols[0][2])} ",
                             f" {pad_str(s_amt, s_cols[1][1], s_cols[1][2])} ",
@@ -1100,9 +1168,13 @@ def menu_execute_short():
     print("PILIH ARAH ORDER (DIRECTION):")
     print("  [1] 🔴 SHORT (Mencari Pucuk / Breakdown / Overbought)")
     print("  [2] 🟢 LONG  (Mencari Dasar / Bottom Absorption / Reclaim)")
+    print("  [3] 🛒 SPOT  (Zero Leverage Long Akumulasi 1-24 Bulan | Smart DCA)")
     print("  [0] Batal / Kembali ke Menu Utama")
-    pilih_dir = input("\nMasukkan pilihan arah [0-2, default: 1 (SHORT)]: ").strip()
+    pilih_dir = input("\nMasukkan pilihan arah [0-3, default: 1 (SHORT)]: ").strip()
     if pilih_dir in ["0", "b", "q", "exit"]:
+        return
+    if pilih_dir == "3":
+        execute_spot_dca_purchase_flow()
         return
     is_long_dir = (pilih_dir == "2")
     chosen_side = "LONG" if is_long_dir else "SHORT"
@@ -2266,6 +2338,150 @@ def menu_ai_war_room():
             print(f"     └─ Spesifikasi: {tk['technical_spec_for_antigravity']}")
 
 
+def execute_spot_dca_purchase_flow(preset_coin: Optional[str] = None):
+    print("\n🛒 EKSEKUSI BELI SPOT (SMART 3-TRANCHE DCA — SCR v10)")
+    print("Zero Liquidation Risk | Unleveraged Long (1-24 Bulan) | Dynamic Sizing")
+    print("─"*78)
+
+    # 1. Ambil rekomendasi koin akumulasi aktif
+    candidates = SpotStrategyEngine.get_spot_accumulation_candidates()
+    cand_symbols = [c["symbol"] for c in candidates]
+    if cand_symbols:
+        print(f"  • Koin Rekomendasi Akumulasi Sehat Saat Ini: [bold green]{', '.join(cand_symbols)}[/bold green]")
+    else:
+        print("  • [yellow]Belum ada koin akumulasi baru di filter ketat (Wyckoff C/D/E + DRS < 55).[/yellow]")
+
+    # 2. Input Koin
+    default_coin = preset_coin.upper() if preset_coin else (cand_symbols[0] if cand_symbols else "BTC")
+    if preset_coin:
+        coin = preset_coin.upper()
+        print(f"\n  🎯 Koin Dipilih: [bold cyan]{coin}[/bold cyan]")
+    else:
+        coin = Prompt.ask("\nMasukkan simbol koin yang akan dibeli Spot", default=default_coin).upper()
+
+    # 3. Hitung Rekomendasi Budget Dinamis Core-Satellite (Spot 55%)
+    try:
+        from src.trader import HyperliquidTrader
+        hl = HyperliquidTrader()
+        acct = hl.get_account_state()
+        eq_live = float(acct.get("equity", 0.0))
+        avail_live = float(acct.get("available", 0.0))
+    except Exception:
+        eq_live = 1000.0
+        avail_live = 1000.0
+
+    alloc_plan = PortfolioSizer.calculate_spot_coin_budget(
+        total_equity=eq_live,
+        current_holdings_count=len(SpotMacroVault.load_portfolio_holdings())
+    )
+    rec_budget = alloc_plan.get("recommended_coin_budget_usd", 110.0)
+    avail_spot_budget = alloc_plan.get("remaining_spot_budget_usd", rec_budget)
+
+    print(f"\n  📊 Status Saldo & Rekomendasi Budget Sizing:")
+    print(f"    • Saldo Total Portofolio : [bold green]${eq_live:,.2f} USD[/bold green]")
+    print(f"    • Sisa Budget Spot 55%   : [bold cyan]${avail_spot_budget:,.2f} USD[/bold cyan]")
+    print(f"    • Rekomendasi per Koin   : [bold yellow]${rec_budget:,.2f} USD[/bold yellow]")
+
+    budget_input = Prompt.ask(
+        f"Alokasi Total Modal untuk koin {coin} ($)",
+        default=f"{rec_budget:.2f}"
+    )
+    try:
+        total_budget = float(budget_input)
+    except ValueError:
+        total_budget = rec_budget
+
+    plan = SpotStrategyEngine.generate_smart_dca_plan(
+        symbol=coin,
+        total_budget_usd=total_budget,
+        total_equity=eq_live
+    )
+    if not plan.get("success"):
+        print(f"\n[red]Gagal membuat rencana DCA:[/red] {plan.get('error')}")
+        input("\nTekan Enter untuk kembali...")
+        return
+
+    # Tampilkan 3 Tranche
+    print(f"\n📋 RENCANA SMART 3-TRANCHE DCA UNTUK {coin} (Total: ${total_budget:,.2f} USD):")
+    tranches = plan["tranches"]
+    print(f"  • Tranche 1 (Pilot Scout 30%) : ${tranches['tranche_1_scout_usd']:,.2f} USD — Entry Sekarang / Market")
+    print(f"  • Tranche 2 (Pullback Dip 40%): ${tranches['tranche_2_pullback_usd']:,.2f} USD — Limit @ ${tranches['tranche_2_entry_price_target']:,.4f}")
+    print(f"  • Tranche 3 (Breakout 30%)    : ${tranches['tranche_3_breakout_usd']:,.2f} USD — Trigger @ ${tranches['tranche_3_entry_price_target']:,.4f}")
+
+    print("\nPilihan Eksekusi:")
+    print("  1. Eksekusi Tranche 1 SAJA (Pilot Scout 30% Modal)")
+    print("  2. Eksekusi Penuh Sekarang (100% Budget)")
+    print("  0. Batal")
+    dca_choice = Prompt.ask("Pilih eksekusi [0/1/2]", choices=["0", "1", "2"], default="1")
+    if dca_choice == "0":
+        print("[yellow]Eksekusi dibatalkan.[/yellow]")
+        time.sleep(1)
+        return
+
+    chosen_alloc = 0.30 if dca_choice == "1" else 1.00
+    chosen_budget = round(total_budget * chosen_alloc, 2)
+    chosen_note = "Tranche 1 Pilot Scout (30%)" if dca_choice == "1" else "100% Full Accumulation Entry"
+
+    # Cari harga dan metadata koin
+    chosen_px = 0.0
+    chosen_cid = "nan"
+    chosen_max_alloc_pct = 100.0
+    for cd in candidates:
+        if cd["symbol"] == coin:
+            chosen_px = cd.get("current_price", 0.0)
+            chosen_cid = cd.get("coin_id", "nan")
+            chosen_max_alloc_pct = cd.get("max_alloc_pct", 100.0)
+            break
+    if chosen_px <= 0:
+        db_p = SpotMacroVault.get_db_path()
+        if db_p:
+            try:
+                conn = sqlite3.connect(db_p)
+                c_cur = conn.cursor()
+                c_cur.execute(f"SELECT coin_id, price FROM coins WHERE symbol = '{coin}' LIMIT 1;")
+                r = c_cur.fetchone()
+                if r:
+                    chosen_cid = r[0] or "nan"
+                    chosen_px = float(r[1]) if r[1] is not None else 0.0
+                conn.close()
+            except Exception:
+                pass
+
+    if chosen_px <= 0:
+        px_in = Prompt.ask(f"Harga estimasi pasar untuk {coin} saat ini ($)", default="1.0")
+        try:
+            chosen_px = float(px_in)
+        except ValueError:
+            chosen_px = 1.0
+
+    print(f"\n⚡ Rincian Order Spot:")
+    print(f"  • Koin        : [bold cyan]{coin}[/bold cyan]")
+    print(f"  • Modal Beli  : [bold green]${chosen_budget:,.2f} USD[/bold green]")
+    print(f"  • Est. Harga  : ${chosen_px:,.4f}")
+    est_qty = round(chosen_budget / chosen_px, 6) if chosen_px > 0 else 0.0
+    print(f"  • Est. Jumlah : [bold yellow]{est_qty} {coin}[/bold yellow]")
+    print(f"  • Keterangan  : {chosen_note}")
+
+    if Confirm.ask("\nApakah Anda yakin ingin mengeksekusi dan mencatat posisi SPOT ini?", default=True):
+        print("\nSedang memproses order dan sinkronisasi portofolio...")
+        exec_res = SpotStrategyEngine.execute_spot_dca_entry(
+            symbol=coin,
+            usd_allocation=chosen_budget,
+            coin_id=chosen_cid,
+            max_alloc_pct=chosen_max_alloc_pct,
+            entry_note=chosen_note
+        )
+        if exec_res.get("success"):
+            print(f"\n[bold green]🎉 SUKSES EKSEKUSI & SINKRONISASI SPOT {coin}![/bold green]")
+            print(f"  Modal Terbeli : ${chosen_budget:,.2f} USD ({exec_res.get('qty')} {coin})")
+            print(f"  Tercatat di   : {exec_res.get('portfolio_file')}")
+            print(f"  Action        : {exec_res.get('action')}")
+        else:
+            print(f"\n[red]Gagal eksekusi spot:[/red] {exec_res.get('error')}")
+    else:
+        print("[yellow]Order dibatalkan.[/yellow]")
+    input("\nTekan Enter untuk kembali...")
+
 def menu_macro_spot_vault():
     """
     Sub-menu khusus Macro Spot Vault (1-24 Bulan) berbasis SCR v10.
@@ -2603,7 +2819,147 @@ def menu_macro_spot_vault():
             break
 
 
-def main_menu():
+def menu_daily_payout():
+    from src.daily_payout_manager import DailyPayoutManager
+    while True:
+        clear_screen()
+        cfg = DailyPayoutManager.load_config()
+        addr = cfg.get("payout_address", "").strip()
+        pct = float(cfg.get("payout_pct", 50.0))
+        calc = DailyPayoutManager.calculate_daily_payout()
+        pnl_d = calc.get("pnl_data", {})
+
+        print("\n" + "═"*78)
+        print("💼 GAJI HARIAN — DAILY PROFIT PAYOUT (PROPORTIONAL REALIZED PNL)")
+        print("═"*78)
+        print("Aturan Baku:")
+        print("  1. Pengisian alamat gajian diatur di menu ini (tanpa alamat = transfer NONAKTIF).")
+        print("  2. Dasar Perhitungan: MURNI Realized PnL (Closed Trades), BUKAN Floating / Unrealized PnL.")
+        print("  3. Kondisi Eksekusi: HANYA jika Realized PnL hari itu POSITIF (> $0 USD).")
+        print("     Jika Realized PnL negatif (loss) atau $0, TIDAK ADA gajian pada hari tersebut.")
+        print("  4. Bebas Bias Modal: Tidak menggunakan selisih saldo (deposit/penarikan luar tidak berpengaruh).")
+        print("─"*78)
+
+        status_addr = f"[bold green]{addr}[/bold green]" if addr else "[bold red]BELUM DIISI (TRANSFER GAJI NONAKTIF)[/bold red]"
+        print(f"  • Alamat Dompet Gajian : {status_addr}")
+        print(f"  • Persentase Gaji      : [bold cyan]{pct:.0f}%[/bold cyan] dari Laba Bersih Tertutup")
+        print(f"  • Status Kelayakan Hari: {'[bold green]MEMENUHI SYARAT (PROFIT BERSIH)[/bold green]' if calc.get('eligible') else '[yellow]BELUM DAPAT DICAIRKAN[/yellow]'}")
+        print(f"  • Catatan Sistem       : {calc.get('message')}")
+        print("─"*78)
+
+        net_pnl = pnl_d.get("net_realized_pnl_usd", 0.0)
+        pnl_color = "bold green" if net_pnl > 0 else ("bold red" if net_pnl < 0 else "dim")
+        print(f"  📊 Realized PnL Terakhir : [{pnl_color}]${net_pnl:+,.2f} USD[/{pnl_color}] "
+              f"(Win: {pnl_d.get('win_count', 0)} | Loss: {pnl_d.get('loss_count', 0)} | Total: {pnl_d.get('total_trades', 0)} Closed Trades)")
+
+        if calc.get("eligible"):
+            print(f"  💰 Hak Gaji Siap Transfer : [bold green]${calc.get('payout_amount_usd', 0.0):,.2f} USD[/bold green]")
+            print(f"  🌱 Laba Ditahan (Compound): [bold cyan]${calc.get('retained_profit_usd', 0.0):,.2f} USD[/bold cyan]")
+
+        last_date = cfg.get("last_payout_date", "")
+        last_amt = cfg.get("last_payout_amount", 0.0)
+        if last_date:
+            print(f"  🕒 Transfer Terakhir      : ${last_amt:,.2f} USD pada {last_date}")
+
+        print("\nPilihan Tindakan:")
+        print("  [1] 📋 Tinjau Rincian Trade PnL Hari Terakhir")
+        print("  [2] ✍️ Atur / Perbarui Alamat Dompet Gajian")
+        print("  [3] ❌ Hapus Alamat Gajian (Nonaktifkan Transfer)")
+        print("  [4] ⚙️ Ubah Persentase Pembagian Gaji (% PnL)")
+        print("  [5] 🚀 Eksekusi Transfer Gaji Harian Sekarang (Hyperliquid L1 Transfer)")
+        print("  [6] 📜 Riwayat Transfer Gaji Sebelumnya")
+        print("  [0] ⬅️ Kembali ke Menu Utama")
+
+        ch = Prompt.ask("\nPilih menu [0-6]", default="0")
+        if ch == "0":
+            break
+        elif ch == "1":
+            trades = pnl_d.get("trades", [])
+            print(f"\n📋 RINCIAN TRADE TERTUTUP (Tanggal: {pnl_d.get('target_date', '')} s/d {pnl_d.get('today_date', '')}):")
+            if not trades:
+                print("  [dim]Belum ada trade yang ditutup pada periode ini.[/dim]")
+            else:
+                table = Table(title="Daftar Trade Realized PnL")
+                table.add_column("Waktu / Tanggal", style="cyan")
+                table.add_column("Koin", style="bold")
+                table.add_column("Arah", style="magenta")
+                table.add_column("Realized PnL ($)", justify="right")
+                table.add_column("Fee ($)", justify="right")
+                table.add_column("Net PnL ($)", justify="right")
+                for tr in trades:
+                    npnl = tr.get("net_pnl", 0.0)
+                    clr = "green" if npnl > 0 else ("red" if npnl < 0 else "white")
+                    table.add_row(
+                        f"{tr.get('date', '')} {tr.get('time', '')}",
+                        tr.get("coin", "N/A"),
+                        tr.get("dir", tr.get("side", "")),
+                        f"${tr.get('closed_pnl', 0.0):+,.2f}",
+                        f"${tr.get('fee', 0.0):,.4f}",
+                        f"[{clr}]${npnl:+,.2f}[/{clr}]"
+                    )
+                console.print(table)
+            input("\nTekan Enter untuk kembali...")
+        elif ch == "2":
+            new_addr = Prompt.ask("\nMasukkan Alamat Wallet Gajian Baru (EVM / Arbitrum / Hyperliquid L1)").strip()
+            if new_addr:
+                DailyPayoutManager.set_payout_address(new_addr)
+                print(f"  [bold green]Sukses![/bold green] Alamat gajian disimpan: {new_addr}")
+            else:
+                print("  [yellow]Pengisian dibatalkan.[/yellow]")
+            time.sleep(1.5)
+        elif ch == "3":
+            if Confirm.ask("\nApakah Anda yakin ingin MENGHAPUS alamat gajian? (Transfer gaji harian akan ditiadakan)", default=False):
+                DailyPayoutManager.set_payout_address("")
+                print("  [bold yellow]Alamat gajian dihapus. Transfer gaji dinonaktifkan.[/bold yellow]")
+                time.sleep(1.5)
+        elif ch == "4":
+            new_pct = Prompt.ask("\nMasukkan Persentase Gaji dari Profit Bersih [1-100]", default=str(pct))
+            try:
+                DailyPayoutManager.set_payout_pct(float(new_pct))
+                print(f"  [bold green]Sukses![/bold green] Porsi gaji diatur ke {float(new_pct):.0f}%")
+            except ValueError:
+                print("  [red]Input tidak valid.[/red]")
+            time.sleep(1.5)
+        elif ch == "5":
+            if not calc.get("eligible"):
+                print(f"\n[red]Tidak dapat transfer:[/red] {calc.get('message')}")
+                input("\nTekan Enter untuk kembali...")
+                continue
+            amt = calc.get("payout_amount_usd", 0.0)
+            if Confirm.ask(f"\nKonfirmasi transfer gaji sebesar ${amt:,.2f} USD ke {addr}?", default=True):
+                print("\nSedang memproses transfer Hyperliquid L1...")
+                exec_res = DailyPayoutManager.execute_payout()
+                if exec_res.get("success"):
+                    print(f"\n[bold green]🎉 TRANSFER GAJI BERHASIL![/bold green]")
+                    print(f"  Nominal : ${exec_res.get('amount_usd'):,.2f} USD")
+                    print(f"  Tujuan  : {exec_res.get('destination')}")
+                    print(f"  Tx Hash : {exec_res.get('tx_hash')}")
+                else:
+                    print(f"\n[bold red]Transfer Gagal:[/bold red] {exec_res.get('error')}")
+                input("\nTekan Enter untuk kembali...")
+        elif ch == "6":
+            history = cfg.get("payout_history", [])
+            print("\n📜 RIWAYAT TRANSFER GAJI HARIAN:")
+            if not history:
+                print("  [dim]Belum ada riwayat transfer gaji sebelumnya.[/dim]")
+            else:
+                table = Table(title="Histori Payout Gaji")
+                table.add_column("Waktu", style="cyan")
+                table.add_column("Nominal ($)", justify="right", style="bold green")
+                table.add_column("Net Profit ($)", justify="right")
+                table.add_column("Alamat Tujuan", style="dim")
+                for h in reversed(history[-15:]):
+                    table.add_row(
+                        h.get("timestamp", h.get("date", "")),
+                        f"${h.get('amount_usd', 0.0):,.2f}",
+                        f"${h.get('net_pnl_usd', 0.0):,.2f}",
+                        h.get("destination", "")[:12] + "..."
+                    )
+                console.print(table)
+            input("\nTekan Enter untuk kembali...")
+
+
+def main():
     while True:
         clear_screen()
         print_header()
@@ -2623,10 +2979,11 @@ def main_menu():
         print("  [8] ⬇️  Perbarui Data Candlestick Hyperliquid (Daily, 4H, & 15m)")
         print("  [9] 📦 Status Database & Penyimpanan (DuckDB & SQLite WAL)")
         print("  [10] 🔑 Setup & Cek Akun Hyperliquid (Testnet / Mainnet)")
+        print("  [12] 💼 Gaji Harian — Daily Profit Payout Engine (Realized PnL)")
         print("  [0] 🚪 Keluar")
         print("-" * 68)
 
-        choice = input("Masukkan nomor pilihan [0-11, atau ketik M untuk Macro Vault / C untuk Chat AI]: ").strip()
+        choice = input("Masukkan nomor pilihan [0-12, atau ketik M untuk Macro Vault / C untuk Chat AI]: ").strip()
         if choice.upper() in ["M", "MACRO", "SPOT", "VAULT"]:
             menu_macro_spot_vault()
         elif choice in ["1", "2", "7", "8", "9"]:
@@ -2655,8 +3012,10 @@ def main_menu():
             menu_ai_hub()
         elif choice == "10":
             menu_hyperliquid_setup()
-        elif choice.upper() in ["11", "C", "CHAT", "W", "WAR"]:
+        elif choice in ["11", "C", "CHAT"]:
             menu_ai_war_room()
+        elif choice == "12":
+            menu_daily_payout()
         elif choice in ["0", "q", "exit"]:
             print("\nTerima kasih! Semoga trading kuantitatif Anda menghasilkan profit maksimal. 🚀\n")
             sys.exit(0)
@@ -2664,9 +3023,11 @@ def main_menu():
             input("\nPilihan tidak valid. Tekan ENTER untuk mencoba lagi...")
 
 
+main_menu = main
+
 if __name__ == "__main__":
     try:
-        main_menu()
+        main()
     except KeyboardInterrupt:
         print("\n\nKeluar dari program...")
         sys.exit(0)

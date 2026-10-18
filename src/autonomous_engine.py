@@ -34,6 +34,7 @@ from src.forward_test import ForwardTestManager
 from src.profiles import get_profile
 from src import position_tags
 from src.trade_db import trade_db
+from src.claude_crypto_engine import ClaudeCryptoEngine
 
 AUTONOMOUS_STATE_FILE = os.path.join(ROOT_DIR, "data", "autonomous_state.json")
 AUTONOMOUS_LOG_FILE = os.path.join(ROOT_DIR, "logs", "autonomous_ai.log")

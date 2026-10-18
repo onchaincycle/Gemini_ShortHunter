@@ -11,13 +11,13 @@
   },
   "DAYTRADE": {
     "liquidity_sweep": 25.0,
-    "m15_pinbar": 22.0,
-    "bos_ema_breakdown": 20.0,
-    "funding_rate_guard": 15.0,
-    "volume_climax": 15.0
+    "m15_pinbar": 20.0,
+    "bos_ema_breakdown": 12.0,
+    "funding_rate_guard": 10.0,
+    "volume_climax": 25.0
   },
   "DAYTRADE_meta": {
-    "rationale": "Recent daytrade outcomes show high MAE on breakouts leading to time stops and stalemates, indicating that structural breakdown triggers need reduced weight while liquidity sweeps and pinbars require higher emphasis to catch true reversals before full structural collapses.",
-    "updated_at": "2026-10-17T12:23:12.731690"
+    "rationale": "Based on recent daytrade outcomes involving high MAE during time stops and stalemate exits, liquidity sweep and volume climax need increased emphasis to better filter fake reversals and capture genuine climactic points, while secondary structural signals are slightly reduced.",
+    "updated_at": "2026-10-18T07:33:14.697338"
   }
 }

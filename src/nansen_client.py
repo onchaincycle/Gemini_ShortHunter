@@ -6,6 +6,7 @@ Fetches Smart Money token holdings, netflow changes, and whale distribution data
 import os
 from typing import Dict, List, Optional
 import requests
+import pandas as pd
 from dotenv import load_dotenv
 
 load_dotenv()

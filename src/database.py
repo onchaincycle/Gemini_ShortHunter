@@ -5,7 +5,7 @@ Handles high-performance local time-series storage for OHLCV, funding rates, and
 
 import os
 import shutil
-from typing import List, Optional
+from typing import List, Optional, Any, Dict
 import duckdb
 import pandas as pd
 
