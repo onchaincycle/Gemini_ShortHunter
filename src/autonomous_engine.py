@@ -304,9 +304,9 @@ class AutonomousEngine:
         can_open = True
         gate_reasons = []
 
-        if not state.get("enabled", True):
+        if not state.get("enabled", True) or state.get("pause_new_positions", False):
             can_open = False
-            gate_reasons.append("Mode Otonom dinonaktifkan manual oleh user")
+            gate_reasons.append("Mode Otonom dibekukan (Menunggu penutupan posisi aktif)")
         if cb_pause:
             can_open = False
             rem_h = max(0.1, (float(thermo.get("pause_until_ts", 0.0)) - now_ts) / 3600.0)
