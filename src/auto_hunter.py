@@ -50,6 +50,25 @@ class AutoHuntSniper:
           - ai_audit: Full Gemini Flash analysis for the winner
           - waterfall_log: Log of candidates evaluated/rejected by AI
         """
+        # Early Guard: Cek apakah mode otonom dibekukan untuk wallet migration
+        try:
+            from src.autonomous_engine import AutonomousEngine
+            engine = AutonomousEngine(self.trader)
+            gov_snap = engine.get_live_governor_snapshot()
+            if not gov_snap.get("enabled", True) or not gov_snap.get("can_open_new_position", True):
+                return {
+                    "status": "BLOCKED",
+                    "reason": gov_snap.get("gate_summary", "Mode Otonom dibekukan"),
+                    "session_info": {},
+                    "slot_status": {},
+                    "leaderboard": [],
+                    "winner": None,
+                    "ai_audit": None,
+                    "waterfall_log": []
+                }
+        except Exception as e:
+            pass
+
         # 1. Sync live market snapshot (~0.5s)
         try:
             DataDownloader(self.db).sync_snapshot_only()
