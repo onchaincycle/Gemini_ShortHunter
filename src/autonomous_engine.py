@@ -1129,6 +1129,13 @@ class AutonomousEngine:
         from src.position_manager import PositionManager
         from src.hyperliquid_client import HyperliquidClient
 
+        # Early Exit: Cek apakah mode otonom dibekukan untuk wallet migration
+        state = self.load_state()
+        if not state.get("enabled", True) or state.get("pause_new_positions", False):
+            reason = "Scale-up dibatalkan: Mode Otonom dibekukan / Menunggu migrasi wallet (enabled=false atau pause_new_positions=true)"
+            self.log_telemetry("SCALE_GUARD", "Blocked Scale-Up", reason)
+            return {"success": False, "status": "BLOCKED", "reason": reason, "scaled_up": [], "revisited": []}
+
         acc = self.trader.get_account_state(force_refresh=True)
         if acc.get("error"):
             return {"success": False, "error": acc.get("error")}

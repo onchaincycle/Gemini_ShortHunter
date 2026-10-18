@@ -1,7 +1,5 @@
 {
   "enabled": false,
-  "pause_new_positions": true,
-  "pause_reason": "Menunggu penutupan posisi aktif sebelum migrasi ke Trust Wallet (Opsi 1)",
   "hunt_interval_minutes": 30,
   "self_eval_interval_hours": 6,
   "forward_audit_interval_hours": 24,
@@ -23,9 +21,9 @@
     "pause_until_ts": 0.0,
     "reason": "Portofolio stabil (Win Rate 55.6%, PF 1.32). Cadangan kas 15% ekuitas, filter wajib Grade A."
   },
-  "last_hunt_ts": 1792290737.436646,
-  "last_hunt_time": "2026-10-18 09:32:17",
-  "last_hunt_status": "Ditahan oleh Filter Disiplin: ETH (DAYTRADE): Skor 45.0 < Threshold 75.0; SOL (DAYTRADE): Skor 45.0 < Threshold 75.0",
+  "last_hunt_ts": 1792295453.960937,
+  "last_hunt_time": "2026-10-18 10:50:53",
+  "last_hunt_status": "Skip Scan (Hemat Token): Mode Otonom dinonaktifkan manual oleh user",
   "last_eval_ts": 1792290569.674274,
   "last_eval_time": "2026-10-18 09:29:29",
   "last_eval_report": {
@@ -209,7 +207,7 @@
   "last_entry_coin": "-",
   "last_calibrated_trade_count": 9,
   "stats": {
-    "total_hunt_cycles": 5,
+    "total_hunt_cycles": 8,
     "total_scans_executed": 5,
     "total_ai_audits": 0,
     "total_autonomous_opens": 0,
@@ -267,6 +265,48 @@
       "grade": "-",
       "equity": 351.43,
       "free_margin": 122.94
+    },
+    {
+      "timestamp": "2026-10-18 09:50:40",
+      "category": "CAPITAL_GUARD",
+      "coin": "-",
+      "action": "Bypass Scan (Slot/Reserve Guard)",
+      "detail": "Mode Otonom dinonaktifkan manual oleh user",
+      "grade": "-",
+      "equity": 350.64,
+      "free_margin": 122.39
+    },
+    {
+      "timestamp": "2026-10-18 10:20:51",
+      "category": "CAPITAL_GUARD",
+      "coin": "-",
+      "action": "Bypass Scan (Slot/Reserve Guard)",
+      "detail": "Mode Otonom dinonaktifkan manual oleh user",
+      "grade": "-",
+      "equity": 350.36,
+      "free_margin": 120.58
+    },
+    {
+      "timestamp": "2026-10-18 10:50:54",
+      "category": "CAPITAL_GUARD",
+      "coin": "-",
+      "action": "Bypass Scan (Slot/Reserve Guard)",
+      "detail": "Mode Otonom dinonaktifkan manual oleh user",
+      "grade": "-",
+      "equity": 350.18,
+      "free_margin": 119.03
+    },
+    {
+      "timestamp": "2026-10-18 11:05:22",
+      "category": "SCALE_GUARD",
+      "coin": "-",
+      "action": "Blocked Scale-Up",
+      "detail": "Scale-up dibatalkan: Mode Otonom dibekukan / Menunggu migrasi wallet (enabled=false atau pause_new_positions=true)",
+      "grade": "-",
+      "equity": 0.0,
+      "free_margin": 0.0
     }
-  ]
+  ],
+  "pause_new_positions": true,
+  "pause_reason": "Menunggu penutupan posisi aktif sebelum migrasi ke Trust Wallet (Opsi 1)"
 }

@@ -15,8 +15,11 @@ Applies:
 """
 
 import time
+import logging
 from typing import Dict, List, Optional, Tuple
 import pandas as pd
+
+logger = logging.getLogger("AutoHuntSniper")
 
 from src.database import Database
 from src.downloader import DataDownloader
@@ -67,7 +70,17 @@ class AutoHuntSniper:
                     "waterfall_log": []
                 }
         except Exception as e:
-            pass
+            logger.warning(f"[AutoHunter] Gagal membaca governor snapshot ({e}), mengaktifkan fail-closed: BLOCKED")
+            return {
+                "status": "BLOCKED",
+                "reason": f"Fail-closed guard: Error memeriksa governor ({e})",
+                "session_info": {},
+                "slot_status": {},
+                "leaderboard": [],
+                "winner": None,
+                "ai_audit": None,
+                "waterfall_log": []
+            }
 
         # 1. Sync live market snapshot (~0.5s)
         try:
@@ -273,8 +286,8 @@ class AutoHuntSniper:
 
         for idx, cand in enumerate(leaderboard):
             audit_res = self.audit_candidate(cand, equity)
-            is_approved = audit_res.get("approve", True)
-            conf_score = audit_res.get("confidence_score", 80)
+            is_approved = audit_res.get("approve", False)
+            conf_score = audit_res.get("confidence_score", 0)
 
             if is_approved and conf_score >= 60:
                 winner = cand
