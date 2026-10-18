@@ -322,3 +322,48 @@ class DailyPayoutManager:
                 "error": str(e),
                 "calc": calc
             }
+
+    @classmethod
+    def format_daily_report(cls) -> str:
+        """Membuat laporan teks evaluasi & potensi gaji harian yang rapi."""
+        calc = cls.calculate_daily_payout()
+        cfg = cls.load_config()
+        addr = cfg.get("payout_address")
+        pnl = calc.get("pnl_data", {})
+        lines = [
+            "============================================================",
+            "   💰 LAPORAN EVALUASI GAJIAN HARIAN (DAILY PAYOUT)   ",
+            "============================================================",
+            f"📅 Tanggal Evaluasi     : {pnl.get('target_date', '-')}",
+            f"📊 Total Trade Tertutup   : {pnl.get('total_trades', 0)} (Win: {pnl.get('win_count', 0)} | Loss: {pnl.get('loss_count', 0)})",
+            f"💵 Gross Realized PnL     : ${pnl.get('gross_realized_pnl_usd', 0.0):,.2f} USD",
+            f"⛽️ Total Fee              : ${pnl.get('total_fee_usd', 0.0):,.4f} USD",
+            f"💵 Net Realized PnL (Net) : ${pnl.get('net_realized_pnl_usd', 0.0):,.2f} USD",
+            "------------------------------------------------------------",
+            f"⚙️  Porsi Gaji (Payout %) : {cfg.get('payout_pct', 50.0):.1f}% dari Profit Bersih",
+            f"🛡️  Batas Min Transfer    : ${cfg.get('min_payout_usd', 5.0):.2f} USD",
+            f"📫 Alamat Tujuan Gajian : {addr if addr else '(Belum diatur)'}",
+            f"🏦 Mode Transfer        : {'OTOMATIS' if cfg.get('auto_payout') else 'MANUAL / KONFIRMASI'}",
+            "------------------------------------------------------------"
+        ]
+        if calc.get("eligible"):
+            lines.extend([
+                "🎉 STATUS: MEMENUHI SYARAT TRANSFER HARI INI",
+                f"👉 Estimasi Hak Gajian  : ${calc.get('payout_amount_usd', 0.0):,.2f} USD",
+                f"💼 Profit Ditahan Modal : ${calc.get('retained_profit_usd', 0.0):,.2f} USD",
+            ])
+        else:
+            lines.extend([
+                "ℹ️  STATUS: BELUM MEMENUHI SYARAT HARI INI",
+                f"👉 Keterangan           : {calc.get('message')}",
+            ])
+        lines.append("============================================================")
+        return "\n".join(lines)
+
+
+if __name__ == "__main__":
+    import sys
+    if len(sys.argv) > 1 and sys.argv[1].lower() == "calc":
+        print(json.dumps(DailyPayoutManager.calculate_daily_payout(), indent=2))
+    else:
+        print(DailyPayoutManager.format_daily_report())
