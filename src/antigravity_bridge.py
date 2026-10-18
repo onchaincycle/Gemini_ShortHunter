@@ -408,6 +408,26 @@ class AntigravityBridge:
         except Exception:
             pass
 
+        # Export dedicated Hermes Agent Context JSON [DEV-003]
+        try:
+            inputs_dir = os.path.join(ROOT_DIR, "inputs")
+            os.makedirs(inputs_dir, exist_ok=True)
+            hermes_ctx = {
+                "synced_at": now_sync,
+                "project": "Gemini_ShortHunter",
+                "active_backlog": open_tickets,
+                "recent_war_room_qa": digest[-15:] if digest else [],
+                "live_tools_state": live_tools,
+                "antigravity_messages": agy_msgs[-5:] if agy_msgs else []
+            }
+            hermes_path = os.path.join(inputs_dir, "hermes_bridge_context.json")
+            tmp_h = hermes_path + ".tmp"
+            with open(tmp_h, "w", encoding="utf-8") as f:
+                json.dump(hermes_ctx, f, indent=2)
+            os.replace(tmp_h, hermes_path)
+        except Exception:
+            pass
+
 
 antigravity_bridge = AntigravityBridge()
 

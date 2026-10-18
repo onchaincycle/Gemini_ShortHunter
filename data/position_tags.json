@@ -1,4 +1,54 @@
 {
+  "AERO": {
+    "coin": "AERO",
+    "strategy": "SWING",
+    "plan": {
+      "strategy": "SWING",
+      "side": "SHORT",
+      "entry_px": 0.869585,
+      "sl_px": 0.94901,
+      "sl_pct": 9.134,
+      "tp1_px": 0.7826265000000001,
+      "tp2_px": 0.6956680000000001,
+      "runner_px": 0.56523025,
+      "tp1_pct": 10.0,
+      "tp2_pct": 20.0,
+      "runner_pct": 35.0,
+      "max_hold_hours": 72
+    },
+    "meta": {
+      "source": "AUTO_HUNT_SNIPER",
+      "ai_grade": "A+",
+      "ai_conviction": 92
+    },
+    "tagged_at": "2026-10-18T07:31:10.960332"
+  },
+  "HYPE": {
+    "coin": "HYPE",
+    "strategy": "DAYTRADE",
+    "plan": {
+      "strategy": "DAYTRADE",
+      "side": "SHORT",
+      "entry_px": 78.276,
+      "sl_px": 80.2713375,
+      "sl_pct": 2.549,
+      "tp1_px": 76.28066249999999,
+      "tp2_px": 74.28532499999999,
+      "runner_px": null,
+      "tp1_pct": 2.549,
+      "tp2_pct": 5.098,
+      "runner_pct": null,
+      "max_hold_hours": 6
+    },
+    "meta": {
+      "source": "AUTONOMOUS_AI_SNIPER",
+      "ai_grade": "A",
+      "ai_conviction": 82,
+      "equity_at_entry": 345.51,
+      "reserve_pct_enforced": 15.0
+    },
+    "tagged_at": "2026-10-18T11:39:49.871234"
+  },
   "BERA": {
     "coin": "BERA",
     "strategy": "DAYTRADE",
@@ -23,7 +73,7 @@
       "equity_at_entry": 346.39,
       "reserve_pct_enforced": 15.0
     },
-    "tagged_at": "2026-10-18T07:31:10.718456"
+    "tagged_at": "2026-10-18T11:39:49.871468"
   },
   "ZK": {
     "coin": "ZK",
@@ -47,7 +97,7 @@
       "ai_grade": "A",
       "ai_conviction": 85
     },
-    "tagged_at": "2026-10-18T07:31:10.719238"
+    "tagged_at": "2026-10-18T11:39:49.871667"
   },
   "INIT": {
     "coin": "INIT",
@@ -71,7 +121,7 @@
       "ai_grade": "A+",
       "ai_conviction": 92
     },
-    "tagged_at": "2026-10-18T07:31:10.719887"
+    "tagged_at": "2026-10-18T11:39:49.871895"
   },
   "ZRO": {
     "coin": "ZRO",
@@ -95,7 +145,7 @@
       "ai_grade": "A",
       "ai_conviction": 85
     },
-    "tagged_at": "2026-10-18T07:31:10.720339"
+    "tagged_at": "2026-10-18T11:39:49.872090"
   },
   "DOT": {
     "coin": "DOT",
@@ -119,7 +169,7 @@
       "ai_grade": "A",
       "ai_conviction": 75
     },
-    "tagged_at": "2026-10-18T07:31:10.720655"
+    "tagged_at": "2026-10-18T11:39:49.872278"
   },
   "TRX": {
     "coin": "TRX",
@@ -143,7 +193,7 @@
       "ai_grade": "B",
       "ai_conviction": 75
     },
-    "tagged_at": "2026-10-18T07:31:10.720913"
+    "tagged_at": "2026-10-18T11:39:49.872489"
   },
   "NIL": {
     "coin": "NIL",
@@ -167,7 +217,7 @@
       "ai_grade": "B",
       "ai_conviction": 68
     },
-    "tagged_at": "2026-10-18T07:31:10.721129"
+    "tagged_at": "2026-10-18T11:39:49.872679"
   },
   "NEAR": {
     "coin": "NEAR",
@@ -193,7 +243,7 @@
       "equity_at_entry": 347.26,
       "reserve_pct_enforced": 15.0
     },
-    "tagged_at": "2026-10-18T07:31:10.721333"
+    "tagged_at": "2026-10-18T11:39:49.872864"
   },
   "EIGEN": {
     "coin": "EIGEN",
@@ -215,7 +265,7 @@
       "opened_via": "MENU_7",
       "margin_usd": 20.0
     },
-    "tagged_at": "2026-10-18T07:31:10.721633"
+    "tagged_at": "2026-10-18T11:39:49.873070"
   },
   "TIA": {
     "coin": "TIA",
@@ -237,31 +287,7 @@
       "opened_via": "MENU_7",
       "margin_usd": 20.0
     },
-    "tagged_at": "2026-10-18T07:31:10.721897"
-  },
-  "AERO": {
-    "coin": "AERO",
-    "strategy": "SWING",
-    "plan": {
-      "strategy": "SWING",
-      "side": "SHORT",
-      "entry_px": 0.869585,
-      "sl_px": 0.94901,
-      "sl_pct": 9.134,
-      "tp1_px": 0.7826265000000001,
-      "tp2_px": 0.6956680000000001,
-      "runner_px": 0.56523025,
-      "tp1_pct": 10.0,
-      "tp2_pct": 20.0,
-      "runner_pct": 35.0,
-      "max_hold_hours": 72
-    },
-    "meta": {
-      "source": "AUTO_HUNT_SNIPER",
-      "ai_grade": "A+",
-      "ai_conviction": 92
-    },
-    "tagged_at": "2026-10-18T07:31:10.722290"
+    "tagged_at": "2026-10-18T11:39:49.873262"
   },
   "KAS": {
     "coin": "KAS",
@@ -285,7 +311,7 @@
       "ai_grade": "B",
       "ai_conviction": 75
     },
-    "tagged_at": "2026-10-18T07:31:10.722568"
+    "tagged_at": "2026-10-18T11:39:49.873444"
   },
   "PEOPLE": {
     "coin": "PEOPLE",
@@ -309,7 +335,7 @@
       "ai_grade": "B",
       "ai_conviction": 75
     },
-    "tagged_at": "2026-10-18T07:31:10.722821"
+    "tagged_at": "2026-10-18T11:39:49.873626"
   },
   "POPCAT": {
     "coin": "POPCAT",
@@ -333,7 +359,7 @@
       "ai_grade": "B",
       "ai_conviction": 75
     },
-    "tagged_at": "2026-10-18T07:31:10.723038"
+    "tagged_at": "2026-10-18T11:39:49.873833"
   },
   "PENDLE": {
     "coin": "PENDLE",
@@ -359,32 +385,6 @@
       "equity_at_entry": 198.31,
       "reserve_pct_enforced": 15.0
     },
-    "tagged_at": "2026-10-18T07:31:10.724149"
-  },
-  "PYTH": {
-    "coin": "PYTH",
-    "strategy": "SWING",
-    "plan": {
-      "strategy": "SWING",
-      "side": "SHORT",
-      "entry_px": 0.081422,
-      "sl_px": 0.0895642,
-      "sl_pct": 10.0,
-      "tp1_px": 0.07572245999999999,
-      "tp2_px": 0.06676604,
-      "runner_px": 0.056995399999999995,
-      "tp1_pct": 7.0,
-      "tp2_pct": 18.0,
-      "runner_pct": 30.0,
-      "max_hold_hours": 72
-    },
-    "meta": {
-      "source": "AUTONOMOUS_AI_SNIPER",
-      "ai_grade": "A",
-      "ai_conviction": 90,
-      "equity_at_entry": 348.95,
-      "reserve_pct_enforced": 15.0
-    },
-    "tagged_at": "2026-10-18T07:31:10.724970"
+    "tagged_at": "2026-10-18T11:39:49.874016"
   }
 }

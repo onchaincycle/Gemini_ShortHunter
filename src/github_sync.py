@@ -6,6 +6,8 @@ Allows remote monitoring of trade performance via GitHub repository and GitHub P
 
 import os
 import sys
+import time
+import json
 import subprocess
 from datetime import datetime
 from typing import Dict, Optional
@@ -13,6 +15,9 @@ from typing import Dict, Optional
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
+
+THROTTLE_STATE_FILE = os.path.join(ROOT_DIR, "data", "last_github_push.json")
+DEFAULT_DEBOUNCE_SECONDS = 60
 
 from src.html_reporter import generate_html_report, OUTPUT_HTML
 
@@ -88,10 +93,30 @@ def ensure_git_setup() -> Dict:
     }
 
 
-def sync_and_push(commit_msg: Optional[str] = None) -> Dict:
+def sync_and_push(commit_msg: Optional[str] = None, force: bool = False, min_interval_seconds: int = DEFAULT_DEBOUNCE_SECONDS) -> Dict:
     """
     Refreshes the HTML dashboard, stages changes safely, commits, and pushes to GitHub.
+    Includes throttling/debounce check [DEV-001] to prevent rapid spam commits on close trades.
     """
+    now_ts = time.time()
+    # Throttling check (DEV-001)
+    if not force and os.path.exists(THROTTLE_STATE_FILE):
+        try:
+            with open(THROTTLE_STATE_FILE, "r") as f:
+                last_push_data = json.load(f)
+            last_ts = float(last_push_data.get("last_push_ts", 0.0))
+            elapsed = now_ts - last_ts
+            if elapsed < min_interval_seconds:
+                return {
+                    "success": True,
+                    "pushed": False,
+                    "throttled": True,
+                    "message": f"Throttled: Push ditunda (jeda minimal {min_interval_seconds}s antar push, baru berjalan {elapsed:.1f}s).",
+                    "elapsed_seconds": round(elapsed, 1)
+                }
+        except Exception:
+            pass
+
     # 1. Generate updated HTML report
     try:
         html_path = generate_html_report()
@@ -122,7 +147,9 @@ def sync_and_push(commit_msg: Optional[str] = None) -> Dict:
         "data/position_tags.json",
         "data/active_profile.json",
         "data/adaptive_weights.json",
-        "data/episodic_memory.json"
+        "data/episodic_memory.json",
+        "data/portfolio_sizing_config.json",
+        "inputs/hermes_bridge_context.json"
     ]
     for sf in safe_files:
         if os.path.exists(os.path.join(ROOT_DIR, sf)):
@@ -174,6 +201,14 @@ def sync_and_push(commit_msg: Optional[str] = None) -> Dict:
                 "error": f"Gagal push ke GitHub: {push_err}",
                 "repo_url": repo_url
             }
+
+    # Record last push timestamp
+    try:
+        os.makedirs(os.path.dirname(THROTTLE_STATE_FILE), exist_ok=True)
+        with open(THROTTLE_STATE_FILE, "w") as f:
+            json.dump({"last_push_ts": now_ts, "last_push_time": now_str, "commit_msg": msg}, f, indent=2)
+    except Exception:
+        pass
 
     return {
         "success": True,

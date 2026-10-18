@@ -1,6 +1,6 @@
 {
-  "updated_at": "2026-10-18 07:31:06",
-  "total_rules_learned": 8,
+  "updated_at": "2026-10-18 11:39:38",
+  "total_rules_learned": 10,
   "rules": [
     {
       "id": "MEM-001",
@@ -75,6 +75,24 @@
       "root_cause": "CLEAN_WIN",
       "rule": "Gunakan AI_STALEMATE_EXIT secara konsisten untuk mengamankan profit saat momentum mulai melambat.",
       "source_coin": "HYPE"
+    },
+    {
+      "id": "MEM-009",
+      "created_at": "2026-10-18 11:39:36",
+      "stream": "SWING",
+      "side": "SHORT",
+      "root_cause": "CLEAN_WIN",
+      "rule": "Amankan profit secara bertahap saat MFE mencapai di atas 5% pada posisi swing short.",
+      "source_coin": "PYTH"
+    },
+    {
+      "id": "MEM-010",
+      "created_at": "2026-10-18 11:39:38",
+      "stream": "SWING",
+      "side": "SHORT",
+      "root_cause": "CLEAN_WIN",
+      "rule": "Pastikan toleransi MAE mencukupi untuk menampung volatilitas awal sebelum tren berjalan sesuai rencana.",
+      "source_coin": "AERO"
     }
   ]
 }
