@@ -1,0 +1,13 @@
+{
+  "spot_pct": 50.0,
+  "swing_pct": 30.0,
+  "intraday_pct": 15.0,
+  "buffer_pct": 5.0,
+  "num_spot_coins": 5,
+  "swing_slots": 5,
+  "intraday_slots": 4,
+  "swing_risk_per_trade_pct": 2.5,
+  "intraday_risk_per_trade_pct": 1.5,
+  "swing_leverage": 2,
+  "intraday_leverage": 2
+}
