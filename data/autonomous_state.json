@@ -1,5 +1,7 @@
 {
-  "enabled": true,
+  "enabled": false,
+  "pause_new_positions": true,
+  "pause_reason": "Menunggu penutupan posisi aktif sebelum migrasi ke Trust Wallet (Opsi 1)",
   "hunt_interval_minutes": 30,
   "self_eval_interval_hours": 6,
   "forward_audit_interval_hours": 24,
