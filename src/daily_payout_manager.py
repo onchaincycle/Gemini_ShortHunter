@@ -12,11 +12,16 @@ Aturan Utama:
 """
 
 import os
+import sys
 import json
 import time
 import logging
 from datetime import datetime, date, timedelta
 from typing import Dict, Any, Optional, List
+
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
 
 logger = logging.getLogger("daily_payout")
 if not logger.handlers:
