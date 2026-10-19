@@ -1,6 +1,6 @@
 {
-  "updated_at": "2026-10-18 11:39:38",
-  "total_rules_learned": 10,
+  "updated_at": "2026-10-19 13:58:40",
+  "total_rules_learned": 11,
   "rules": [
     {
       "id": "MEM-001",
@@ -93,6 +93,15 @@
       "root_cause": "CLEAN_WIN",
       "rule": "Pastikan toleransi MAE mencukupi untuk menampung volatilitas awal sebelum tren berjalan sesuai rencana.",
       "source_coin": "AERO"
+    },
+    {
+      "id": "MEM-011",
+      "created_at": "2026-10-19 13:58:40",
+      "stream": "DAYTRADE",
+      "side": "SHORT",
+      "root_cause": "CLEAN_WIN",
+      "rule": "Gunakan AI stalemate exit untuk mengamankan profit saat momentum melemah pada perdagangan intraday.",
+      "source_coin": "WLFI"
     }
   ]
 }

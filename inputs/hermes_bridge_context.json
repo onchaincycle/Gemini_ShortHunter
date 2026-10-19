@@ -1,5 +1,5 @@
 {
-  "synced_at": "2026-10-19 11:01:58",
+  "synced_at": "2026-10-19 15:00:03",
   "project": "Gemini_ShortHunter",
   "active_backlog": [
     {
@@ -176,19 +176,20 @@
   "live_tools_state": {
     "thermostat_mode": "\ud83d\ude80 COMPOUND BOOST (Win Streak Aktif)",
     "reserve_pct": 15.0,
-    "last_hunt_time": "2026-10-19 10:59:19",
-    "last_hunt_status": "\ud83d\ude80 AUTO-OPEN SUKSES: LONG ZEC [SWING] | Grade A (88/100) | Margin: $26.02 (2x) | Entry: $1173.45 | SL On-Chain: $1056.1 | TP1 On-Chain: $1255.6",
+    "last_hunt_time": "2026-10-19 14:31:07",
+    "last_hunt_status": "Margin tidak cukup mempertahankan cadangan 15.0% ($14.87) untuk STRK.",
     "active_positions": [
-      "LONG SPX (SWING, PnL: $+0.14)",
-      "SHORT WLFI (DAYTRADE, PnL: $+0.07)"
+      "LONG SPX (SWING, PnL: $-0.53)",
+      "LONG ZEC (SWING, PnL: $-0.53)",
+      "SHORT NEAR (SWING, PnL: $-0.43)"
     ],
     "episodic_rules": [
-      "[MEM-005] (DAYTRADE/SHORT): Terapkan stop loss yang ketat saat melakukan short intraday jika volatilitas melawan arah tren.",
       "[MEM-006] (DAYTRADE/LONG): Gunakan sinyal AI stalemate exit untuk mengamankan profit ketika momentum mulai mendatar setelah pergerakan positif.",
       "[MEM-007] (DAYTRADE/LONG): Gunakan trailing stop atau ambil sebagian profit ketika MFE mencapai mendekati 1% untuk menghindari pembalikan arah menjadi kerugian.",
       "[MEM-008] (DAYTRADE/SHORT): Gunakan AI_STALEMATE_EXIT secara konsisten untuk mengamankan profit saat momentum mulai melambat.",
       "[MEM-009] (SWING/SHORT): Amankan profit secara bertahap saat MFE mencapai di atas 5% pada posisi swing short.",
-      "[MEM-010] (SWING/SHORT): Pastikan toleransi MAE mencukupi untuk menampung volatilitas awal sebelum tren berjalan sesuai rencana."
+      "[MEM-010] (SWING/SHORT): Pastikan toleransi MAE mencukupi untuk menampung volatilitas awal sebelum tren berjalan sesuai rencana.",
+      "[MEM-011] (DAYTRADE/SHORT): Gunakan AI stalemate exit untuk mengamankan profit saat momentum melemah pada perdagangan intraday."
     ]
   },
   "antigravity_messages": [
