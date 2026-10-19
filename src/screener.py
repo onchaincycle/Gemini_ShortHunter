@@ -11,6 +11,7 @@ from src.nansen_client import NansenClient
 from src.market_regime import MarketRegime
 from src.tokenomics import TokenomicsRadar
 from src.claude_crypto_engine import ClaudeCryptoEngine
+from src.propensity_gate import propensity_gate
 
 from src.indicators import calculate_rsi, calculate_ema, evaluate_peak_exhaustion
 
@@ -244,6 +245,21 @@ class ShortScreener:
             if squeeze_risk == "⚠️ RAWAN SQUEEZE" or funding_rate < -0.000015:
                 score = min(score, 50.0)
 
+            # PREDICTIVE ML ENGINE: 18-Feature Vector & LightGBM Propensity Gatekeeper (Tahap 2)
+            feat_input = {
+                "sm_live": sm_live,
+                "phase": phase_data.get("badge", ""),
+                "drs_score": drs_data.get("drs", 50.0),
+                "bms_score": bms_data.get("bms", 50.0),
+                "funding_rate": funding_rate,
+                "oi_vol_ratio": oi_vol_ratio,
+                "pullback_from_ath": pullback_from_ath,
+            }
+            feat_vec = propensity_gate.extract_feature_vector(feat_input, df_daily=df_d, df_hourly=df_4h)
+            p_win, p_grade, p_meta = propensity_gate.calculate_propensity(feat_vec)
+            if p_grade == "VETO":
+                score -= 15.0
+
             if score >= min_score or gain_90d >= min_90d_gain:
                 candidates.append({
                     "symbol": symbol,
@@ -274,6 +290,8 @@ class ShortScreener:
                     "sm_trend_7d": sm_info.get("trend", "7d N/A"),
                     "sm_netflow_k": round(float(sm_live.get("net_flow_usd", 0.0)) / 1000, 1) if sm_live else 0.0,
                     "drs_onchain": conf["drs_onchain"],
+                    "p_win": p_win,
+                    "p_grade": p_grade,
                     "_is_stale": ex["is_stale_or_oversold"],
                     "_has_breakdown": has_breakdown
                 })

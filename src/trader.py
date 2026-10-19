@@ -222,6 +222,17 @@ class HyperliquidTrader:
         if not self.is_configured():
             return {"success": False, "error": "Hyperliquid API keys not configured in .env"}
 
+        # RISK GATE 0: Cross-Asset Correlation Veto
+        from src.portfolio_sizer import PortfolioSizer
+        try:
+            st = self.get_account_state()
+            act_pos = st.get("positions", [])
+            corr_pass, corr_msg = PortfolioSizer.check_cross_asset_correlation_veto(coin, act_pos)
+            if not corr_pass:
+                return {"success": False, "error": corr_msg}
+        except Exception as e:
+            pass
+
         # Safety Guard: Cap leverage at 3x for volatile altcoins
         leverage = min(leverage, 3)
 

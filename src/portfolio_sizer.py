@@ -10,7 +10,7 @@ Menyediakan kalkulasi terpadu Core-Satellite Portfolio Allocation:
 
 import os
 import json
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Tuple
 
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CONFIG_PATH = os.path.join(ROOT_DIR, "data", "portfolio_sizing_config.json")
@@ -283,3 +283,120 @@ class PortfolioSizer:
             "=" * 78,
         ]
         return "\n".join(lines)
+
+    # -------------------------------------------------------------------------
+    # DYNAMIC RISK ENHANCEMENTS: VOLATILITY SIZING, CORRELATION & HEAT GATES
+    # -------------------------------------------------------------------------
+    @classmethod
+    def calculate_atr_volatility_sizing(
+        cls,
+        total_equity: float,
+        strategy: str,
+        entry_px: float,
+        atr_14: float,
+        sl_atr_mult: float = 1.5,
+        custom_config: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """
+        Volatility-Parity Sizing: Menghitung ukuran posisi dolar berdasarkan volatilitas ATR.
+        Memastikan kerugian saat SL tercapai tepat setara dengan target risk % akun.
+        """
+        cfg = custom_config or cls.get_config()
+        equity = max(0.0, float(total_equity))
+        risk_pct = float(cfg.get("swing_risk_per_trade_pct" if strategy == "SWING" else "intraday_risk_per_trade_pct", 1.5))
+        target_risk_usd = equity * (risk_pct / 100.0)
+
+        sl_distance_usd = max(0.0001, atr_14 * sl_atr_mult)
+        sl_distance_pct = (sl_distance_usd / entry_px) * 100.0 if entry_px > 0 else 3.0
+
+        # Posisi size nominal agar kerugian pas di target_risk_usd
+        calculated_pos_size_usd = target_risk_usd / (sl_distance_pct / 100.0) if sl_distance_pct > 0 else 0.0
+
+        # Cap dengan batas slot maksimal dari konfigurasi Core-Satellite
+        alloc = cls.calculate_allocation(equity, cfg)
+        max_allowed_pos_usd = float(alloc["swing" if strategy == "SWING" else "intraday"]["notional_per_slot"])
+
+        final_pos_size_usd = min(calculated_pos_size_usd, max_allowed_pos_usd)
+        lev = int(cfg.get("swing_leverage" if strategy == "SWING" else "intraday_leverage", 2))
+        required_margin = final_pos_size_usd / lev if lev > 0 else final_pos_size_usd
+
+        return {
+            "target_risk_usd": round(target_risk_usd, 2),
+            "sl_distance_pct": round(sl_distance_pct, 2),
+            "calculated_pos_usd": round(calculated_pos_size_usd, 2),
+            "capped_pos_usd": round(final_pos_size_usd, 2),
+            "required_margin_usd": round(required_margin, 2),
+            "leverage": lev,
+            "is_capped_by_slot": calculated_pos_size_usd > max_allowed_pos_usd
+        }
+
+    @classmethod
+    def check_cross_asset_correlation_veto(
+        cls,
+        candidate_coin: str,
+        active_positions: list,
+        db = None,
+        max_correlation: float = 0.70
+    ) -> Tuple[bool, str]:
+        """
+        Cross-Asset Correlation Veto:
+        Mencegah penumpukan posisi short pada koin yang berkorelasi tinggi (> 0.70)
+        untuk melindungi akun dari drawdown serentak (misal sektor meme atau L1 pump bersamaan).
+        """
+        if not active_positions:
+            return True, "No active positions (correlation clear)"
+
+        # Ekosistem klaster statis sebagai pelindung cepat (fast gate)
+        CLUSTERS = {
+            "MEME": {"PEPE", "KPEPE", "BONK", "KBONK", "SHIB", "KSHIB", "FLOKI", "KFLOKI", "WIF", "DOGE", "POPCAT", "PUMP", "NEIRO", "KNEIRO"},
+            "AI": {"FET", "NEAR", "RENDER", "TAO", "IO", "ATH", "WLD", "GRT"},
+            "DEFI": {"UNI", "AAVE", "CRV", "MKR", "SNX", "LDO", "ENA", "PENDLE"},
+            "SOL_ECO": {"SOL", "JUP", "RAY", "JTO", "PYTH", "W"}
+        }
+
+        cand = candidate_coin.upper().replace("K", "")
+        cand_cluster = None
+        for cname, coins in CLUSTERS.items():
+            if candidate_coin.upper() in coins or cand in coins:
+                cand_cluster = cname
+                break
+
+        if cand_cluster:
+            for pos in active_positions:
+                p_coin = str(pos.get("coin", "")).upper()
+                p_clean = p_coin.replace("K", "")
+                if p_coin in CLUSTERS[cand_cluster] or p_clean in CLUSTERS[cand_cluster]:
+                    return False, f"VETO CORRELATION: {candidate_coin} berada di klaster yang sama ({cand_cluster}) dengan posisi aktif {p_coin}"
+
+        return True, "Correlation check PASSED"
+
+    @classmethod
+    def check_portfolio_heat_limit(
+        cls,
+        total_equity: float,
+        active_positions: list,
+        new_risk_usd: float,
+        max_heat_pct: float = 6.0
+    ) -> Tuple[bool, str]:
+        """
+        Portfolio Heat Ceiling:
+        Memastikan total akumulasi risiko terbuka dari seluruh posisi <= 6% ekuitas.
+        """
+        max_allowed_heat_usd = total_equity * (max_heat_pct / 100.0)
+        current_open_risk_usd = 0.0
+
+        for p in active_positions:
+            pos_sz_usd = float(p.get("size", 0.0)) * float(p.get("entry_px", 0.0))
+            sl_px = float(p.get("current_sl_px", 0.0))
+            entry = float(p.get("entry_px", 0.0))
+            if entry > 0 and sl_px > 0:
+                risk_dist_pct = abs(sl_px - entry) / entry
+                current_open_risk_usd += (pos_sz_usd * risk_dist_pct)
+            else:
+                current_open_risk_usd += (pos_sz_usd * 0.015)
+
+        projected_heat_usd = current_open_risk_usd + new_risk_usd
+        if projected_heat_usd > max_allowed_heat_usd:
+            return False, f"PORTFOLIO HEAT VETO: Total risk (${projected_heat_usd:.2f}) melebihi batas {max_heat_pct}% (${max_allowed_heat_usd:.2f})"
+
+        return True, f"Heat check PASSED: Projected heat ${projected_heat_usd:.2f} / ${max_allowed_heat_usd:.2f}"
