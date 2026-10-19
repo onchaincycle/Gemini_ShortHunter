@@ -11,13 +11,13 @@
   },
   "DAYTRADE": {
     "liquidity_sweep": 25.0,
-    "m15_pinbar": 20.0,
-    "bos_ema_breakdown": 12.0,
-    "funding_rate_guard": 15.0,
-    "volume_climax": 25.0
+    "m15_pinbar": 22.0,
+    "bos_ema_breakdown": 10.0,
+    "funding_rate_guard": 20.0,
+    "volume_climax": 22.0
   },
   "DAYTRADE_meta": {
-    "rationale": "Recent intraday trades demonstrate decent performance on clean reversal setups involving liquidity sweeps and volume climaxes. Moderate upward adjustment on liquidity sweeps due to successful takes, while keeping structural breakdowns and pinbars relatively balanced to avoid high MAE drawdowns.",
-    "updated_at": "2026-10-19T15:16:59.308787"
+    "rationale": "Based on the recent trade outcomes, liquidity sweeps continue to provide the best directional clues for reversals leading to successful take profits and positive MFE excursions. Minor adjustments have been made to down-weight unreliable structure breakdowns while prioritizing liquidity sweeps and robust funding rate guards.",
+    "updated_at": "2026-10-20T02:45:29.259328"
   }
 }

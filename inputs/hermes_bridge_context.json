@@ -1,5 +1,5 @@
 {
-  "synced_at": "2026-10-20 00:00:07",
+  "synced_at": "2026-10-20 03:00:04",
   "project": "Gemini_ShortHunter",
   "active_backlog": [
     {
@@ -176,13 +176,13 @@
   "live_tools_state": {
     "thermostat_mode": "\ud83d\ude80 COMPOUND BOOST (Win Streak Aktif)",
     "reserve_pct": 15.0,
-    "last_hunt_time": "2026-10-19 23:59:23",
-    "last_hunt_status": "Skip Scan (Hemat Token): Margin Bebas di atas Cadangan 15% ($15.17) hanya $0.13 (Butuh min. $13.75 untuk buka posisi baru)",
+    "last_hunt_time": "2026-10-20 02:45:29",
+    "last_hunt_status": "Skip Scan (Hemat Token): Margin Bebas di atas Cadangan 15% ($15.39) hanya $11.38 (Butuh min. $13.95 untuk buka posisi baru)",
     "active_positions": [
-      "LONG SPX (SWING, PnL: $-1.56)",
-      "LONG ZEC (SWING, PnL: $-1.43)",
-      "SHORT NEAR (SWING, PnL: $+0.68)",
-      "SHORT PUMP (DAYTRADE, PnL: $+0.52)"
+      "LONG SPX (SWING, PnL: $-1.09)",
+      "LONG ZEC (SWING, PnL: $-2.05)",
+      "SHORT NEAR (SWING, PnL: $+1.10)",
+      "SHORT PUMP (DAYTRADE, PnL: $+0.96)"
     ],
     "episodic_rules": [
       "[MEM-007] (DAYTRADE/LONG): Gunakan trailing stop atau ambil sebagian profit ketika MFE mencapai mendekati 1% untuk menghindari pembalikan arah menjadi kerugian.",
