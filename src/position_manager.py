@@ -543,25 +543,37 @@ class PositionManager:
             if self._close_full(coin, state, pos_info, current_px, f"SWING_TIME_STOP_{max_hold}H", msg, "TIME_EXIT", actions):
                 return
 
-        # RULE 0.1: AI Dead-Momentum Buster (Scenario 1)
-        # Evaluasi posisi stagnan / jalan di tempat (age >= 36 jam, |move_pct| <= 1.5%)
+        # RULE 0.1: AI Dead-Momentum Buster (Scenario 1 - Optimized)
+        # Evaluasi posisi stagnan / modal terkunci tanpa momentum
         age_h = self._age_hours(state)
+        peak_profit_pct = float(state.get("peak_profit_pct", 0.0))
+        now_ts = time.time()
+        last_check_ts = float(state.get("last_stalemate_check_ts", 0.0))
+        swing_cooldown_sec = 4 * 3600  # Evaluasi ulang tiap 4 jam jika masih stagnan
+
+        # HARD GATEKEEPER 1: Anti-Clipping Rule (Jangan bunuh trade yang sedang/pernah untung sehat)
+        # Jika sedang profit >= +1.0% atau MFE pernah mencapai >= +1.5%, biarkan Trailing SL / TP bekerja
+        is_profit_protected = profit_pct >= 1.0 or peak_profit_pct >= 1.5 or state.get("early_be_shield") or state.get("trimmed_10pct")
+
+        # Trigger hanya jika: Umur >= 36 jam, pergerakan loyo (|move| <= 1.5%), cooldown terpenuhi, dan BUKAN posisi pemenang
         if (age_h >= 36.0 and abs(profit_pct) <= 1.5 and
-                not state.get("trimmed_10pct") and not state.get("early_be_shield") and
-                not state.get("ai_stalemate_checked")):
-            state["ai_stalemate_checked"] = True
+                not is_profit_protected and
+                (now_ts - last_check_ts >= swing_cooldown_sec)):
+            state["last_stalemate_check_ts"] = now_ts
             try:
                 from src.ai_engine import ai_advisor
                 market_info = {
                     "current_px": current_px,
                     "age_hours": age_h,
+                    "max_hold_hours": max_hold,
                     "unrealized_pnl": state.get("unrealized_pnl", 0.0),
                     "move_pct": profit_pct,
-                    "funding_rate": 0.0,
+                    "peak_profit_pct": peak_profit_pct,
+                    "funding_rate": float(state.get("funding_rate", 0.0)),
                 }
                 diag = ai_advisor.evaluate_position_stalemate(coin, state, market_info)
                 if diag.get("action") == "CLOSE_NOW" and diag.get("confidence", 0) >= 70:
-                    msg = (f"🧠 AI DEAD-MOMENTUM BUSTER: {coin} ({side}) jalan di tempat {age_h:.1f} jam (gerak {profit_pct:+.2f}%). "
+                    msg = (f"🧠 AI DEAD-MOMENTUM BUSTER: {coin} ({side}) jalan di tempat {age_h:.1f} jam (gerak {profit_pct:+.2f}%, MFE: {peak_profit_pct:+.2f}%). "
                            f"Posisi ditutup dini untuk daur ulang modal! ({diag.get('reasoning')})")
                     if self._close_full(coin, state, pos_info, current_px, "AI_STALEMATE_EXIT", msg, "AI_EXIT", actions):
                         return
@@ -744,23 +756,35 @@ class PositionManager:
             self._close_full(coin, state, pos_info, current_px, f"INTRADAY_TIME_STOP_{max_hold}H", msg, "TIME_EXIT", actions)
             return
 
-        # RULE 0.1: AI Dead-Momentum Buster (Scenario 1)
-        # Evaluasi intraday stagnan (age >= 3.0 jam, |move_pct| <= 0.8%)
+        # RULE 0.1: AI Dead-Momentum Buster (Scenario 1 - Optimized)
+        # Evaluasi intraday stagnan dengan Cooldown berkala & Anti-Clipping Rule
+        peak_profit_pct = float(state.get("peak_profit_pct", 0.0))
+        now_ts = time.time()
+        last_check_ts = float(state.get("last_stalemate_check_ts", 0.0))
+        dt_cooldown_sec = 60 * 60  # Evaluasi ulang tiap 60 menit jika tetap stagnan
+
+        # HARD GATEKEEPER 1: Anti-Clipping Rule (Jangan pernah potong trade intraday yang sedang profit)
+        # Jika profit >= +0.7% atau peak profit pernah >= +0.9% (atau BE/Trim sudah aktif), serahkan ke Trailing SL
+        is_dt_profit_protected = profit_pct >= 0.7 or peak_profit_pct >= 0.9 or state.get("early_be_shield") or state.get("trimmed_10pct")
+
         if (age_h >= 3.0 and abs(profit_pct) <= 0.8 and
-                not state.get("trimmed_10pct") and not state.get("ai_stalemate_checked")):
-            state["ai_stalemate_checked"] = True
+                not is_dt_profit_protected and
+                (now_ts - last_check_ts >= dt_cooldown_sec)):
+            state["last_stalemate_check_ts"] = now_ts
             try:
                 from src.ai_engine import ai_advisor
                 market_info = {
                     "current_px": current_px,
                     "age_hours": age_h,
+                    "max_hold_hours": max_hold,
                     "unrealized_pnl": state.get("unrealized_pnl", 0.0),
                     "move_pct": profit_pct,
-                    "funding_rate": 0.0,
+                    "peak_profit_pct": peak_profit_pct,
+                    "funding_rate": float(state.get("funding_rate", 0.0)),
                 }
                 diag = ai_advisor.evaluate_position_stalemate(coin, state, market_info)
                 if diag.get("action") == "CLOSE_NOW" and diag.get("confidence", 0) >= 70:
-                    msg = (f"🧠 AI INTRADAY DEAD-MOMENTUM: {coin} ({side}) stagnan {age_h:.1f} jam (gerak {profit_pct:+.2f}%). "
+                    msg = (f"🧠 AI INTRADAY DEAD-MOMENTUM: {coin} ({side}) stagnan {age_h:.1f} jam (gerak {profit_pct:+.2f}%, MFE: {peak_profit_pct:+.2f}%). "
                            f"Posisi ditutup dini untuk daur ulang modal! ({diag.get('reasoning')})")
                     if self._close_full(coin, state, pos_info, current_px, "AI_STALEMATE_EXIT", msg, "AI_EXIT", actions):
                         return

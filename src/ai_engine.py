@@ -1129,17 +1129,33 @@ Propose 2 to 3 actionable parameter experiments to test across historical candle
         entry = float(state.get("entry_px", 0.0))
         cur_px = float((market_info or {}).get("current_px") or state.get("last_px", entry))
         age_h = float((market_info or {}).get("age_hours", 0.0))
+        max_hold = float((market_info or {}).get("max_hold_hours", 6.0 if strat == "DAYTRADE" else 72.0))
         pnl = float((market_info or {}).get("unrealized_pnl", 0.0))
         move_pct = float((market_info or {}).get("move_pct", 0.0))
+        peak_mfe = float((market_info or {}).get("peak_profit_pct", 0.0))
         f_rate = float((market_info or {}).get("funding_rate", 0.0))
+        life_pct = (age_h / max_hold * 100.0) if max_hold > 0 else 50.0
 
         prompt = self._sanitize_prompt(f"""
-You are the Lead Risk Officer for a high-frequency crypto fund reviewing a STAGNANT position.
-Coin: {coin} | Strategy: {strat} | Side: {side}
-Entry: ${entry} | Current Price: ${cur_px} | Move: {move_pct:+.2f}% | PnL: ${pnl:+.2f}
-Age: {age_h:.1f} hours | Funding Rate: {f_rate:+.4f}%
+You are the Senior Quantitative Risk Officer reviewing a potentially STAGNANT trading position.
+Our primary mandate: Capital preservation without premature clipping of winning trades.
 
-Determine action (CLOSE_NOW or HOLD), urgency, confidence, and reasoning.
+POSITION DOSSIER:
+- Coin: {coin} | Strategy: {strat} | Side: {side}
+- Entry: ${entry} | Current Price: ${cur_px}
+- Price Move: {move_pct:+.2f}% (Floating PnL: ${pnl:+.2f})
+- Peak MFE (High-Water Mark): {peak_mfe:+.2f}%
+- Elapsed Time: {age_h:.1f} hours of max {max_hold:.1f} hours ({life_pct:.0f}% life elapsed)
+- Funding Rate: {f_rate:+.4f}%
+
+DECISION FRAMEWORK:
+1. DO NOT close positions that are developing favorably or resting quietly after entry without structural damage.
+2. Recommend CLOSE_NOW ONLY if:
+   - The trade has consumed >= 50% of its lifespan with zero directional progress AND sits in floating loss / dead flat,
+   - Or there is clear dead momentum / liquidity exhaustion where opportunity cost of locked margin outweighs continuation potential.
+3. Otherwise recommend HOLD and let native resting trigger orders (SL / Trailing / Time-stop) manage the position.
+
+Return strictly JSON matching StalemateDiagnosis schema.
 """)
         try:
             response = self._client.models.generate_content(
