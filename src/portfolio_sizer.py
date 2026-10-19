@@ -2,10 +2,10 @@
 Portfolio Sizer & Allocation Master for Gemini ShortHunter v2.0
 
 Menyediakan kalkulasi terpadu Core-Satellite Portfolio Allocation:
-- Spot Vault (Hold 1-24 Bulan): 50% - 60% (Default 55%)
-- Swing 3-Day (Reversal / Dump 2x): 25% - 30% (Default 25%)
-- Intraday Day-Trade (Precision 2x-3x): 10% - 15% (Default 10%)
-- Free Margin Buffer (Liquid Cash): 10% (Default 10%)
+- Spot Vault (Scout / Sinyal Bot): 20% (Akumulasi riil skala besar di Cold Wallet)
+- Swing 3-Day (Reversal / Dump 2x): 50%
+- Intraday Day-Trade (Precision 2x-3x): 20%
+- Free Margin Buffer (Liquid Cash Hyperliquid): 10%
 """
 
 import os
@@ -16,15 +16,15 @@ ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CONFIG_PATH = os.path.join(ROOT_DIR, "data", "portfolio_sizing_config.json")
 
 DEFAULT_CONFIG = {
-    "spot_pct": 55.0,
-    "swing_pct": 25.0,
-    "intraday_pct": 10.0,
+    "spot_pct": 20.0,
+    "swing_pct": 50.0,
+    "intraday_pct": 20.0,
     "buffer_pct": 10.0,
     "num_spot_coins": 5,
     "swing_slots": 5,
-    "intraday_slots": 3,
-    "swing_risk_per_trade_pct": 2.0,
-    "intraday_risk_per_trade_pct": 1.0,
+    "intraday_slots": 4,
+    "swing_risk_per_trade_pct": 2.5,
+    "intraday_risk_per_trade_pct": 1.5,
     "swing_leverage": 2,
     "intraday_leverage": 2,
 }

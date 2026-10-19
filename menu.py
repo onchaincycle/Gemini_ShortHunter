@@ -10,8 +10,14 @@ import sys
 import time
 import sqlite3
 import unicodedata
+import logging
 from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
+
+# Silence verbose third-party loggers (httpx, google_genai) to keep CLI UI clean
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("google_genai").setLevel(logging.WARNING)
+logging.getLogger("google").setLevel(logging.WARNING)
 
 from src.database import Database
 from src.downloader import DataDownloader

@@ -18,10 +18,16 @@ Upgrades Gemini Flash into a true Agentic Quantitative System across:
 import os
 import json
 import time
+import logging
 from datetime import datetime
 from typing import Dict, List, Optional, Any, Literal
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
+
+# Silence verbose third-party loggers (httpx, google_genai) to keep CLI and logs clean
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("google_genai").setLevel(logging.WARNING)
+logging.getLogger("google").setLevel(logging.WARNING)
 
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 load_dotenv(os.path.join(ROOT_DIR, ".env"))

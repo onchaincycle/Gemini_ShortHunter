@@ -492,3 +492,103 @@ class ClaudeCryptoEngine:
             "action": "NEUTRAL",
             "desc": "Rentang konsolidasi wajar tanpa dominasi akumulasi atau distribusi agresif."
         }
+
+    # ------------------------------------------------------------------
+    # 4. SMART MONEY DISTRIBUTION SCORE (SMS) — NANSEN ON-CHAIN LAYER
+    # ------------------------------------------------------------------
+    @classmethod
+    def compute_smart_money_score(cls,
+                                  sm_live: Optional[Dict[str, Any]],
+                                  sm_trend: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """
+        Smart Money Distribution Score (SMS, 0-100; higher = stronger whale distribution):
+          - Live balance change 24h (0-60): dumping scales with |change|, accumulating = 0.
+          - Live netflow USD (±15): outflow >= $50k adds, inflow >= $50k subtracts.
+          - 7d historical trend (0-25): falling Smart Money value + persistent distribution days.
+        Returns sms=None when Nansen has no coverage for the coin.
+        """
+        if not sm_live and not sm_trend:
+            return {"sms": None, "action": "N/A", "label": "N/A", "details": "Tidak ada data Nansen"}
+
+        sms = 0.0
+        action = "N/A"
+        label = "N/A"
+        if sm_live:
+            action = sm_live.get("action", "NEUTRAL")
+            pct = float(sm_live.get("change_24h_pct", 0.0))
+            net_flow = float(sm_live.get("net_flow_usd", 0.0))
+            label = f"{action} ({pct:+.1f}%)"
+            if pct <= -1.0:
+                sms += min(60.0, 30.0 + abs(pct) * 6.0)
+            elif pct < 1.0:
+                sms += 20.0
+            if net_flow <= -50_000:
+                sms += 15.0
+            elif net_flow >= 50_000:
+                sms -= 15.0
+
+        trend_txt = "7d N/A"
+        if sm_trend:
+            v_chg = float(sm_trend.get("value_change_pct", 0.0))
+            d_dist = int(sm_trend.get("days_distributing", 0))
+            if v_chg <= -10.0:
+                sms += 15.0
+            elif v_chg <= -3.0:
+                sms += 8.0
+            sms += min(10.0, d_dist * 2.5)
+            trend_txt = f"7d {v_chg:+.1f}% ({d_dist}d dist)"
+
+        sms = round(max(0.0, min(100.0, sms)), 1)
+        return {"sms": sms, "action": action, "label": label, "trend": trend_txt,
+                "details": f"SMS {sms:.0f} | {label} | {trend_txt}"}
+
+    # ------------------------------------------------------------------
+    # 5. UNIFIED SHORT CONFLUENCE (SCR v10 + NANSEN) — SATU PANGGILAN
+    # ------------------------------------------------------------------
+    @classmethod
+    def evaluate_short_confluence(cls,
+                                  symbol: str,
+                                  df_daily: pd.DataFrame,
+                                  funding_rate: float = 0.0,
+                                  oi_vol_ratio: float = 0.0,
+                                  sm_live: Optional[Dict[str, Any]] = None,
+                                  sm_trend: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """
+        Single entry point for the short screener: Sector + BMS + DRS + Phase + Smart Money.
+        score_adj reproduces the legacy Pillar 6 (Nansen) + Pillar 8 (SCR) weights exactly,
+        so scores stay comparable with historical signals. New metrics (sms, drs_onchain)
+        are informational until validated by backtest.
+        """
+        sector = cls.get_coin_sector(symbol)
+        bms = cls.compute_bms(df_daily)
+        drs = cls.compute_drs(df_daily, funding_rate=funding_rate, oi_vol_ratio=oi_vol_ratio)
+        phase = cls.classify_phase(df_daily, bms, drs)
+        sm = cls.compute_smart_money_score(sm_live, sm_trend)
+
+        score_adj = 0.0
+        # Legacy Pillar 6: Nansen Smart Money
+        if sm["action"] == "DUMPING":
+            score_adj += 15
+        elif sm["action"] == "ACCUMULATING":
+            score_adj -= 25
+        # Legacy Pillar 8a: macro confluence
+        if phase["phase"] == "P7 Distribution":
+            score_adj += 4
+        elif drs["drs"] >= 65.0:
+            score_adj += 2
+        # Legacy Pillar 8b: whale base safety veto
+        if bms["is_solid_base"] and bms["bms"] >= 80.0:
+            score_adj -= 10
+
+        # On-chain-blended DRS: 75% price structure + 25% Smart Money flow
+        drs_onchain = round(0.75 * drs["drs"] + 0.25 * sm["sms"], 1) if sm["sms"] is not None else drs["drs"]
+
+        return {
+            "sector": sector,
+            "bms": bms,
+            "drs": drs,
+            "phase": phase,
+            "smart_money": sm,
+            "drs_onchain": drs_onchain,
+            "score_adj": score_adj,
+        }

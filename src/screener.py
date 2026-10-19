@@ -10,6 +10,7 @@ from src.database import Database
 from src.nansen_client import NansenClient
 from src.market_regime import MarketRegime
 from src.tokenomics import TokenomicsRadar
+from src.claude_crypto_engine import ClaudeCryptoEngine
 
 from src.indicators import calculate_rsi, calculate_ema, evaluate_peak_exhaustion
 
@@ -51,8 +52,9 @@ class ShortScreener:
         except Exception:
             df_snap = pd.DataFrame()
 
-        # Fetch on-chain Smart Money data from Nansen
-        sm_holdings = self.nansen.get_smart_money_holdings() if self.nansen.is_configured() else {}
+        # Fetch on-chain Smart Money (live, cached 15 min) + 7d trend from DuckDB history
+        sm_signals = self.nansen.get_smart_money_signals() if self.nansen.is_configured() else {}
+        sm_trends = NansenClient.get_history_trends(self.db, days=7)
 
         candidates = []
 
@@ -209,17 +211,21 @@ class ShortScreener:
             elif oi_vol_ratio >= 0.4:
                 score += 5
 
-            # Pillar 6: On-Chain Smart Money (Nansen API)
-            sm_action = "N/A"
-            if symbol.upper() in sm_holdings:
-                sm_data = sm_holdings[symbol.upper()]
-                action = sm_data["action"]
-                change_pct = sm_data["change_24h_pct"]
-                sm_action = f"{action} ({change_pct:+.1f}%)"
-                if action == "DUMPING":
-                    score += 15
-                elif action == "ACCUMULATING":
-                    score -= 25
+            # Pillar 6+8: Unified On-Chain (Nansen) + Claude_Crypto SCR v10 Confluence
+            sm_live = NansenClient.lookup(sm_signals, symbol)
+            sm_trend = NansenClient.lookup(sm_trends, symbol)
+            conf = ClaudeCryptoEngine.evaluate_short_confluence(
+                symbol, df_d,
+                funding_rate=funding_rate, oi_vol_ratio=oi_vol_ratio,
+                sm_live=sm_live, sm_trend=sm_trend
+            )
+            score += conf["score_adj"]
+            sector_data = conf["sector"]
+            bms_data = conf["bms"]
+            drs_data = conf["drs"]
+            phase_data = conf["phase"]
+            sm_info = conf["smart_money"]
+            sm_action = sm_info["label"]
 
             # Pillar 7: Tokenomics Dilution Risk
             t_data = self.tokenomics.get_tokenomics(symbol)
@@ -228,25 +234,6 @@ class ShortScreener:
                 score += 10
             elif dilution_label == "MODERATE_DILUTION":
                 score += 5
-
-            # Pillar 8: Claude_Crypto Macro Context & Safety Backdrop (Pagar Pengaman Pasif)
-            # Karena ShortHunter beroperasi pada horizon taktis 6h - 72h sementara Claude_Crypto berorientasi bulanan/tahunan,
-            # metrik Claude_Crypto difungsikan secara proporsional sebagai konfluensi latar belakang & pelindung risiko:
-            from src.claude_crypto_engine import ClaudeCryptoEngine
-            sector_data = ClaudeCryptoEngine.get_coin_sector(symbol)
-            bms_data = ClaudeCryptoEngine.compute_bms(df_d)
-            drs_data = ClaudeCryptoEngine.compute_drs(df_d, funding_rate=funding_rate, oi_vol_ratio=oi_vol_ratio)
-            phase_data = ClaudeCryptoEngine.classify_phase(df_d, bms_data, drs_data)
-
-            # 8a. Konfluensi Makro Searah (Bonus ringan +4 jika fase makro sejalan dengan distribusi P7)
-            if phase_data["phase"] == "P7 Distribution":
-                score += 4
-            elif drs_data["drs"] >= 65.0:
-                score += 2
-
-            # 8b. Safety Veto: Jangan short koin yang sedang berada di atas base akumulasi paus masif (BMS >= 80)
-            if bms_data["is_solid_base"] and bms_data["bms"] >= 80.0:
-                score -= 10
 
             # Cap score if stale/oversold so it never masquerades as a top candidate
             if ex["is_stale_or_oversold"]:
@@ -283,6 +270,10 @@ class ShortScreener:
                     "drs_score": drs_data["drs"],
                     "bms_score": bms_data["bms"],
                     "phase": phase_data["badge"],
+                    "sms_score": sm_info["sms"] if sm_info["sms"] is not None else "N/A",
+                    "sm_trend_7d": sm_info.get("trend", "7d N/A"),
+                    "sm_netflow_k": round(float(sm_live.get("net_flow_usd", 0.0)) / 1000, 1) if sm_live else 0.0,
+                    "drs_onchain": conf["drs_onchain"],
                     "_is_stale": ex["is_stale_or_oversold"],
                     "_has_breakdown": has_breakdown
                 })
