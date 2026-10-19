@@ -123,10 +123,20 @@ class WeightCalibration(BaseModel):
     confidence: int = Field(ge=0, le=100)
 
 
+class ParameterChanges(BaseModel):
+    sl_pct: Optional[float] = Field(default=None, description="Stop loss percent")
+    stop_loss_pct: Optional[float] = Field(default=None, description="Stop loss percent")
+    trim_pct: Optional[float] = Field(default=None, description="Trim take profit percent")
+    take_profit_pct: Optional[float] = Field(default=None, description="Full take profit percent")
+    tp2_pct: Optional[float] = Field(default=None, description="Full take profit percent")
+    max_hold_days: Optional[int] = Field(default=None, description="Max hold days for swing")
+    max_hold_hours: Optional[int] = Field(default=None, description="Max hold hours for intraday")
+
+
 class ExperimentProposal(BaseModel):
     experiment_name: str
     stream: Literal["SWING", "DAYTRADE"]
-    parameter_changes: Dict[str, Any]
+    parameter_changes: ParameterChanges
     hypothesis: str
     expected_impact: str
 

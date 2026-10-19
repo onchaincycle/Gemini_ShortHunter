@@ -67,6 +67,8 @@ class AutonomousEngine:
                 "mode": "OPTIMAL",
                 "badge": "🟢 OPTIMAL (Standard)",
                 "reserve_pct": 15.0,
+                "base_min_score_intraday": 75.0,
+                "base_min_score_swing": 78.0,
                 "min_score_intraday": 75.0,
                 "min_score_swing": 78.0,
                 "required_grades": ["A", "A+"],
@@ -401,7 +403,17 @@ class AutonomousEngine:
                 try:
                     rev = ai_advisor.analyze_closed_trade(t)
                     t["ai_review"] = rev
-                    journal[t["coin"]] = t
+                    # Cari key asli di journal agar tidak menimpa posisi OPEN dengan nama koin yang sama
+                    matched_key = None
+                    for k, v in journal.items():
+                        if v is t or (v.get("coin") == t.get("coin") and v.get("exit_time") == t.get("exit_time") and v.get("status") == "CLOSED"):
+                            matched_key = k
+                            break
+                    if matched_key:
+                        journal[matched_key] = t
+                    else:
+                        trade_key = f"{t.get('coin')}@{t.get('exit_time') or int(time.time())}"
+                        journal[trade_key] = t
                     newly_audited += 1
                     journal_modified = True
                 except Exception:
@@ -468,13 +480,18 @@ class AutonomousEngine:
         daily_dd_pct = abs(min(0.0, today_pnl)) / equity * 100.0 if equity > 0 else 0.0
 
         thermo = state["thermostat"]
+        base_sw = float(thermo.get("base_min_score_swing", thermo.get("min_score_swing", 78.0)))
+        base_dt = float(thermo.get("base_min_score_intraday", thermo.get("min_score_intraday", 75.0)))
+        thermo["base_min_score_swing"] = base_sw
+        thermo["base_min_score_intraday"] = base_dt
+
         if loss_streak >= 3 or daily_dd_pct >= 5.0:
             thermo.update({
                 "mode": "CIRCUIT_BREAKER",
                 "badge": "🛑 CIRCUIT BREAKER (Auto-Pause Entry)",
                 "reserve_pct": 30.0,
-                "min_score_intraday": 82.0,
-                "min_score_swing": 84.0,
+                "min_score_intraday": max(70.0, min(88.0, base_dt + 7.0)),
+                "min_score_swing": max(72.0, min(88.0, base_sw + 6.0)),
                 "min_ai_confidence": 85,
                 "sizing_mult": 0.75,
                 "circuit_breaker_pause": True,
@@ -486,21 +503,21 @@ class AutonomousEngine:
                 "mode": "DEFENSIVE_SHIELD",
                 "badge": "🟡 DEFENSIVE SHIELD (Mode Waspada)",
                 "reserve_pct": 25.0,
-                "min_score_intraday": 80.0,
-                "min_score_swing": 82.0,
+                "min_score_intraday": max(70.0, min(85.0, base_dt + 5.0)),
+                "min_score_swing": max(72.0, min(85.0, base_sw + 4.0)),
                 "min_ai_confidence": 80,
                 "sizing_mult": 0.80,
                 "circuit_breaker_pause": False,
                 "pause_until_ts": 0.0,
-                "reason": "Terdeteksi 2x loss beruntun. Cadangan kas dinaikkan ke 25% ekuitas, syarat skor dinaikkan ke 80+, ukuran peluru dipangkas 20%."
+                "reason": "Terdeteksi 2x loss beruntun. Cadangan kas dinaikkan ke 25% ekuitas, syarat skor diperketat, ukuran peluru dipangkas 20%."
             })
         elif win_streak >= 3 and net_realized_pnl > 0:
             thermo.update({
                 "mode": "COMPOUND_BOOST",
                 "badge": "🚀 COMPOUND BOOST (Win Streak Aktif)",
                 "reserve_pct": 15.0,
-                "min_score_intraday": 75.0,
-                "min_score_swing": 77.0,
+                "min_score_intraday": max(68.0, min(82.0, base_dt)),
+                "min_score_swing": max(70.0, min(82.0, base_sw - 1.0)),
                 "min_ai_confidence": 75,
                 "sizing_mult": 1.08,
                 "circuit_breaker_pause": False,
@@ -512,8 +529,8 @@ class AutonomousEngine:
                 "mode": "OPTIMAL",
                 "badge": "🟢 OPTIMAL (Standard Disiplin)",
                 "reserve_pct": 15.0,
-                "min_score_intraday": 75.0,
-                "min_score_swing": 78.0,
+                "min_score_intraday": base_dt,
+                "min_score_swing": base_sw,
                 "min_ai_confidence": 75,
                 "sizing_mult": 1.00,
                 "circuit_breaker_pause": False,
@@ -521,10 +538,11 @@ class AutonomousEngine:
                 "reason": f"Portofolio stabil (Win Rate {win_rate}%, PF {profit_factor}). Cadangan kas 15% ekuitas, filter wajib Grade A."
             })
 
-        # 4. Auto-Calibrate Adaptive Weights if >= 2 new trades closed since last calibration
+        # 4. Adaptive Weights Calibration (Loop 2) - Disabled until unified scoring connects weights to screener
+        ENABLE_WEIGHT_CALIBRATION = False
         last_cal_count = int(state.get("last_calibrated_trade_count", 0))
-        weight_cal_note = "Bobot screener sudah terkalibrasi dengan data terbaru."
-        if total_closed >= 3 and (total_closed - last_cal_count) >= 2:
+        weight_cal_note = "Bobot screener statis (kalibrasi Loop 2 dinonaktifkan sementara hingga unified scoring engine terpasang)."
+        if ENABLE_WEIGHT_CALIBRATION and total_closed >= 3 and (total_closed - last_cal_count) >= 2:
             try:
                 from src.adaptive_weights import run_calibration
                 cal_dt = run_calibration("DAYTRADE")
@@ -779,9 +797,11 @@ class AutonomousEngine:
                 old_dt = float(state["thermostat"].get("min_score_intraday", 75.0))
                 if new_sw_score != old_sw:
                     state["thermostat"]["min_score_swing"] = new_sw_score
+                    state["thermostat"]["base_min_score_swing"] = new_sw_score
                     tuning_applied.append(f"min_score_swing: {old_sw:.1f} -> {new_sw_score:.1f}")
                 if new_dt_score != old_dt:
                     state["thermostat"]["min_score_intraday"] = new_dt_score
+                    state["thermostat"]["base_min_score_intraday"] = new_dt_score
                     tuning_applied.append(f"min_score_intraday: {old_dt:.1f} -> {new_dt_score:.1f}")
 
             # Also run Adaptive Screener Weight Calibration
@@ -1129,10 +1149,12 @@ class AutonomousEngine:
         from src.position_manager import PositionManager
         from src.hyperliquid_client import HyperliquidClient
 
-        # Early Exit: Cek apakah mode otonom dibekukan untuk wallet migration
+        # Early Exit: Cek apakah mode otonom dibekukan untuk wallet migration atau Circuit Breaker aktif
         state = self.load_state()
-        if not state.get("enabled", True) or state.get("pause_new_positions", False):
-            reason = "Scale-up dibatalkan: Mode Otonom dibekukan / Menunggu migrasi wallet (enabled=false atau pause_new_positions=true)"
+        thermo = state.get("thermostat", {})
+        cb_pause = bool(thermo.get("circuit_breaker_pause", False)) and time.time() < float(thermo.get("pause_until_ts", 0.0))
+        if not state.get("enabled", True) or state.get("pause_new_positions", False) or cb_pause:
+            reason = "Scale-up dibatalkan: Mode Otonom dibekukan / Circuit Breaker Pause aktif (enabled=false, pause=true, atau cb_pause=true)"
             self.log_telemetry("SCALE_GUARD", "Blocked Scale-Up", reason)
             return {"success": False, "status": "BLOCKED", "reason": reason, "scaled_up": [], "revisited": []}
 

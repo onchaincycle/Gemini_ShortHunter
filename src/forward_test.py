@@ -7,6 +7,7 @@ milestone execution, funding friction, and performance logs.
 
 import os
 import json
+import time
 from datetime import datetime
 from typing import Dict, List, Optional
 from src.trade_db import trade_db
@@ -133,6 +134,12 @@ class ForwardTestManager:
             drop_pct = ((entry_px - current_px) / entry_px) * 100.0 if entry_px > 0 else 0.0
             adverse_pct = ((current_px - entry_px) / entry_px) * 100.0 if entry_px > 0 else 0.0
             init_sl = float(plan.get("initial_sl_px") or plan.get("sl_px") or entry_px * 1.10)
+
+        if coin in journal and journal[coin].get("status") == "CLOSED":
+            # Arsipkan trade closed lama ke key unik timestamp agar riwayat tersimpan utuh
+            archived_key = f"{coin}@{journal[coin].get('exit_time') or int(time.time())}"
+            journal[archived_key] = journal[coin]
+            del journal[coin]
 
         if coin not in journal:
             journal[coin] = {
@@ -390,14 +397,6 @@ class ForwardTestManager:
             traded_coins = {f.get("coin") for f in fills if f.get("coin")}
             for coin in traded_coins:
                 if coin not in live_positions:
-                    existing_closed = next(
-                        (v for k, v in journal.items() if (k == coin or k.startswith(f"{coin}@")) and v.get("status") == "CLOSED"),
-                        None
-                    )
-                    # Lewati jika sudah tersinkron rapi & tidak pending rekonsiliasi
-                    if existing_closed and not existing_closed.get("pending_fill_reconcile"):
-                        continue
-
                     coin_fills = sorted([f for f in fills if f.get("coin") == coin], key=lambda x: x.get("time", 0))
                     open_fills = [f for f in coin_fills if ("Open Short" in str(f.get("dir", "")) or "Open Long" in str(f.get("dir", "")))]
                     if not open_fills:
@@ -421,6 +420,16 @@ class ForwardTestManager:
                     cyc_open = [f for f in cycle if open_dir_str in str(f.get("dir", ""))]
                     cyc_close = [f for f in cycle if close_dir_str in str(f.get("dir", ""))]
                     if not cyc_close:
+                        continue
+
+                    exit_dt = datetime.fromtimestamp(cyc_close[-1].get("time", 0) / 1000.0).strftime("%Y-%m-%d %H:%M:%S")
+
+                    existing_closed = next(
+                        (v for k, v in journal.items() if (k == coin or k.startswith(f"{coin}@")) and v.get("status") == "CLOSED" and v.get("exit_time") == exit_dt),
+                        None
+                    )
+                    # Lewati jika sudah tersinkron rapi & tidak pending rekonsiliasi
+                    if existing_closed and not existing_closed.get("pending_fill_reconcile"):
                         continue
 
                     open_sz = sum(float(f.get("sz", 0.0)) for f in cyc_open)
