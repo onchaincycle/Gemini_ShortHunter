@@ -1,6 +1,6 @@
 {
-  "updated_at": "2026-10-19 18:03:40",
-  "total_rules_learned": 12,
+  "updated_at": "2026-10-20 05:01:35",
+  "total_rules_learned": 13,
   "rules": [
     {
       "id": "MEM-001",
@@ -110,6 +110,15 @@
       "side": "SHORT",
       "root_cause": "STALE_MOMENTUM",
       "rule": "Gunakan AI stalemate exit saat momentum melemah pada perdagangan short untuk mengamankan profit kecil.",
+      "source_coin": "PUMP"
+    },
+    {
+      "id": "MEM-013",
+      "created_at": "2026-10-20 05:01:35",
+      "stream": "DAYTRADE",
+      "side": "SHORT",
+      "root_cause": "TIME_STOP_EXIT",
+      "rule": "Gunakan time-stop 6 jam untuk keluar dari posisi short saat momentum melambat dan amankan profit yang tersedia.",
       "source_coin": "PUMP"
     }
   ]

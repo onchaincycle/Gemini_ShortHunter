@@ -254,6 +254,8 @@ class ShortScreener:
                 "funding_rate": funding_rate,
                 "oi_vol_ratio": oi_vol_ratio,
                 "pullback_from_ath": pullback_from_ath,
+                "squeeze_risk": squeeze_risk,
+                "has_exhaustion": has_exhaustion,
             }
             feat_vec = propensity_gate.extract_feature_vector(feat_input, df_daily=df_d, df_hourly=df_4h)
             p_win, p_grade, p_meta = propensity_gate.calculate_propensity(feat_vec)

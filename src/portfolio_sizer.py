@@ -346,6 +346,12 @@ class PortfolioSizer:
         if not active_positions:
             return True, "No active positions (correlation clear)"
 
+        def clean_kilo(sym: str) -> str:
+            sym = str(sym).upper()
+            if sym.startswith("K") and sym[1:] in {"PEPE", "BONK", "SHIB", "FLOKI", "LUNC", "DOGS", "NEIRO"}:
+                return sym[1:]
+            return sym
+
         # Ekosistem klaster statis sebagai pelindung cepat (fast gate)
         CLUSTERS = {
             "MEME": {"PEPE", "KPEPE", "BONK", "KBONK", "SHIB", "KSHIB", "FLOKI", "KFLOKI", "WIF", "DOGE", "POPCAT", "PUMP", "NEIRO", "KNEIRO"},
@@ -354,7 +360,7 @@ class PortfolioSizer:
             "SOL_ECO": {"SOL", "JUP", "RAY", "JTO", "PYTH", "W"}
         }
 
-        cand = candidate_coin.upper().replace("K", "")
+        cand = clean_kilo(candidate_coin)
         cand_cluster = None
         for cname, coins in CLUSTERS.items():
             if candidate_coin.upper() in coins or cand in coins:
@@ -364,7 +370,7 @@ class PortfolioSizer:
         if cand_cluster:
             for pos in active_positions:
                 p_coin = str(pos.get("coin", "")).upper()
-                p_clean = p_coin.replace("K", "")
+                p_clean = clean_kilo(p_coin)
                 if p_coin in CLUSTERS[cand_cluster] or p_clean in CLUSTERS[cand_cluster]:
                     return False, f"VETO CORRELATION: {candidate_coin} berada di klaster yang sama ({cand_cluster}) dengan posisi aktif {p_coin}"
 
@@ -386,7 +392,8 @@ class PortfolioSizer:
         current_open_risk_usd = 0.0
 
         for p in active_positions:
-            pos_sz_usd = float(p.get("size", 0.0)) * float(p.get("entry_px", 0.0))
+            # Posisi short di Hyperliquid bernilai negatif (szi < 0), gunakan abs()
+            pos_sz_usd = abs(float(p.get("size", 0.0))) * float(p.get("entry_px", 0.0))
             sl_px = float(p.get("current_sl_px", 0.0))
             entry = float(p.get("entry_px", 0.0))
             if entry > 0 and sl_px > 0:

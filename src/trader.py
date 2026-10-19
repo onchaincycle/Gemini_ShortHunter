@@ -471,7 +471,7 @@ class HyperliquidTrader:
         }
 
     def calculate_risk_margin(self,
-                              equity: float,
+                              equity: Optional[float] = None,
                               risk_pct: float = 2.0,
                               sl_pct: float = 10.0,
                               leverage: int = 2,
@@ -481,6 +481,7 @@ class HyperliquidTrader:
                               open_slots_remaining: Optional[int] = None,
                               strategy: Optional[str] = None,
                               available: Optional[float] = None,
+                              coin: Optional[str] = None,
                               **kwargs) -> Dict:
         """
         Calculates mathematically sound margin sizing as a function of Total Equity (E),
@@ -490,8 +491,20 @@ class HyperliquidTrader:
         capped at $19.80 by static unadjusted SL risk formulas.
         Also incorporates an Idle-Capital Recycler Boost when legacy positions are small.
         """
+        # Robust handling if equity passed as strategy string e.g. calculate_risk_margin('SWING', ...)
+        if isinstance(equity, str):
+            strategy = equity
+            equity = None
+
+        if equity is None:
+            st = self.get_account_state()
+            equity = float(st.get("hl_equity", st.get("equity", 100.0)))
+            if available is None:
+                available = float(st.get("available", 0.0))
+
+        equity = max(0.0, float(equity))
         if equity <= 0:
-            return {"recommended_margin": 12.0, "base_margin": 12.0, "max_risk_usd": 1.2, "pos_value": 24.0}
+            return {"recommended_margin": 12.0, "base_margin": 12.0, "max_risk_usd": 1.2, "pos_value": 24.0, "allowed": False, "reason": "Hyperliquid balance empty or zero"}
 
         strat = strategy or ("DAYTRADE" if (risk_pct <= 1.2 or sl_pct < 6.0) else "SWING")
         slot_plan = self.get_equity_slot_plan(equity, reserve_pct=reserve_pct, strategy=strat)

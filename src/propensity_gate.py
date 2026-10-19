@@ -80,10 +80,38 @@ class ShortPropensityGate:
         vec["funding_velocity_1h"] = float(coin_data.get("funding_rate", 0.0)) * 100.0
         vec["open_interest_divergence"] = float(coin_data.get("oi_divergence", 0.0))
 
-        # 4. Teknikal Kompresi & Volatilitas
-        vec["bb_width_percentile_4h"] = float(coin_data.get("bb_width_percentile", 50.0))
-        vec["keltner_compression_ratio"] = float(coin_data.get("keltner_ratio", 1.0))
-        vec["atr_expansion_1h"] = float(coin_data.get("atr_ratio", 1.0))
+        # 4. Teknikal Kompresi & Volatilitas dari klines (df_hourly jika tersedia)
+        bb_width_pct = float(coin_data.get("bb_width_percentile", 50.0))
+        keltner_ratio = float(coin_data.get("keltner_ratio", 1.0))
+        atr_exp = float(coin_data.get("atr_ratio", 1.0))
+
+        if df_hourly is not None and not df_hourly.empty and len(df_hourly) >= 20:
+            try:
+                closes = df_hourly["close"].astype(float)
+                sma20 = closes.rolling(20).mean()
+                std20 = closes.rolling(20).std()
+                bb_width = (4.0 * std20) / sma20
+                curr_bbw = 0.05
+                if len(bb_width.dropna()) >= 10:
+                    curr_bbw = float(bb_width.iloc[-1])
+                    bb_width_pct = float((bb_width < curr_bbw).mean() * 100.0)
+
+                # ATR 14
+                highs = df_hourly["high"].astype(float)
+                lows = df_hourly["low"].astype(float)
+                tr = np.maximum(highs - lows, np.maximum(abs(highs - closes.shift(1)), abs(lows - closes.shift(1))))
+                atr14 = tr.rolling(14).mean().iloc[-1]
+                if atr14 > 0 and float(closes.iloc[-1]) > 0:
+                    atr_exp = float(tr.iloc[-1] / atr14)
+                    kelt_width = (3.0 * atr14) / float(closes.iloc[-1])
+                    if kelt_width > 0:
+                        keltner_ratio = float(curr_bbw / kelt_width)
+            except Exception:
+                pass
+
+        vec["bb_width_percentile_4h"] = bb_width_pct
+        vec["keltner_compression_ratio"] = keltner_ratio
+        vec["atr_expansion_1h"] = atr_exp
         vec["session_time_boost"] = 1.0
 
         # 5. Overextension & Valuation
