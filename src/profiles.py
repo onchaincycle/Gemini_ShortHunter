@@ -31,7 +31,8 @@ PROFILES = {
         "exit_model": "FIXED_PCT",
         "sl_pct": 10.0,
         "half_risk_step_pct": 2.2,  # Step 1 (+2.2% move / +4.4% ROE): Compress on-chain SL from -10% to -5.0%
-        "early_be_pct": 4.0,        # Step 2 (+4.0% move / +8.0% ROE): Early Breakeven Shield (0% risk + fee)
+        "early_be_pct": 4.0,        # Step 2 (+4.0% move / +8.0% ROE): Early Trigger (+1.5R)
+        "tier1_lock_profit_pct": 1.5, # Tier-1 Lock: Kunci minimal +1.5% net profit (+3.0% ROE) alih-alih BE polos
         "trim_pct": 7.0,            # Step 3 (+7.0% move / +14% ROE): Trim 50% + lock SL at +2.0% profit
         "periodic_trail_start_pct": 8.5,  # Step 4 (>= +8.5% move): Periodic HWM ratchet locking 55% of peak move
         "tp2_pct": 18.0,            # TP2 at +18% price move (36% ROE)
@@ -50,7 +51,7 @@ PROFILES = {
         "session_gate": False,
         "poll_seconds": 25,
         "fee_roundtrip_pct": 0.09,  # taker 0.045% x 2
-        "target_desc": "Half-Risk @ ±2.2% ➔ Early BE @ ±4% ➔ Trim 50% @ ±7% (+Periodic Trail) ➔ TP @ ±18% ➔ Runner @ ±30%"
+        "target_desc": "Half-Risk @ ±2.2% ➔ Tier-1 Lock (+1.5% profit) @ ±4% ➔ Trim 50% @ ±7% (+HWM Ratchet) ➔ TP @ ±18% ➔ Runner @ ±30%"
     },
     "DAYTRADE": {
         "key": "DAYTRADE",
@@ -67,6 +68,8 @@ PROFILES = {
         "sl_max_pct": 4.5,
         "half_risk_r": 0.45,        # Step 1 (0.45R / ~1.4% move): Perketat SL on-chain 50%
         "early_be_r": 0.65,         # Step 2 (0.65R / ~2.1% move): Geser SL on-chain ke Breakeven + Fee
+        "tier1_trigger_r": 1.5,     # Step 2.5 (+1.5R move / >=+4.0%): Trigger Tier-1 Profit Lock
+        "tier1_lock_r": 0.5,        # Kunci minimal +0.5R profit (~1.5% move)
         "tp1_r": 1.0,               # Step 3 (1.0R / 2.5-4.5% move): Trim 50% & kunci SL di profit +0.3R
         "tp2_r": 2.0,               # Step 4 (2.0R / 5.0-9.0% move): Tutup sisa (Hard Cap 9.0% gerak harga)
         "trim_pct": 3.2,            # = 1.0R dari default SL (fallback)
