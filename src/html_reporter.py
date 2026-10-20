@@ -76,6 +76,20 @@ def generate_html_report(output_path: str = OUTPUT_HTML) -> str:
 
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
+    # Capital mutations tracking
+    capital_sub = f"Free: ${free_collateral:.2f} | Margin: ${tot_margin_used:.2f}"
+    mutations_path = os.path.join(ROOT_DIR, "data", "capital_mutations.json")
+    if os.path.exists(mutations_path):
+        try:
+            with open(mutations_path, "r") as f:
+                mut = json.load(f)
+                dep = sum(float(d.get("amount_usd", 0.0)) for d in mut.get("deposits", []))
+                init_cap = float(mut.get("initial_capital_usd", 100.0))
+                total_cap = init_cap + dep
+                capital_sub = f"Modal: ${total_cap:.2f} (Topup +${dep:.2f}) | Free: ${free_collateral:.2f}"
+        except Exception:
+            pass
+
     # Build HTML
     html = f"""<!DOCTYPE html>
 <html lang="id">
@@ -339,7 +353,7 @@ def generate_html_report(output_path: str = OUTPUT_HTML) -> str:
             <div class="card">
                 <div class="card-title">Total Ekuitas Akun</div>
                 <div class="card-val">${equity:.2f}</div>
-                <div class="card-sub">Free: ${free_collateral:.2f} | Margin: ${tot_margin_used:.2f}</div>
+                <div class="card-sub">{capital_sub}</div>
             </div>
             <div class="card">
                 <div class="card-title">Floating PnL Aktif</div>
