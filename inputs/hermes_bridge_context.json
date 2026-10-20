@@ -1,5 +1,5 @@
 {
-  "synced_at": "2026-10-21 00:00:04",
+  "synced_at": "2026-10-21 02:59:58",
   "project": "Gemini_ShortHunter",
   "active_backlog": [
     {
@@ -176,23 +176,22 @@
   "live_tools_state": {
     "thermostat_mode": "\ud83d\udfe2 OPTIMAL (Standard Disiplin)",
     "reserve_pct": 15.0,
-    "last_hunt_time": "2026-10-20 23:37:09",
-    "last_hunt_status": "Ditahan oleh Filter Disiplin: BCH (DAYTRADE): Kuota Intraday efektif penuh (2.0/2); NEAR (Layer-1): Batas diversifikasi sektor tercapai (2/2 posisi Layer-1 aktif)",
+    "last_hunt_time": "2026-10-21 02:48:36",
+    "last_hunt_status": "Ditahan oleh Filter Disiplin: NEAR (Layer-1): Batas diversifikasi sektor tercapai (2/2 posisi Layer-1 aktif); GRAM (Layer-1): Batas diversifikasi sektor tercapai (2/2 posisi Layer-1 aktif)",
     "active_positions": [
-      "LONG SPX (SWING, PnL: $+1.41)",
-      "LONG ZEC (SWING, PnL: $+1.43)",
-      "SHORT TIA (SWING, PnL: $-0.64)",
-      "LONG WIF (SWING, PnL: $+0.22)",
-      "SHORT VVV (DAYTRADE, PnL: $+0.03)",
-      "LONG WLFI (DAYTRADE, PnL: $-0.10)"
+      "LONG ZEC (SWING, PnL: $+1.40)",
+      "SHORT TIA (SWING, PnL: $-0.33)",
+      "LONG WIF (SWING, PnL: $-0.74)",
+      "LONG WLFI (DAYTRADE, PnL: $+1.16)",
+      "LONG POL (SWING, PnL: $+0.36)"
     ],
     "episodic_rules": [
-      "[MEM-010] (SWING/SHORT): Pastikan toleransi MAE mencukupi untuk menampung volatilitas awal sebelum tren berjalan sesuai rencana.",
       "[MEM-011] (DAYTRADE/SHORT): Gunakan AI stalemate exit untuk mengamankan profit saat momentum melemah pada perdagangan intraday.",
       "[MEM-012] (DAYTRADE/SHORT): Gunakan AI stalemate exit saat momentum melemah pada perdagangan short untuk mengamankan profit kecil.",
       "[MEM-013] (DAYTRADE/SHORT): Gunakan time-stop 6 jam untuk keluar dari posisi short saat momentum melambat dan amankan profit yang tersedia.",
       "[MEM-014] (DAYTRADE/LONG): Gunakan stop loss yang lebih ketat atau lakukan exit bertahap jika momentum melemah setelah MFE mencapai di bawah 0.5 persen.",
-      "[MEM-015] (SWING/SHORT): Pertahankan disiplin TP bertahap pada NEAR (SWING)."
+      "[MEM-015] (SWING/SHORT): Pertahankan disiplin TP bertahap pada NEAR (SWING).",
+      "[MEM-016] (DAYTRADE/SHORT): Pertahankan disiplin TP bertahap pada VVV (DAYTRADE)."
     ]
   },
   "antigravity_messages": [
