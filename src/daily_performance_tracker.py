@@ -178,8 +178,9 @@ def generate_daily_performance_section(root_dir: str, trader = None) -> str:
                         <div style="font-size: 1.25rem; font-weight: 700; color: #10b981;">{overall_wr:.1f}% <span style="font-size: 0.75rem; color: var(--text-muted);">({tot_onchain_wins}W / {tot_onchain_trades - tot_onchain_wins}L)</span></div>
                     </div>
                     <div>
-                        <div style="font-size: 0.78rem; color: var(--text-muted);">Modal Aktif Terverifikasi</div>
+                        <div style="font-size: 0.78rem; color: var(--text-muted);">Modal Pokok Disetor</div>
                         <div style="font-size: 1.25rem; font-weight: 700; color: var(--text-main);">${daily_rows[-1]['modal']:.2f} USDC</div>
+                        <div style="font-size: 0.72rem; color: #10b981; font-weight: 600;">Saldo Bursa: ${daily_rows[-1]['modal'] + tot_onchain_pnl:.2f} (+$${tot_onchain_pnl:.2f})</div>
                     </div>
                 </div>
             </div>
