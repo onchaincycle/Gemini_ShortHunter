@@ -1,5 +1,5 @@
 {
-  "synced_at": "2026-10-20 18:00:05",
+  "synced_at": "2026-10-20 21:00:09",
   "project": "Gemini_ShortHunter",
   "active_backlog": [
     {
@@ -176,14 +176,14 @@
   "live_tools_state": {
     "thermostat_mode": "\ud83d\ude80 COMPOUND BOOST (Win Streak Aktif)",
     "reserve_pct": 15.0,
-    "last_hunt_time": "2026-10-20 17:33:05",
-    "last_hunt_status": "\ud83d\ude80 AUTO-OPEN SUKSES: LONG ETHFI [DAYTRADE] | Grade A (88/100) | Margin: $17.49 (3x) | Entry: $0.67422 | SL On-Chain: $0.6569 | TP1 On-Chain: $0.69154",
+    "last_hunt_time": "2026-10-20 20:33:42",
+    "last_hunt_status": "Skip Scan (Hemat Token): Kapasitas Slot Efektif Penuh (5.0/5 slot untuk ekuitas $104.31) | Margin Bebas di atas Cadangan 15% ($15.65) hanya $0.35 (Butuh min. $14.18 untuk buka posisi baru)",
     "active_positions": [
-      "LONG SPX (SWING, PnL: $-0.88)",
-      "LONG ZEC (SWING, PnL: $-1.31)",
-      "SHORT NEAR (SWING, PnL: $+1.77)",
-      "SHORT TIA (SWING, PnL: $-1.51)",
-      "LONG ETHFI (DAYTRADE, PnL: $+0.27)"
+      "LONG SPX (SWING, PnL: $-0.79)",
+      "LONG ZEC (SWING, PnL: $+0.39)",
+      "SHORT NEAR (SWING, PnL: $+1.39)",
+      "SHORT TIA (SWING, PnL: $-1.59)",
+      "LONG ETHFI (DAYTRADE, PnL: $+1.07)"
     ],
     "episodic_rules": [
       "[MEM-009] (SWING/SHORT): Amankan profit secara bertahap saat MFE mencapai di atas 5% pada posisi swing short.",
