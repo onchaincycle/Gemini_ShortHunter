@@ -1,5 +1,5 @@
 {
-  "synced_at": "2026-10-20 05:59:51",
+  "synced_at": "2026-10-20 08:59:58",
   "project": "Gemini_ShortHunter",
   "active_backlog": [
     {
@@ -176,12 +176,14 @@
   "live_tools_state": {
     "thermostat_mode": "\ud83d\ude80 COMPOUND BOOST (Win Streak Aktif)",
     "reserve_pct": 15.0,
-    "last_hunt_time": "2026-10-20 05:33:44",
-    "last_hunt_status": "Ditahan oleh Filter Disiplin: ZK (SWING): Skor 73.0 < Threshold 77.0; INIT (SWING): Skor 75.0 < Threshold 77.0",
+    "last_hunt_time": "2026-10-20 08:34:31",
+    "last_hunt_status": "Skip Scan (Hemat Token): Kapasitas Slot Efektif Penuh (5.0/5 slot untuk ekuitas $103.32) | Margin Bebas di atas Cadangan 15% ($15.50) hanya $0.00 (Butuh min. $14.05 untuk buka posisi baru)",
     "active_positions": [
-      "LONG SPX (SWING, PnL: $-0.87)",
-      "LONG ZEC (SWING, PnL: $-0.90)",
-      "SHORT NEAR (SWING, PnL: $+1.03)"
+      "LONG SPX (SWING, PnL: $-0.91)",
+      "LONG ZEC (SWING, PnL: $-1.15)",
+      "SHORT NEAR (SWING, PnL: $+1.61)",
+      "SHORT TIA (SWING, PnL: $+0.35)",
+      "LONG FIL (DAYTRADE, PnL: $-0.25)"
     ],
     "episodic_rules": [
       "[MEM-008] (DAYTRADE/SHORT): Gunakan AI_STALEMATE_EXIT secara konsisten untuk mengamankan profit saat momentum mulai melambat.",
