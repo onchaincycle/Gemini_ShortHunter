@@ -150,6 +150,7 @@ def sync_and_push(commit_msg: Optional[str] = None, force: bool = False, min_int
         "data/episodic_memory.json",
         "data/portfolio_sizing_config.json",
         "data/capital_mutations.json",
+        "data/daily_performance_cache.json",
         "inputs/hermes_bridge_context.json"
     ]
     for sf in safe_files:

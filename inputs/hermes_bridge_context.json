@@ -1,5 +1,5 @@
 {
-  "synced_at": "2026-10-20 21:42:44",
+  "synced_at": "2026-10-20 22:19:19",
   "project": "Gemini_ShortHunter",
   "active_backlog": [
     {
@@ -176,13 +176,13 @@
   "live_tools_state": {
     "thermostat_mode": "\ud83d\udfe2 OPTIMAL (Standard Disiplin)",
     "reserve_pct": 15.0,
-    "last_hunt_time": "2026-10-20 21:36:43",
-    "last_hunt_status": "Skip Scan (Hemat Token): Masa tenang (Cooldown) pasca-entry terakhir (0 menit tersisa)",
+    "last_hunt_time": "2026-10-20 22:06:49",
+    "last_hunt_status": "Ditahan oleh Filter Disiplin: LONG SAND (Skor 80.0) -> AI Grade B (74/100, Approve=True). Syarat: Wajib Grade A (>=75). Alasan: [\ud83d\udc68\u200d\u2696\ufe0f CRO JUDGE] Skor komite 74.0/100 (Grade B). BALANCED_EXPOSURE (3 Long vs 1 Short). (E; GRASS (DAYTRADE): Skor 70.0 < Threshold 75.0",
     "active_positions": [
-      "LONG SPX (SWING, PnL: $+0.32)",
-      "LONG ZEC (SWING, PnL: $+1.98)",
-      "SHORT TIA (SWING, PnL: $-2.45)",
-      "LONG WIF (SWING, PnL: $+1.36)"
+      "LONG SPX (SWING, PnL: $+0.25)",
+      "LONG ZEC (SWING, PnL: $+0.99)",
+      "SHORT TIA (SWING, PnL: $-0.57)",
+      "LONG WIF (SWING, PnL: $-0.81)"
     ],
     "episodic_rules": [
       "[MEM-010] (SWING/SHORT): Pastikan toleransi MAE mencukupi untuk menampung volatilitas awal sebelum tren berjalan sesuai rencana.",

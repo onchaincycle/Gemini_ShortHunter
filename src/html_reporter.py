@@ -25,6 +25,7 @@ def generate_html_report(output_path: str = OUTPUT_HTML) -> str:
     from src.trader import HyperliquidTrader
     from src.position_manager import PositionManager
     from src.forward_test import ForwardTestManager
+    from src.daily_performance_tracker import generate_daily_performance_section
 
     trader = HyperliquidTrader()
     pm = PositionManager(trader)
@@ -89,6 +90,9 @@ def generate_html_report(output_path: str = OUTPUT_HTML) -> str:
                 capital_sub = f"Modal: ${total_cap:.2f} (Topup +${dep:.2f}) | Free: ${free_collateral:.2f}"
         except Exception:
             pass
+
+    # Daily performance chart & % profit against total modal
+    daily_section_html = generate_daily_performance_section(ROOT_DIR, trader)
 
     # Build HTML
     html = f"""<!DOCTYPE html>
@@ -403,6 +407,8 @@ def generate_html_report(output_path: str = OUTPUT_HTML) -> str:
                 </div>
             </div>
         </div>
+
+        {daily_section_html}
 
         <!-- SECTION 1: POSISI AKTIF (REAL-TIME) -->
         <div class="section-header">

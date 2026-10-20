@@ -235,7 +235,7 @@
                 <span class="badge-live">LIVE AUTO-PILOT GUARD</span>
             </div>
             <div class="header-meta">
-                <div>Terakhir Disinkronkan: <strong>2026-10-20 21:42:46</strong></div>
+                <div>Terakhir Disinkronkan: <strong>2026-10-20 22:19:25</strong></div>
                 <div>Server Stop Loss: <span style="color:var(--neon-green);">🟢 AKTIF ON-CHAIN</span></div>
             </div>
         </header>
@@ -259,12 +259,12 @@
             </div>
             <div class="card">
                 <div class="card-title">Total Ekuitas Akun</div>
-                <div class="card-val">$298.54</div>
-                <div class="card-sub">Modal: $294.61 (Topup +$194.61) | Free: $191.29</div>
+                <div class="card-val">$297.05</div>
+                <div class="card-sub">Modal: $294.61 (Topup +$194.61) | Free: $192.44</div>
             </div>
             <div class="card">
                 <div class="card-title">Floating PnL Aktif</div>
-                <div class="card-val pnl-pos">+$1.21</div>
+                <div class="card-val pnl-neg">$-0.14</div>
                 <div class="card-sub">4 posisi terbuka di bursa</div>
             </div>
         </div>
@@ -311,6 +311,161 @@
             </div>
         </div>
 
+        
+        <!-- SECTION: DAILY PERFORMANCE & % PROFIT TERHADAP TOTAL MODAL -->
+        <div class="section-header" style="margin-top: 36px;">
+            <h2>📈 Performa & % Profit Harian terhadap Total Modal</h2>
+            <span style="font-size:0.8rem; color:var(--text-muted);">Dihitung on-chain live Hyperliquid (memisahkan injeksi deposit dari profit murni)</span>
+        </div>
+
+        <div class="card" style="margin-bottom: 24px; padding: 22px; background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 14px;">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 16px; margin-bottom: 16px; border-bottom: 1px solid var(--card-border); padding-bottom: 14px;">
+                <div>
+                    <div style="font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); font-weight: 600;">Akumulasi Realized Profit On-Chain</div>
+                    <div style="font-size: 1.5rem; font-weight: 800; color: #10b981; margin-top: 2px;">+$10.25 USD <span style="font-size: 0.85rem; font-weight: 500; color: var(--text-muted);">(Total Bersih 5 Hari)</span></div>
+                </div>
+                <div style="display: flex; gap: 24px; text-align: right; flex-wrap: wrap;">
+                    <div>
+                        <div style="font-size: 0.78rem; color: var(--text-muted);">Win Rate Kumulatif</div>
+                        <div style="font-size: 1.25rem; font-weight: 700; color: #10b981;">68.1% <span style="font-size: 0.75rem; color: var(--text-muted);">(32W / 15L)</span></div>
+                    </div>
+                    <div>
+                        <div style="font-size: 0.78rem; color: var(--text-muted);">Modal Aktif Terverifikasi</div>
+                        <div style="font-size: 1.25rem; font-weight: 700; color: var(--text-main);">$294.61 USDC</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SVG Performance Chart -->
+            <div style="width: 100%; overflow-x: auto; padding-bottom: 8px;">
+                <svg viewBox="0 0 760 220" style="min-width: 620px; width: 100%; height: auto; font-family: inherit;">
+                    <!-- Zero line -->
+                    <line x1="50" y1="115" x2="730" y2="115" stroke="var(--card-border)" stroke-dasharray="4" stroke-width="1.5" />
+                    <text x="20" y="119" fill="var(--text-muted)" font-size="11" font-weight="600">$0</text>
+
+                    <!-- Grid Reference lines -->
+                    <line x1="50" y1="55" x2="730" y2="55" stroke="rgba(255,255,255,0.05)" stroke-width="1" />
+                    <text x="15" y="59" fill="var(--text-muted)" font-size="10">+$5</text>
+
+                    <line x1="50" y1="155" x2="730" y2="155" stroke="rgba(255,255,255,0.05)" stroke-width="1" />
+                    <text x="15" y="159" fill="var(--text-muted)" font-size="10">-$3</text>
+
+                    
+            <g class="bar-group">
+                <rect x="110.0" y="115.0" width="48" height="15.4" rx="5" fill="#ef4444" opacity="0.9" />
+                <text x="134.0" y="145.4" text-anchor="middle" fill="#ef4444" font-size="11" font-weight="700">$-1.28</text>
+                <text x="134.0" y="157.4" text-anchor="middle" fill="#ef4444" font-size="10" font-weight="800">(-1.28%)</text>
+                <text x="134.0" y="175" text-anchor="middle" fill="var(--text-main)" font-size="11" font-weight="600">16 Oct</text>
+                <text x="134.0" y="190" text-anchor="middle" fill="var(--text-muted)" font-size="9">4W/3L • M:$100</text>
+            </g>
+            <g class="bar-group">
+                <rect x="238.0" y="47.5" width="48" height="67.5" rx="5" fill="#10b981" opacity="0.9" />
+                <text x="262.0" y="31.5" text-anchor="middle" fill="#10b981" font-size="11" font-weight="700">+$5.62</text>
+                <text x="262.0" y="43.5" text-anchor="middle" fill="#10b981" font-size="10" font-weight="800">(+5.62%)</text>
+                <text x="262.0" y="175" text-anchor="middle" fill="var(--text-main)" font-size="11" font-weight="600">17 Oct</text>
+                <text x="262.0" y="190" text-anchor="middle" fill="var(--text-muted)" font-size="9">13W/2L • M:$100</text>
+            </g>
+            <g class="bar-group">
+                <rect x="366.0" y="115.0" width="48" height="17.2" rx="5" fill="#ef4444" opacity="0.9" />
+                <text x="390.0" y="147.2" text-anchor="middle" fill="#ef4444" font-size="11" font-weight="700">$-1.43</text>
+                <text x="390.0" y="159.2" text-anchor="middle" fill="#ef4444" font-size="10" font-weight="800">(-1.43%)</text>
+                <text x="390.0" y="175" text-anchor="middle" fill="var(--text-main)" font-size="11" font-weight="600">18 Oct</text>
+                <text x="390.0" y="190" text-anchor="middle" fill="var(--text-muted)" font-size="9">6W/8L • M:$100</text>
+            </g>
+            <g class="bar-group">
+                <rect x="494.0" y="83.9" width="48" height="31.1" rx="5" fill="#10b981" opacity="0.9" />
+                <text x="518.0" y="67.9" text-anchor="middle" fill="#10b981" font-size="11" font-weight="700">+$2.59</text>
+                <text x="518.0" y="79.9" text-anchor="middle" fill="#10b981" font-size="10" font-weight="800">(+2.59%)</text>
+                <text x="518.0" y="175" text-anchor="middle" fill="var(--text-main)" font-size="11" font-weight="600">19 Oct</text>
+                <text x="518.0" y="190" text-anchor="middle" fill="var(--text-muted)" font-size="9">4W/0L • M:$100</text>
+            </g>
+            <g class="bar-group">
+                <rect x="622.0" y="57.9" width="48" height="57.1" rx="5" fill="#10b981" opacity="0.9" />
+                <text x="646.0" y="41.9" text-anchor="middle" fill="#10b981" font-size="11" font-weight="700">+$4.76</text>
+                <text x="646.0" y="53.9" text-anchor="middle" fill="#10b981" font-size="10" font-weight="800">(+1.61%)</text>
+                <text x="646.0" y="175" text-anchor="middle" fill="var(--text-main)" font-size="11" font-weight="600">20 Oct (Hari Ini)</text>
+                <text x="646.0" y="190" text-anchor="middle" fill="var(--text-muted)" font-size="9">5W/2L • M:$295</text>
+            </g>
+                </svg>
+            </div>
+
+            <div style="margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--card-border); font-size: 0.8rem; color: var(--text-muted); display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
+                <span>Hari Ini: <strong style='color:#10b981;'>+$4.76 (+1.61% terhadap modal)</strong> | 🛡️ Formula: <code>% Profit = (Net PnL / Total Modal Harian) × 100%</code></span>
+                <span>💡 Top-Up Modal (+$194.61) tercatat terpisah & tidak mendistorsi % ROI</span>
+            </div>
+        </div>
+
+        <div class="table-responsive" style="margin-bottom: 36px;">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Tanggal</th>
+                        <th>Total Modal</th>
+                        <th>Net Profit</th>
+                        <th>% Profit / Modal</th>
+                        <th>Win Rate</th>
+                        <th>Trades</th>
+                        <th>Fee Bursa</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    
+            <tr>
+                <td><strong>20 October 2026 (Hari Ini)</strong></td>
+                <td>$294.61</td>
+                <td class="pnl-pos"><strong>+$4.76</strong></td>
+                <td><span style='padding: 3px 8px; border-radius: 6px; font-weight: 700; font-size: 0.85rem; background: rgba(16,185,129,0.15); color:#10b981;'>+1.61%</span></td>
+                <td>71%</td>
+                <td>7 trades (5W / 2L)</td>
+                <td style="color:var(--text-muted);">$0.0905</td>
+                <td><span class="badge badge-neutral">🟢 Profit Konsisten</span></td>
+            </tr>
+            <tr>
+                <td>Monday, 19 October 2026</td>
+                <td>$100.00</td>
+                <td class="pnl-pos"><strong>+$2.59</strong></td>
+                <td><span style='padding: 3px 8px; border-radius: 6px; font-weight: 700; font-size: 0.85rem; background: rgba(16,185,129,0.15); color:#10b981;'>+2.59%</span></td>
+                <td>100%</td>
+                <td>4 trades (4W / 0L)</td>
+                <td style="color:var(--text-muted);">$0.0652</td>
+                <td><span class="badge badge-neutral">🚀 Target Tercapai</span></td>
+            </tr>
+            <tr>
+                <td>Sunday, 18 October 2026</td>
+                <td>$100.00</td>
+                <td class="pnl-neg"><strong>$-1.43</strong></td>
+                <td><span style='padding: 3px 8px; border-radius: 6px; font-weight: 700; font-size: 0.85rem; background: rgba(239,68,68,0.15); color:#ef4444;'>-1.43%</span></td>
+                <td>43%</td>
+                <td>14 trades (6W / 8L)</td>
+                <td style="color:var(--text-muted);">$0.3582</td>
+                <td><span class="badge badge-neutral">⚠️ Controlled Drawdown</span></td>
+            </tr>
+            <tr>
+                <td>Saturday, 17 October 2026</td>
+                <td>$100.00</td>
+                <td class="pnl-pos"><strong>+$5.62</strong></td>
+                <td><span style='padding: 3px 8px; border-radius: 6px; font-weight: 700; font-size: 0.85rem; background: rgba(16,185,129,0.15); color:#10b981;'>+5.62%</span></td>
+                <td>87%</td>
+                <td>15 trades (13W / 2L)</td>
+                <td style="color:var(--text-muted);">$0.1179</td>
+                <td><span class="badge badge-neutral">🚀 Target Tercapai</span></td>
+            </tr>
+            <tr>
+                <td>Friday, 16 October 2026</td>
+                <td>$100.00</td>
+                <td class="pnl-neg"><strong>$-1.28</strong></td>
+                <td><span style='padding: 3px 8px; border-radius: 6px; font-weight: 700; font-size: 0.85rem; background: rgba(239,68,68,0.15); color:#ef4444;'>-1.28%</span></td>
+                <td>57%</td>
+                <td>7 trades (4W / 3L)</td>
+                <td style="color:var(--text-muted);">$0.0704</td>
+                <td><span class="badge badge-neutral">⚠️ Controlled Drawdown</span></td>
+            </tr>
+                </tbody>
+            </table>
+        </div>
+    
+
         <!-- SECTION 1: POSISI AKTIF (REAL-TIME) -->
         <div class="section-header">
             <h2>📊 Detail Posisi Aktif (4)</h2>
@@ -338,52 +493,52 @@
                         <td><strong>SPX</strong> <span class="pill" style="font-size:0.65rem; background:rgba(255,255,255,0.06); color:#94a3b8; border:1px solid rgba(255,255,255,0.12); margin-left:4px;">🎭 MEME</span></td>
                         <td><span class="pill pill-swing">🌊 SWING</span></td>
                         <td><span class="pill pill-long">🟢 LONG 2x</span></td>
-                        <td>$0.36573 <span style="color:var(--text-muted);">➔</span> $0.36911</td>
-                        <td class="pnl-pos"><strong>+0.92%</strong></td>
-                        <td>$18.15 <span style="color:var(--text-muted); font-size:0.75rem;">(98.4 koin)</span></td>
-                        <td class="pnl-pos"><strong>+$0.32 (+1.8%)</strong></td>
+                        <td>$0.36573 <span style="color:var(--text-muted);">➔</span> $0.36826</td>
+                        <td class="pnl-pos"><strong>+0.69%</strong></td>
+                        <td>$18.12 <span style="color:var(--text-muted); font-size:0.75rem;">(98.4 koin)</span></td>
+                        <td class="pnl-pos"><strong>+$0.25 (+1.4%)</strong></td>
                         <td><span class="pill pill-sl">$0.32967 (SL Teknis) 🟢</span></td>
                         <td><span>✂️ TP1: $0.3913</span> | <span>🎯 TP2: $0.4316</span></td>
-                        <td style="color:var(--text-muted); font-size:0.78rem;">36.9j tersisa (Max 72j)</td>
+                        <td style="color:var(--text-muted); font-size:0.78rem;">36.3j tersisa (Max 72j)</td>
                     </tr>
             
                     <tr>
                         <td><strong>TIA</strong> <span class="pill" style="font-size:0.65rem; background:rgba(255,255,255,0.06); color:#94a3b8; border:1px solid rgba(255,255,255,0.12); margin-left:4px;">⛓️ L1</span></td>
                         <td><span class="pill pill-swing">🌊 SWING</span></td>
                         <td><span class="pill pill-short">🔴 SHORT 2x</span></td>
-                        <td>$0.61609 <span style="color:var(--text-muted);">➔</span> $0.65800</td>
-                        <td class="pnl-neg"><strong>-6.80%</strong></td>
-                        <td>$19.25 <span style="color:var(--text-muted); font-size:0.75rem;">(58.5 koin)</span></td>
-                        <td class="pnl-neg"><strong>$-2.45 (-13.6%)</strong></td>
+                        <td>$0.61609 <span style="color:var(--text-muted);">➔</span> $0.62598</td>
+                        <td class="pnl-neg"><strong>-1.61%</strong></td>
+                        <td>$18.31 <span style="color:var(--text-muted); font-size:0.75rem;">(58.5 koin)</span></td>
+                        <td class="pnl-neg"><strong>$-0.57 (-3.2%)</strong></td>
                         <td><span class="pill pill-sl">$0.67576 (SL Teknis) 🟢</span></td>
                         <td><span>✂️ TP1: $0.5730</span> | <span>🎯 TP2: $0.5052</span></td>
-                        <td style="color:var(--text-muted); font-size:0.78rem;">57.3j tersisa (Max 72j)</td>
+                        <td style="color:var(--text-muted); font-size:0.78rem;">56.7j tersisa (Max 72j)</td>
                     </tr>
             
                     <tr>
                         <td><strong>WIF</strong> <span class="pill" style="font-size:0.65rem; background:rgba(255,255,255,0.06); color:#94a3b8; border:1px solid rgba(255,255,255,0.12); margin-left:4px;">🎭 MEME</span></td>
                         <td><span class="pill pill-swing">🌊 SWING</span></td>
                         <td><span class="pill pill-long">🟢 LONG 2x</span></td>
-                        <td>$0.20696 <span style="color:var(--text-muted);">➔</span> $0.21010</td>
-                        <td class="pnl-pos"><strong>+1.52%</strong></td>
-                        <td>$45.38 <span style="color:var(--text-muted); font-size:0.75rem;">(432.0 koin)</span></td>
-                        <td class="pnl-pos"><strong>+$1.36 (+3.0%)</strong></td>
+                        <td>$0.20696 <span style="color:var(--text-muted);">➔</span> $0.20509</td>
+                        <td class="pnl-neg"><strong>-0.90%</strong></td>
+                        <td>$44.30 <span style="color:var(--text-muted); font-size:0.75rem;">(432.0 koin)</span></td>
+                        <td class="pnl-neg"><strong>$-0.81 (-1.8%)</strong></td>
                         <td><span class="pill pill-sl">$0.18563 (SL Teknis) 🟢</span></td>
                         <td><span>✂️ TP1: $0.2214</span> | <span>🎯 TP2: $0.2442</span></td>
-                        <td style="color:var(--text-muted); font-size:0.78rem;">71.5j tersisa (Max 72j)</td>
+                        <td style="color:var(--text-muted); font-size:0.78rem;">70.9j tersisa (Max 72j)</td>
                     </tr>
             
                     <tr>
                         <td><strong>ZEC</strong> <span class="pill" style="font-size:0.65rem; background:rgba(255,255,255,0.06); color:#94a3b8; border:1px solid rgba(255,255,255,0.12); margin-left:4px;">⛓️ L1</span></td>
                         <td><span class="pill pill-swing">🌊 SWING</span></td>
                         <td><span class="pill pill-long">🟢 LONG 2x</span></td>
-                        <td>$1173.50000 <span style="color:var(--text-muted);">➔</span> $1223.35000</td>
-                        <td class="pnl-pos"><strong>+4.25%</strong></td>
-                        <td>$24.46 <span style="color:var(--text-muted); font-size:0.75rem;">(0.0 koin)</span></td>
-                        <td class="pnl-pos"><strong>+$1.98 (+8.4%)</strong></td>
+                        <td>$1173.50000 <span style="color:var(--text-muted);">➔</span> $1198.00000</td>
+                        <td class="pnl-pos"><strong>+2.09%</strong></td>
+                        <td>$23.96 <span style="color:var(--text-muted); font-size:0.75rem;">(0.0 koin)</span></td>
+                        <td class="pnl-pos"><strong>+$0.99 (+4.2%)</strong></td>
                         <td><span class="pill pill-sl">$1174.60000 (SL Teknis) 🟢</span></td>
                         <td><span>✂️ TP1: $1255.6450</span> | <span>🎯 TP2: $1384.7300</span></td>
-                        <td style="color:var(--text-muted); font-size:0.78rem;">37.3j tersisa (Max 72j)</td>
+                        <td style="color:var(--text-muted); font-size:0.78rem;">36.7j tersisa (Max 72j)</td>
                     </tr>
             
                 </tbody>
@@ -652,8 +807,8 @@
             </div>
             <div class="metric-card">
                 <div class="metric-label">Pagar Cadangan Kas f(E)</div>
-                <div class="metric-value">$44.78 <span style="font-size:0.85rem; color:var(--text-muted);">(15% E)</span></div>
-                <div class="metric-sub">Margin Siap Tembak: $146.51 USDC</div>
+                <div class="metric-value">$44.56 <span style="font-size:0.85rem; color:var(--text-muted);">(15% E)</span></div>
+                <div class="metric-sub">Margin Siap Tembak: $147.88 USDC</div>
             </div>
             <div class="metric-card">
                 <div class="metric-label">Kapasitas Slot N_max(E)</div>
@@ -662,8 +817,8 @@
             </div>
             <div class="metric-card">
                 <div class="metric-label">Ukuran Peluru f(E)</div>
-                <div class="metric-value">$29.00 – $52.56</div>
-                <div class="metric-sub">Slot Base: $36.25 USDC</div>
+                <div class="metric-value">$28.86 – $52.30</div>
+                <div class="metric-sub">Slot Base: $36.07 USDC</div>
             </div>
             <div class="metric-card">
                 <div class="metric-label">Diversifikasi Sektor (Claude_Crypto)</div>
@@ -689,6 +844,14 @@
                 </thead>
                 <tbody>
         
+                    <tr>
+                        <td style="color:var(--text-muted); font-size:0.78rem;">2026-10-20 22:08:57</td>
+                        <td><code>AI_GATEKEEPER</code></td>
+                        <td><strong>SAND</strong></td>
+                        <td>Skip (Bukan Grade A)</td>
+                        <td style="font-size:0.82rem; color:var(--text-muted);">LONG SAND (Skor 80.0) -> AI Grade B (74/100, Approve=True). Syarat: Wajib Grade A (>=75). Alasan: [👨‍⚖️ CRO JUDGE] Skor komite 74.0/100 (Grade B). BALANCED_EXPOSURE (3 Long vs 1 Short). (E</td>
+                    </tr>
+                
                     <tr>
                         <td style="color:var(--text-muted); font-size:0.78rem;">2026-10-20 21:36:43</td>
                         <td><code>CAPITAL_GUARD</code></td>
@@ -775,14 +938,6 @@
                         <td><strong>-</strong></td>
                         <td>Bypass Scan (Slot/Reserve Guard)</td>
                         <td style="font-size:0.82rem; color:var(--text-muted);">Kapasitas Slot Efektif Penuh (5.0/5 slot untuk ekuitas $103.31) | Margin Bebas di atas Cadangan 15% ($15.50) hanya $0.00 (Butuh min. $14.05 untuk buka posisi baru)</td>
-                    </tr>
-                
-                    <tr>
-                        <td style="color:var(--text-muted); font-size:0.78rem;">2026-10-20 18:33:16</td>
-                        <td><code>CAPITAL_GUARD</code></td>
-                        <td><strong>-</strong></td>
-                        <td>Bypass Scan (Slot/Reserve Guard)</td>
-                        <td style="font-size:0.82rem; color:var(--text-muted);">Kapasitas Slot Efektif Penuh (5.0/5 slot untuk ekuitas $103.09) | Margin Bebas di atas Cadangan 15% ($15.46) hanya $0.00 (Butuh min. $14.02 untuk buka posisi baru)</td>
                     </tr>
                 
                 </tbody>
