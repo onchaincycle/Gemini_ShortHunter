@@ -1,5 +1,5 @@
 {
-  "synced_at": "2026-10-20 12:00:00",
+  "synced_at": "2026-10-20 14:59:44",
   "project": "Gemini_ShortHunter",
   "active_backlog": [
     {
@@ -176,13 +176,13 @@
   "live_tools_state": {
     "thermostat_mode": "\ud83d\ude80 COMPOUND BOOST (Win Streak Aktif)",
     "reserve_pct": 15.0,
-    "last_hunt_time": "2026-10-20 11:30:02",
-    "last_hunt_status": "Skip Scan (Hemat Token): Margin Bebas di atas Cadangan 15% ($15.72) hanya $5.72 (Butuh min. $14.25 untuk buka posisi baru)",
+    "last_hunt_time": "2026-10-20 14:32:19",
+    "last_hunt_status": "Skip Scan (Hemat Token): Margin Bebas di atas Cadangan 15% ($15.50) hanya $4.49 (Butuh min. $14.06 untuk buka posisi baru)",
     "active_positions": [
-      "LONG SPX (SWING, PnL: $-0.17)",
-      "LONG ZEC (SWING, PnL: $-0.94)",
-      "SHORT NEAR (SWING, PnL: $+2.27)",
-      "SHORT TIA (SWING, PnL: $+0.26)"
+      "LONG SPX (SWING, PnL: $-0.48)",
+      "LONG ZEC (SWING, PnL: $-1.64)",
+      "SHORT NEAR (SWING, PnL: $+2.51)",
+      "SHORT TIA (SWING, PnL: $-1.08)"
     ],
     "episodic_rules": [
       "[MEM-009] (SWING/SHORT): Amankan profit secara bertahap saat MFE mencapai di atas 5% pada posisi swing short.",
