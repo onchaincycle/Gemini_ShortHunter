@@ -5,12 +5,20 @@
       "date": "2026-10-20",
       "amount_usd": 194.61,
       "type": "DEPOSIT_TOPUP",
-      "note": "Penambahan modal trading Hyperliquid (USDC Top-Up) oleh Pak Iman. BUKAN profit trading.",
+      "note": "Penambahan modal trading Hyperliquid (USDC Top-Up Tahap 1) oleh Pak Iman. BUKAN profit trading.",
       "previous_equity_usd": 103.16,
       "new_equity_usd": 297.77
+    },
+    {
+      "date": "2026-10-21",
+      "amount_usd": 689.60,
+      "type": "DEPOSIT_TOPUP",
+      "note": "Penambahan modal trading Hyperliquid (USDC Top-Up Tahap 2: 14.8 + 674.8 USDC) mendekati $1,000 USD oleh Pak Iman. BUKAN profit trading.",
+      "previous_equity_usd": 297.77,
+      "new_equity_usd": 996.16
     }
   ],
-  "total_deposited_capital_usd": 294.61,
+  "total_deposited_capital_usd": 984.21,
   "net_realized_trading_profit_usd": 10.26,
-  "last_audit_time": "2026-10-20 21:42:00"
+  "last_audit_time": "2026-10-21 05:44:00"
 }
