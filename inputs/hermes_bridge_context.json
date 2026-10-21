@@ -1,5 +1,5 @@
 {
-  "synced_at": "2026-10-21 05:59:56",
+  "synced_at": "2026-10-21 09:00:04",
   "project": "Gemini_ShortHunter",
   "active_backlog": [
     {
@@ -176,13 +176,15 @@
   "live_tools_state": {
     "thermostat_mode": "\ud83d\udfe2 OPTIMAL (Standard Disiplin)",
     "reserve_pct": 15.0,
-    "last_hunt_time": "2026-10-21 05:41:46",
-    "last_hunt_status": "Ditahan oleh Filter Disiplin: ZRO (SWING): Skor 65.0 < Threshold 78.0; NEAR (SWING): Skor 65.0 < Threshold 78.0",
+    "last_hunt_time": "2026-10-21 08:42:54",
+    "last_hunt_status": "Ditahan oleh Filter Disiplin: ZK (SWING): Skor 58.0 < Threshold 78.0; INIT (SWING): Skor 50.0 < Threshold 78.0",
     "active_positions": [
-      "SHORT TIA (SWING, PnL: $-0.08)",
-      "LONG WIF (SWING, PnL: $-0.31)",
-      "LONG POL (SWING, PnL: $+0.32)",
-      "LONG DOGE (SWING, PnL: $+0.15)"
+      "SHORT TIA (SWING, PnL: $+0.11)",
+      "LONG WIF (SWING, PnL: $-0.22)",
+      "LONG POL (SWING, PnL: $+0.29)",
+      "LONG DOGE (SWING, PnL: $+0.17)",
+      "LONG HYPE (SWING, PnL: $+4.24)",
+      "SHORT PYTH (DAYTRADE, PnL: $+1.90)"
     ],
     "episodic_rules": [
       "[MEM-012] (DAYTRADE/SHORT): Gunakan AI stalemate exit saat momentum melemah pada perdagangan short untuk mengamankan profit kecil.",
