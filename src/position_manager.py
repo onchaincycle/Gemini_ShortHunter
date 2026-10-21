@@ -638,21 +638,14 @@ class PositionManager:
         current_sz = float(pos_info.get("size", initial_sz))
         cur_sl = float(state.get("current_sl_px", 0.0))
 
-        # Helper to verify intraday SL only tightens (never widens) and sits safely on the stop side
-        def _is_better_dt_sl(candidate_sl: float) -> bool:
+        # Helper to verify swing SL only tightens (never widens) and sits safely on the stop side
+        def _is_better_sl(candidate_sl: float) -> bool:
             if candidate_sl <= 0:
                 return False
             if side == "LONG":
                 return (candidate_sl > cur_sl) and (candidate_sl < current_px * 0.996)
             else:
                 return (cur_sl <= 0 or candidate_sl < cur_sl) and (candidate_sl > current_px * 1.004)
-
-        def _tighter_dt_sl(a: float, b: float) -> float:
-            if b <= 0:
-                return a
-            if a <= 0:
-                return b
-            return max(a, b) if side == "LONG" else min(a, b)
 
         def _tighter_sl(a: float, b: float) -> float:
             if b <= 0:
@@ -911,6 +904,13 @@ class PositionManager:
                 return (candidate_sl > cur_sl) and (candidate_sl < current_px * 0.997)
             else:
                 return (cur_sl <= 0 or candidate_sl < cur_sl) and (candidate_sl > current_px * 1.003)
+
+        def _tighter_dt_sl(a: float, b: float) -> float:
+            if b <= 0:
+                return a
+            if a <= 0:
+                return b
+            return max(a, b) if side == "LONG" else min(a, b)
 
         if not state.get("trimmed_10pct") and not state.get("early_be_shield"):
             if profit_pct >= (early_be_r * r_dist_pct):
