@@ -1,6 +1,6 @@
 {
-  "updated_at": "2026-10-21 05:09:26",
-  "total_rules_learned": 17,
+  "updated_at": "2026-10-21 17:27:39",
+  "total_rules_learned": 19,
   "rules": [
     {
       "id": "MEM-001",
@@ -156,6 +156,24 @@
       "root_cause": "TIME_STOP_EXIT",
       "rule": "Gunakan time-stop 6 jam untuk mengamankan keuntungan pada strategi daytrade jika momentum melambat.",
       "source_coin": "WLFI"
+    },
+    {
+      "id": "MEM-018",
+      "created_at": "2026-10-21 15:34:00",
+      "stream": "DAYTRADE",
+      "side": "LONG",
+      "root_cause": "NORMAL_SL",
+      "rule": "Pastikan konfirmasi momentum tren lebih kuat sebelum entry LONG untuk menghindari MAE cepat.",
+      "source_coin": "ALT"
+    },
+    {
+      "id": "MEM-019",
+      "created_at": "2026-10-21 17:27:39",
+      "stream": "DAYTRADE",
+      "side": "LONG",
+      "root_cause": "NORMAL_SL",
+      "rule": "Tutup posisi segera jika AI mendeteksi jalan buntu (stalemate) untuk mencegah MAE berkembang lebih besar dari target MFE.",
+      "source_coin": "PAXG"
     }
   ]
 }
