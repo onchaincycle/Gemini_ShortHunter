@@ -98,12 +98,22 @@ class NansenClient:
             pass
 
     def _post(self, endpoint: str, payload: Dict, timeout: int = 8) -> List[Dict]:
+        # 2026-10-22 (ROADMAP 2.1): setiap panggilan dicatat di buku besar kredit bersama
+        # (data/nansen_ledger.db) dan ditolak bila sisa kredit terakhir < MIN_CREDITS.
+        from src.nansen_ledger import log_call, credits_ok
+        if not credits_ok():
+            log_call("screener", endpoint, error="SKIPPED_LOW_CREDITS")
+            return []
+        t0 = time.time()
         try:
             resp = requests.post(f"{self.base_url}/{endpoint}", headers=self.headers, json=payload, timeout=timeout)
-            if resp.status_code == 200:
-                return resp.json().get("data", []) or []
-        except Exception:
-            pass
+            data = (resp.json().get("data", []) or []) if resp.status_code == 200 else []
+            log_call("screener", endpoint, resp.status_code, resp.headers.get("x-nansen-credits-cost"),
+                     resp.headers.get("x-nansen-credits-remaining"), len(data), int((time.time() - t0) * 1000),
+                     None if resp.status_code == 200 else resp.text[:200])
+            return data
+        except Exception as e:
+            log_call("screener", endpoint, error=f"{type(e).__name__}: {e}")
         return []
 
     # --- Live Smart Money ------------------------------------------------

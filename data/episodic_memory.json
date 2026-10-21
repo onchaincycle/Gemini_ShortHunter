@@ -1,6 +1,6 @@
 {
-  "updated_at": "2026-10-21 17:27:39",
-  "total_rules_learned": 19,
+  "updated_at": "2026-10-22 01:15:41",
+  "total_rules_learned": 22,
   "rules": [
     {
       "id": "MEM-001",
@@ -54,9 +54,9 @@
       "stream": "DAYTRADE",
       "side": "LONG",
       "root_cause": "CLEAN_WIN",
-      "rule": "Gunakan sinyal AI stalemate exit untuk mengamankan profit ketika momentum mulai mendatar setelah pergerakan positif.",
+      "rule": "Pastikan target profit realistis dan biarkan order take profit tereksekusi secara otomatis.",
       "source_coin": "INIT",
-      "updated_at": "2026-10-17 23:26:48"
+      "updated_at": "2026-10-22 01:14:43"
     },
     {
       "id": "MEM-007",
@@ -64,8 +64,9 @@
       "stream": "DAYTRADE",
       "side": "LONG",
       "root_cause": "NORMAL_SL",
-      "rule": "Gunakan trailing stop atau ambil sebagian profit ketika MFE mencapai mendekati 1% untuk menghindari pembalikan arah menjadi kerugian.",
-      "source_coin": "BERA"
+      "rule": "Jangan melakukan short pada aset dengan momentum naik yang kuat tanpa konfirmasi pelemahan volume.",
+      "source_coin": "BERA",
+      "updated_at": "2026-10-22 01:15:12"
     },
     {
       "id": "MEM-008",
@@ -145,8 +146,9 @@
       "stream": "DAYTRADE",
       "side": "SHORT",
       "root_cause": "CLEAN_WIN",
-      "rule": "Pertahankan disiplin TP bertahap pada VVV (DAYTRADE).",
-      "source_coin": "VVV"
+      "rule": "Pastikan konsistensi pengambilan profit sesuai target terencana pada pair dengan volatilitas tinggi.",
+      "source_coin": "VVV",
+      "updated_at": "2026-10-22 01:14:53"
     },
     {
       "id": "MEM-017",
@@ -163,8 +165,9 @@
       "stream": "DAYTRADE",
       "side": "LONG",
       "root_cause": "NORMAL_SL",
-      "rule": "Pastikan konfirmasi momentum tren lebih kuat sebelum entry LONG untuk menghindari MAE cepat.",
-      "source_coin": "ALT"
+      "rule": "Pastikan konfirmasi momentum tren lebih ketat pada altcoin sebelum melakukan entry posisi short untuk menghindari MAE yang tinggi.",
+      "source_coin": "ALT",
+      "updated_at": "2026-10-22 01:15:41"
     },
     {
       "id": "MEM-019",
@@ -172,8 +175,36 @@
       "stream": "DAYTRADE",
       "side": "LONG",
       "root_cause": "NORMAL_SL",
-      "rule": "Tutup posisi segera jika AI mendeteksi jalan buntu (stalemate) untuk mencegah MAE berkembang lebih besar dari target MFE.",
-      "source_coin": "PAXG"
+      "rule": "Gunakan manajemen risiko ketat pada aset komoditas token seperti PAXG ketika momentum tidak kunjung terkonfirmasi.",
+      "source_coin": "PAXG",
+      "updated_at": "2026-10-22 00:03:28"
+    },
+    {
+      "id": "MEM-020",
+      "created_at": "2026-10-22 01:14:59",
+      "stream": "DAYTRADE",
+      "side": "SHORT",
+      "root_cause": "CLEAN_WIN",
+      "rule": "Pastikan target profit pada posisi short dikunci secara disiplin saat kondisi pasar mendukung.",
+      "source_coin": "EIGEN"
+    },
+    {
+      "id": "MEM-021",
+      "created_at": "2026-10-22 01:15:18",
+      "stream": "SWING",
+      "side": "LONG",
+      "root_cause": "CLEAN_WIN",
+      "rule": "Pastikan toleransi MAE hingga 5 persen diakomodasi dengan ukuran posisi yang tepat pada swing ZEC.",
+      "source_coin": "ZEC"
+    },
+    {
+      "id": "MEM-022",
+      "created_at": "2026-10-22 01:15:29",
+      "stream": "DAYTRADE",
+      "side": "SHORT",
+      "root_cause": "NORMAL_SL",
+      "rule": "Hindari membuka posisi short pada PYTH ketika MAE mencapai lebih dari 1 persen tanpa konfirmasi tren turun yang kuat.",
+      "source_coin": "PYTH"
     }
   ]
 }

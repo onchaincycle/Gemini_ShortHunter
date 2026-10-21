@@ -135,8 +135,14 @@ class AutoHuntSniper:
         dyn_max_dt = slot_plan.get("max_intraday", 3)
         max_dt_short = max(prof_dt.get("max_concurrent_short", 2), (dyn_max_dt + 1) // 2)
         max_dt_long = max(prof_dt.get("max_concurrent_long", 2), (dyn_max_dt + 1) // 2)
-        max_sw_short = max(prof_sw.get("max_concurrent_short", 3), (dyn_max_sw + 1) // 2)
-        max_sw_long = max(prof_sw.get("max_concurrent_long", 3), (dyn_max_sw + 1) // 2)
+        # FIX 2026-10-22 (ROADMAP 1.3): pinjaman slot elastis (+1 saat intraday kosong) hanya menambah TOTAL swing,
+        # tidak menaikkan batas per arah. Dulu batas swing long ikut naik 3->4 lalu turun lagi -> tampil "4/3"
+        # dan 4 swing long searah (WIF/POL/DOGE/HYPE) terbuka bersamaan.
+        from src import risk_config
+        _qc = risk_config.get()["quadrant_caps"]
+        base_max_sw = dyn_max_sw if _qc.get("swing_elastic_raises_direction_cap") else slot_plan.get("max_swing", 5)
+        max_sw_short = max(prof_sw.get("max_concurrent_short", 3), (base_max_sw + 1) // 2)
+        max_sw_long = max(prof_sw.get("max_concurrent_long", 3), (base_max_sw + 1) // 2)
 
         # 4. Check Market Session & Intraday Circuit Breaker
         day_engine = IntradayDaytradeEngine()

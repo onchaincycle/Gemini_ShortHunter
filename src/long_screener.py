@@ -305,28 +305,20 @@ class LongScreener:
         df_res["verdict"] = verdicts
         df_res.drop(columns=["_is_falling_knife", "_has_reclaim", "_is_dilution_veto"], inplace=True, errors="ignore")
 
-        # Log Top candidates into trade_db screener_signals
+        # Tahap 3.1: catat SEMUA kandidat swing LONG. (Dulu memanggil trade_db.save_screener_signal yang
+        # tidak ada → AttributeError tertelan → sinyal SWING_LONG tidak pernah tercatat.)
         try:
             import time
             now_ms = int(time.time() * 1000)
-            now_dt = pd.Timestamp.now().isoformat()
-            for _, r in df_res.head(10).iterrows():
-                trade_db.save_screener_signal(
-                    signal_id=f"LONG_{r['symbol']}_{now_ms}",
-                    symbol=r["symbol"],
-                    strategy="SWING_LONG",
-                    timestamp=now_ms,
-                    dt_str=now_dt,
-                    score=float(r["score"]),
-                    gain_90d=float(r["discount_pct"]),
-                    gain_30d=0.0,
-                    rsi_daily=float(r["rsi_daily"]),
-                    funding_rate=float(r["funding_rate"]),
-                    verdict=r["verdict"],
-                    details={"squeeze_status": r["squeeze_status"], "absorption": r["absorption"]}
-                )
-        except Exception:
-            pass
+            records = df_res.to_dict("records")
+            for r in records:
+                r["strategy"] = "SWING_LONG"
+                r["side"] = "LONG"
+                r["timestamp"] = now_ms
+                r["signal_id"] = f"SWL_{r.get('symbol')}_{now_ms}"
+            trade_db.log_signals(records)
+        except Exception as e:
+            print(f"[!] Gagal mencatat sinyal SWING_LONG: {e}")
 
         return df_res
 

@@ -127,12 +127,9 @@ def fmt_price(p: float) -> str:
 
 
 def print_header():
-    print("=" * 68)
-    print("      🎯 SHORTHUNTER & LONG QUANT ENGINE (DUAL-STREAM DUAL-SIDE)      ")
-    print("=" * 68)
-    print("Stream: ⚡ INTRADAY (Day-Trade 15m)  |  🌊 SWING (Multi-Hari)")
-    print("Arah  : 🔴 SHORT (Patah Tren)   |  🟢 LONG (Whale Absorption)")
-    print("-" * 68)
+    print("═" * 72)
+    print(" 🎯 SHORTHUNTER  ·  ⚡ Intraday 15m / 🌊 Swing  ·  🔴 Short / 🟢 Long")
+    print("═" * 72)
     try:
         from src.trader import HyperliquidTrader, categorize_trigger_order
         from src.position_manager import PositionManager
@@ -159,7 +156,8 @@ def print_header():
 
             daemon_pid = PositionManager.is_daemon_running()
             auto_started = False
-            if not daemon_pid and (positions or auto_state.get("enabled", True)):
+            daemon_held = PositionManager.is_daemon_held()
+            if not daemon_pid and not daemon_held and (positions or auto_state.get("enabled", True)):
                 start_res = PositionManager.start_daemon()
                 if start_res.get("success"):
                     daemon_pid = start_res.get("pid")
@@ -170,32 +168,24 @@ def print_header():
                 mode_tag = "Zero-Touch Autonomous Grade-A + Guard" if auto_state.get("enabled", True) else "Position Guard Only"
                 daemon_str = f"🟢 AKTIF 24/7 DI BACKGROUND (PID: {daemon_pid} | {mode_tag}){suffix}"
             else:
-                daemon_str = "⚪ OFF (Pilih menu [4] untuk menyalakan)"
+                daemon_str = ("⏸️  DITAHAN (maintenance) — tidak auto-start. Nyalakan: menu [4] → [5]"
+                              if daemon_held else "⚪ OFF (Pilih menu [4] untuk menyalakan)")
 
             from src.ai_engine import ai_advisor
-            ai_str = "🟢 AKTIF (Gemini Flash | Self-Eval & Gatekeeper Wajib Grade A)" if ai_advisor.is_available() else "⚪ OFF / FALLBACK"
+            ai_on = ai_advisor.is_available()
             tradable_eq = float(state.get("equity", 0.0))
             hl_eq = float(state.get("hl_equity", tradable_eq))
             spot_ext = float(state.get("spot_external_value", 0.0))
             total_net_worth = float(state.get("total_portfolio_equity", tradable_eq + spot_ext))
-            spot_info = f" [Net Worth Portofolio: ${total_net_worth:,.2f} (inkl. Spot Luar: ${spot_ext:,.2f})]" if spot_ext > 0 else ""
-            print(
-                f"💼 Saldo Tradable HL ({net_label}): ${hl_eq:,.2f} USDC "
-                f"(Bebas: ${avail:,.2f} | Cadangan {gov['reserve_pct']:.0f}%: ${gov['reserve_usd']:,.2f} | Siap Tembak: ${gov['free_above_reserve']:,.2f}){spot_info}"
-            )
-            print(f"🤖 Status AI Mandiri   : {daemon_str}")
-            print(f"🧠 AI Advisor & Eval   : {ai_str}")
-            print(
-                f"📐 Pagar Dinamis f(E)  : Slot {gov['active_count']}/{gov['max_positions']} Posisi "
-                f"(🌊Swing {gov['swing_count']}/{gov['max_swing']} | ⚡Intra {gov['intraday_count']}/{gov['max_intraday']}) "
-                f"| Peluru: ${gov['min_order_margin']:,.2f}–${gov['max_order_margin']:,.2f} | Thermostat: {thermo.get('mode', 'OPTIMAL')}"
-            )
 
-            # Claude_Crypto Sector Diversification
-            sec_dist = gov.get("sector_distribution", {})
-            if sec_dist:
-                sec_items = [f"{v}x {k}" for k, v in sorted(sec_dist.items(), key=lambda x: -x[1])]
-                print(f"🌐 Sektor Portofolio   : {' | '.join(sec_items)} (Diversifikasi Claude_Crypto, batas 2/sektor)")
+            if daemon_pid:
+                daemon_short = f"🟢 aktif (PID {daemon_pid}{', dipulihkan otomatis' if auto_started else ''})"
+                if not auto_state.get("enabled", True):
+                    daemon_short += " · hanya guard"
+            elif daemon_held:
+                daemon_short = "⏸️  ditahan → nyalakan [4]→[5]"
+            else:
+                daemon_short = "⚪ off → nyalakan [4]→[5]"
 
             # Circuit Breaker Status (Intraday & Global Thermostat)
             is_intraday_cb = bool(gov.get("intraday_cb_active", False))
@@ -205,19 +195,30 @@ def print_header():
             pause_until_ts = float(thermo.get("pause_until_ts", 0.0))
             import time
             now_ts = time.time()
-
             if is_intraday_cb and is_thermo_cb:
-                cb_badge = f"🛑 AKTIF PENUH (⚡Intra {intraday_losses}/{max_intraday_losses} SL Hit & 🌊Global Thermostat Pause)"
+                cb_short = "🛑 intraday & global dijeda"
             elif is_intraday_cb:
-                cb_badge = f"🛑 AKTIF (⚡Intra {intraday_losses}/{max_intraday_losses} SL Hit Hari Ini ➔ Entry 15m Di-Pause | 🌊Swing Normal)"
+                cb_short = f"🛑 intraday dijeda ({intraday_losses}/{max_intraday_losses} SL)"
             elif is_thermo_cb:
-                cb_badge = f"🛑 AKTIF (🌊Global Thermostat Pause | Alasan: {thermo.get('reason', '-')})"
+                cb_short = "🛑 global dijeda"
             elif thermo.get("mode") == "DEFENSIVE_SHIELD":
-                cb_badge = "🟡 WASPADA (Defensive Shield: 2x SL Streak | Syarat Skor 80+)"
+                cb_short = "🟡 waspada (skor min 80)"
             else:
-                cb_badge = f"🟢 NORMAL / SIAP (Loss Intraday: {intraday_losses}/{max_intraday_losses} | Global: Normal)"
+                cb_short = f"🟢 normal (SL intraday {intraday_losses}/{max_intraday_losses})"
 
-            print(f"🛑 Circuit Breaker     : {cb_badge}")
+            nw = f" · Net worth ${total_net_worth:,.2f}" if spot_ext > 0 else ""
+            print(f"💼 {net_label}  Ekuitas ${hl_eq:,.2f} · Bebas ${avail:,.2f} · "
+                  f"Siap tembak ${gov['free_above_reserve']:,.2f} (cadangan {gov['reserve_pct']:.0f}%){nw}")
+            print(f"🤖 Daemon {daemon_short} · AI {'🟢' if ai_on else '⚪ off'} · "
+                  f"Thermostat {thermo.get('mode', 'OPTIMAL')} · CB {cb_short}")
+            sec_dist = gov.get("sector_distribution", {})
+            sec_txt = ""
+            if sec_dist:
+                top = sorted(sec_dist.items(), key=lambda x: -x[1])[:3]
+                sec_txt = " · Sektor " + ", ".join(f"{k} {v}" for k, v in top)
+            print(f"📐 Slot {gov['active_count']}/{gov['max_positions']} (🌊 {gov['swing_count']}/{gov['max_swing']} · "
+                  f"⚡ {gov['intraday_count']}/{gov['max_intraday']}) · Order ${gov['min_order_margin']:,.2f}–"
+                  f"${gov['max_order_margin']:,.2f}{sec_txt}")
 
             # Prominent Alert Box when Circuit Breaker is Active
             if is_intraday_cb or is_thermo_cb:
@@ -400,82 +401,37 @@ def print_header():
                 print(bot_border)
                 print("  💡 Keterangan: 🟢 SL On-Chain Hyperliquid | BE = Breakeven (0% Risiko) | ⚡ Intraday | 🌊 Swing")
             else:
-                print("📊 Posisi Aktif        : Tidak ada posisi terbuka (Mode Cash)")
+                print("📊 Posisi: tidak ada yang terbuka (mode cash)")
 
-            # Tampilkan kepemilikan koin SPOT di Menu Home jika ada
+            # Ringkasan Spot Vault (detail lengkap di menu [M])
             try:
                 from src.spot_macro_vault import SpotMacroVault
                 spot_audit = SpotMacroVault.get_spot_portfolio_audit()
-                spot_holdings = spot_audit.get("holdings", [])
-                if spot_holdings:
-                    print(f"\n🏛️  PORTOFOLIO SPOT VAULT ({len(spot_holdings)} KOIN AKTIF - ZERO LEVERAGE):")
-                    s_cols = [
-                        ('KOIN [TIER]', 15, 'center'),
-                        ('JUMLAH', 14, 'right'),
-                        ('MODAL BELI', 14, 'right'),
-                        ('HARGA BELI ➔ NOW', 26, 'left'),
-                        ('PnL SPOT (ROE%)', 18, 'right'),
-                        ('STATUS EXIT / WHALE', 22, 'left'),
-                    ]
-                    s_widths = [c[1] for c in s_cols]
-                    s_top = "┌" + "┬".join("─" * (w + 2) for w in s_widths) + "┐"
-                    s_mid = "├" + "┼".join("─" * (w + 2) for w in s_widths) + "┤"
-                    s_bot = "└" + "┴".join("─" * (w + 2) for w in s_widths) + "┘"
-                    print(s_top)
-                    print("│" + "│".join(f" {pad_str(c[0], c[1], 'center')} " for c in s_cols) + "│")
-                    print(s_mid)
-                    for sh in spot_holdings:
-                        sym = sh.get('symbol', 'UNKNOWN')
-                        s_sym = f"{sym} [SPOT]"
-                        qty = float(sh.get('qty', 0.0))
-                        s_amt = f"{qty:,.4f}".rstrip('0').rstrip('.') if qty < 10 else f"{qty:,.1f}"
-                        inv = float(sh.get('invested_usd', 0.0))
-                        s_inv = f"${inv:,.2f}"
-                        ent_px = float(sh.get('entry_price', 0.0))
-                        cur_px = float(sh.get('current_price', 0.0))
-                        s_pxs = f"${ent_px:,.4f} ➔ ${cur_px:,.4f}" if cur_px < 1.0 else f"${ent_px:,.2f} ➔ ${cur_px:,.2f}"
-                        s_pnl = float(sh.get('unrealized_pnl_usd', 0.0))
-                        s_pnl_pct = float(sh.get('unrealized_pnl_pct', 0.0))
-                        s_clr = green if s_pnl >= 0 else red
-                        s_badge = sh.get('status_badge', '💎 KEEP')
-                        s_alert = s_badge.split('(')[0].strip() if '(' in s_badge else s_badge
-                        s_cells = [
-                            f" {pad_str(s_sym, s_cols[0][1], s_cols[0][2])} ",
-                            f" {pad_str(s_amt, s_cols[1][1], s_cols[1][2])} ",
-                            f" {pad_str(s_inv, s_cols[2][1], s_cols[2][2])} ",
-                            f" {pad_str(s_pxs, s_cols[3][1], s_cols[3][2])} ",
-                            f" {s_clr}{pad_str(f'${s_pnl:+,.2f} ({s_pnl_pct:+.1f}%)', s_cols[4][1], s_cols[4][2])}{reset} ",
-                            f" {pad_str(s_alert, s_cols[5][1], s_cols[5][2])} ",
-                        ]
-                        print("│" + "│".join(s_cells) + "│")
-                    print(s_bot)
-                    s_val = spot_audit.get('total_current_value', 0.0)
-                    s_tot_pnl = spot_audit.get('total_unrealized_pnl', 0.0)
-                    s_tot_clr = green if s_tot_pnl >= 0 else red
-                    print(f"Total Investasi: ${spot_audit.get('total_invested', 0.0):,.2f} | Nilai Spot: ${s_val:,.2f} ({s_tot_clr}${s_tot_pnl:+,.2f}{reset})\n")
+                n_spot = len(spot_audit.get("holdings", []))
+                if n_spot:
+                    s_pnl = float(spot_audit.get("total_unrealized_pnl", 0.0))
+                    s_clr = green if s_pnl >= 0 else red
+                    print(f"🏛️  Spot Vault: {n_spot} koin · nilai ${spot_audit.get('total_current_value', 0.0):,.2f} "
+                          f"({s_clr}{'+' if s_pnl >= 0 else '-'}${abs(s_pnl):,.2f}{reset}) → detail [M]")
             except Exception:
                 pass
 
-            # Show compact summary of recently CLOSED positions from Forward Test Journal
+            # Ringkasan 3 posisi close terakhir (detail di menu [5])
             try:
                 from src.forward_test import ForwardTestManager
                 ft_journal = ForwardTestManager().load_journal()
                 closed_positions = [p for p in ft_journal.values() if p.get("status") == "CLOSED"]
                 if closed_positions:
-                    print(f"🏁 RIWAYAT POSISI CLOSE TERAKHIR ({len(closed_positions)}) — [Detail Per-Stream di Menu 9]:")
+                    items = []
                     for cp in closed_positions[-3:]:
-                        c_sym = cp.get("coin")
-                        c_strat = "⚡ INTRADAY" if cp.get("strategy") == "DAYTRADE" else "🌊 SWING"
-                        c_entry = float(cp.get("entry_px", 0.0))
-                        c_exit = float(cp.get("exit_px", 0.0))
-                        c_pnl = float(cp.get("final_pnl_usd", 0.0))
-                        c_reason = cp.get("exit_reason", "CLOSED")
-                        c_time = cp.get("exit_time", "-")
-                        c_icon = "🏆 WIN" if c_pnl > 0 else "🛑 CUT LOSS"
-                        print(f"  • [{c_sym}] ({c_strat}) {c_icon} | ${c_entry:.5f} ➔ ${c_exit:.5f} | Net PnL: ${c_pnl:+.2f} USDC ({c_reason} @ {c_time})")
+                        c_pnl = float(cp.get("final_pnl_usd", cp.get("realized_pnl", 0.0)) or 0.0)
+                        c_clr = green if c_pnl > 0 else red
+                        st = "⚡" if cp.get("strategy") == "DAYTRADE" else "🌊"
+                        items.append(f"{st}{cp.get('coin')} {c_clr}{c_pnl:+.2f}{reset}")
+                    print(f"🏁 Close terakhir: {'  '.join(items)} → detail [5]")
             except Exception:
                 pass
-            print("-" * 68)
+            print("─" * 72)
     except Exception as e:
         print(f"[!] Info Akun: Gagal memuat status live ({e})")
         print("-" * 68)
@@ -601,7 +557,7 @@ def menu_auto_hunt_sniper(db):
 
     trader = HyperliquidTrader()
     if not trader.is_configured():
-        print("[!] Akun Hyperliquid belum dikonfigurasi. Silakan pilih menu [10] terlebih dahulu.\n")
+        print("[!] Akun Hyperliquid belum dikonfigurasi. Silakan pilih menu [S] → [3] terlebih dahulu.\n")
         input("Tekan ENTER untuk kembali...")
         return
 
@@ -1163,7 +1119,7 @@ def menu_execute_short():
     trader = HyperliquidTrader()
     state = trader.get_account_state()
     if not state.get("configured"):
-        print("[!] Akun Hyperliquid belum dikonfigurasi. Silakan pilih menu [10] terlebih dahulu.\n")
+        print("[!] Akun Hyperliquid belum dikonfigurasi. Silakan pilih menu [S] → [3] terlebih dahulu.\n")
         input("Tekan ENTER untuk kembali...")
         return
 
@@ -1907,7 +1863,7 @@ def menu_position_guard():
             input("\nTekan ENTER untuk lanjut...")
         elif sub == "5":
             if PositionManager.is_daemon_running():
-                PositionManager.stop_daemon()
+                PositionManager.stop_daemon(hold=False)
             res = PositionManager.start_daemon()
             print(f"\n[✓] {res['message']}")
             input("Tekan ENTER untuk lanjut...")
@@ -2442,7 +2398,8 @@ def execute_spot_dca_purchase_flow(preset_coin: Optional[str] = None):
         db_p = SpotMacroVault.get_db_path()
         if db_p:
             try:
-                conn = sqlite3.connect(db_p)
+                from src import scr_contract
+                conn = scr_contract.connect()
                 c_cur = conn.cursor()
                 c_cur.execute(f"SELECT coin_id, price FROM coins WHERE symbol = '{coin}' LIMIT 1;")
                 r = c_cur.fetchone()
@@ -2965,65 +2922,103 @@ def menu_daily_payout():
             input("\nTekan Enter untuk kembali...")
 
 
+# Pilihan menu utama. Nomor lama (6, 8, 9, 10, 11, 12) tetap diterima agar kebiasaan & dokumen
+# (mis. "[4]→[5] nyalakan daemon") tidak berubah.
+MENU_ALIASES = {
+    "1": "hunt", "2": "screener", "3": "manual",
+    "4": "komando", "5": "jurnal", "M": "vault", "MACRO": "vault", "SPOT": "vault", "VAULT": "vault",
+    "G": "gaji", "12": "gaji",
+    "A": "ai", "AI": "ai", "6": "ai", "C": "warroom", "CHAT": "warroom", "11": "warroom",
+    "7": "lab", "L": "lab",
+    "S": "sistem", "8": "sync", "9": "dbstat", "10": "akun",
+    "0": "exit", "Q": "exit", "EXIT": "exit",
+}
+
+
+def resolve_choice(choice: str) -> Optional[str]:
+    return MENU_ALIASES.get((choice or "").strip().upper())
+
+
+def _menu_row(left: str, right: str = "", width: int = 38) -> str:
+    return "  " + (pad_str(left, width) + right if right else left)
+
+
+def print_main_menu():
+    print("─ TRADING " + "─" * 62)
+    print(_menu_row("[1] 🎯 Auto-Hunt AI Sniper", "[2] 🔍 Screener sinyal"))
+    print(_menu_row("[3] ⚡ Eksekusi manual"))
+    print("─ PANTAU " + "─" * 63)
+    print(_menu_row("[4] 🤖 Pusat Komando & daemon", "[5] 📓 Jurnal & scorecard"))
+    print(_menu_row("[M] 🏛️  Spot Vault (1–24 bulan)", "[G] 💼 Gaji harian"))
+    print("─ LAINNYA " + "─" * 62)
+    print(_menu_row("[A] 🧠 AI Hub & War Room", "[7] 🧪 Lab backtest"))
+    print(_menu_row("[S] ⚙️  Sistem: data, database, akun", "[0] 🚪 Keluar"))
+    print("─" * 72)
+
+
+def menu_sistem():
+    while True:
+        clear_screen()
+        print("═" * 72)
+        print(" ⚙️  SISTEM")
+        print("═" * 72)
+        print("  [1] ⬇️  Perbarui data candle Hyperliquid (Daily, 4H, 15m)")
+        print("  [2] 📦 Status database & penyimpanan")
+        print("  [3] 🔑 Setup & cek akun Hyperliquid")
+        print("  [0] Kembali")
+        print("─" * 72)
+        sub = input("Pilih [0-3]: ").strip()
+        if sub == "1":
+            _run_with_db("sync")
+        elif sub == "2":
+            _run_with_db("dbstat")
+        elif sub == "3":
+            menu_hyperliquid_setup()
+        elif sub in ("0", ""):
+            return
+
+
+def _run_with_db(action: str):
+    # Hanya hunt & sync yang menulis; lainnya read_only agar tidak bentrok dengan daemon (DuckDB)
+    db = Database(read_only=(action not in ("hunt", "sync")))
+    try:
+        if action == "lab":
+            menu_backtest(db, is_custom=False)
+        else:
+            {"hunt": menu_auto_hunt_sniper, "screener": menu_screen,
+             "sync": menu_sync, "dbstat": menu_stats}[action](db)
+    finally:
+        db.close()
+
+
 def main():
     while True:
         clear_screen()
         print_header()
-        print("─── 🚀 TRADING OPERASIONAL & AI MANDIRI (FLOW UTAMA) ───────────────")
-        print("  [1] 🎯 Auto-Hunt AI Sniper (Scan 4 Kuadran ➔ Auto-Pilih #1 ➔ AI Guard ➔ Eksekusi)")
-        print("  [2] 🔍 Screener Sinyal Manual (Intraday ⚡ & Swing 🌊 | Short 🔴 & Long 🟢)")
-        print("  [3] ⚡ Eksekusi Posisi Manual (Ketik Koin Sendiri | Server SL & TP)")
-        print("  [4] 🤖 Pusat Komando AI Mandiri & Live Monitor (Zero-Touch 24/7, Self-Eval & Telemetri)")
-        print("  [5] 📓 Jurnal Forward Test & Scorecard Per-Stream (Audit PnL)")
-        print("\n─── 🏛️  TRI-HORIZON & MACRO SPOT VAULT (1-24 BULAN) ──────────────────")
-        print("  [M] 🏛️  Macro Spot Vault (1-24 Bulan) — SCR v10 Portfolio & Hold Manager (Zero-Leverage)")
-        print("\n─── 🧠 AI INTELLIGENCE, WAR ROOM & RISET ───────────────────────────")
-        print("  [6] 🧠 Agentic AI Committee, Episodic Memory & Guardian Hub (6 Loops)")
-        print("  [7] 🧪 Lab Backtest & Uji Sensitivitas (Intraday 15m & Swing Daily)")
-        print("  [11] 💬 AI War Room — Bicara Bebas, Review Pendapat & Auto Follow-Up Bersama AI")
-        print("\n─── ⚙️  DATA & KONFIGURASI SISTEM ─────────────────────────────────")
-        print("  [8] ⬇️  Perbarui Data Candlestick Hyperliquid (Daily, 4H, & 15m)")
-        print("  [9] 📦 Status Database & Penyimpanan (DuckDB & SQLite WAL)")
-        print("  [10] 🔑 Setup & Cek Akun Hyperliquid (Testnet / Mainnet)")
-        print("  [12] 💼 Gaji Harian — Daily Profit Payout Engine (Realized PnL)")
-        print("  [0] 🚪 Keluar")
-        print("-" * 68)
-
-        choice = input("Masukkan nomor pilihan [0-12, atau ketik M untuk Macro Vault / C untuk Chat AI]: ").strip()
-        if choice.upper() in ["M", "MACRO", "SPOT", "VAULT"]:
-            menu_macro_spot_vault()
-        elif choice in ["1", "2", "7", "8", "9"]:
-            # Gunakan read_only=True untuk query analitis DuckDB agar tidak konflik concurrency
-            db = Database(read_only=(choice not in ["1", "8"]))
-            try:
-                if choice == "1":
-                    menu_auto_hunt_sniper(db)
-                elif choice == "2":
-                    menu_screen(db)
-                elif choice == "7":
-                    menu_backtest(db, is_custom=False)
-                elif choice == "8":
-                    menu_sync(db)
-                elif choice == "9":
-                    menu_stats(db)
-            finally:
-                db.close()
-        elif choice == "3":
+        print_main_menu()
+        action = resolve_choice(input("Pilih menu: "))
+        if action in ("hunt", "screener", "lab", "sync", "dbstat"):
+            _run_with_db(action)
+        elif action == "manual":
             menu_execute_short()
-        elif choice == "4":
+        elif action == "komando":
             menu_position_guard()
-        elif choice == "5":
+        elif action == "jurnal":
             menu_forward_test_journal()
-        elif choice == "6":
-            menu_ai_hub()
-        elif choice == "10":
-            menu_hyperliquid_setup()
-        elif choice in ["11", "C", "CHAT"]:
-            menu_ai_war_room()
-        elif choice == "12":
+        elif action == "vault":
+            menu_macro_spot_vault()
+        elif action == "gaji":
             menu_daily_payout()
-        elif choice in ["0", "q", "exit"]:
-            print("\nTerima kasih! Semoga trading kuantitatif Anda menghasilkan profit maksimal. 🚀\n")
+        elif action == "ai":
+            menu_ai_hub()
+        elif action == "warroom":
+            menu_ai_war_room()
+        elif action == "sistem":
+            menu_sistem()
+        elif action == "akun":
+            menu_hyperliquid_setup()
+        elif action == "exit":
+            print("\nSampai jumpa. 🚀\n")
             sys.exit(0)
         else:
             input("\nPilihan tidak valid. Tekan ENTER untuk mencoba lagi...")

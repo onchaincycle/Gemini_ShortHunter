@@ -245,7 +245,7 @@ class ShortScreener:
             if squeeze_risk == "⚠️ RAWAN SQUEEZE" or funding_rate < -0.000015:
                 score = min(score, 50.0)
 
-            # PREDICTIVE ML ENGINE: 18-Feature Vector & LightGBM Propensity Gatekeeper (Tahap 2)
+            # HEURISTIC PROPENSITY GATE: 18-Feature Vector, bobot manual (BUKAN LightGBM; lihat ROADMAP Tahap 3)
             feat_input = {
                 "sm_live": sm_live,
                 "phase": phase_data.get("badge", ""),

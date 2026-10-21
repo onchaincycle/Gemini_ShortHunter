@@ -6,7 +6,10 @@ Integrates empirical data, models, and statistical insights from project Claude_
 2. BMS (Bottom Momentum Score) & Crash Gate:
    - Proven metric for Long bottom absorption (Base duration >= 45d, stability, volatility compression, >=3 retests).
    - Crash Gate: Disqualifies >50% drawdown coins unless 45d stabilization + 3 retests are confirmed.
-   - Claude_Crypto statistical short edge: BMS < 30 confirms breakdown / free-fall (p=0.001 across 3 market regimes).
+   - CATATAN 2026-10-22: BMS < 30 sebagai sinyal SHORT TIDAK terbukti. Riset SCR
+     (Claude_Crypto/SCR_v10/output/short_explore/laporan_2026-10-15.md, S2) = GAGAL: median setelah biaya -0,8%
+     (syarat <= -1,5%), hit rate 54% (syarat >= 57%). Flag `is_breakdown_freefall` hanya informasi;
+     JANGAN dipakai menambah skor short tanpa backtest baru.
 3. DRS (Distribution Risk Score):
    - Quantitative measure of institutional distribution & dump risk:
      * Structure breakdown: 3d below SMA30, negative slope, 20d lower low.

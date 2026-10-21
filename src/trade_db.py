@@ -22,6 +22,15 @@ ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DB_PATH = os.path.join(ROOT_DIR, "data", "shorthunter_trade.db")
 
 
+class _ClosingConnection(sqlite3.Connection):
+    """Koneksi yang ditutup otomatis saat keluar dari blok `with` (setelah commit/rollback)."""
+    def __exit__(self, exc_type, exc, tb):
+        try:
+            return super().__exit__(exc_type, exc, tb)
+        finally:
+            self.close()
+
+
 class TradeDatabase:
     def __init__(self, db_path: str = DB_PATH):
         self.db_path = db_path
@@ -29,7 +38,10 @@ class TradeDatabase:
         self.init_db()
 
     def get_connection(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self.db_path, timeout=30.0)
+        # 2026-10-22: _ClosingConnection -> `with get_connection() as conn:` commit LALU menutup koneksi.
+        # (Koneksi sqlite3 bawaan hanya commit di __exit__ tanpa close -> file descriptor menumpuk,
+        #  kandidat penyebab "Errno 24 Too many open files" di autopilot.log.)
+        conn = sqlite3.connect(self.db_path, timeout=30.0, factory=_ClosingConnection)
         conn.row_factory = sqlite3.Row
         # Enable Write-Ahead Logging (WAL) and set busy timeout
         conn.execute("PRAGMA journal_mode=WAL;")
@@ -443,7 +455,8 @@ class TradeDatabase:
         now_str = datetime.now().isoformat()
         with self.get_connection() as conn:
             for s in signals_list:
-                sig_id = f"{s.get('symbol')}_{s.get('timestamp', now_ms)}"
+                # signal_id eksplisit dipakai sinyal LONG (prefiks DTL_/SWL_) agar tidak bentrok dengan SHORT
+                sig_id = s.get("signal_id") or f"{s.get('symbol')}_{s.get('timestamp', now_ms)}"
                 conn.execute("""
                     INSERT OR REPLACE INTO screener_signals (
                         signal_id, symbol, strategy, timestamp, datetime, score,
@@ -461,7 +474,7 @@ class TradeDatabase:
                     float(s.get("rsi_daily", 0.0)),
                     float(s.get("funding_rate", 0.0)),
                     s.get("verdict", "N/A"),
-                    json.dumps(s)
+                    json.dumps(s, default=str)
                 ))
 
     def get_recent_signals(self, limit: int = 50) -> List[Dict]:

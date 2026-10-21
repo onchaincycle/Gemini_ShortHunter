@@ -43,3 +43,7 @@ Daftar fitur dan peningkatan yang dijadwalkan untuk tahap berikutnya:
 * **Status:** `OPEN_FOR_ANTIGRAVITY` | **Kategori:** `NEW_FEATURE` | **Prioritas:** `HIGH`
 * **Kutipan User (`QA-0016`):** "saat ini saya juga sudah implementasi Hermes, jadi bot ini akan di edit akan lebih sering oleh Hermes, pastikan percakapan kita juga bisa dibaca oleh Hermes"
 * **Spesifikasi Teknis untuk Antigravity:** Tambahkan modul atau endpoint sinkronisasi transkrip chat War Room ke direktori khusus (misal inputs/hermes_bridge_context.json) agar agen Hermes dapat membaca riwayat diskusi, keputusan komite, dan backlog aktif secara real-time.
+
+## Dari Tahap 3.1 (2026-10-22)
+- Pencatatan `screener_signals` bergantung slot: auto_hunter hanya scan kuadran yang slotnya terbuka → data uji skor bolong saat slot penuh. Opsi: scan ringan terjadwal (mis. tiap 1 jam) khusus pencatatan, terlepas dari slot. Perhatikan beban API Hyperliquid.
+- Rekam candle OHLC 15m untuk koin kandidat screener (label triple-barrier lebih akurat dari snapshot mark price).

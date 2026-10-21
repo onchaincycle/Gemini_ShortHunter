@@ -199,7 +199,9 @@ class AutonomousEngine:
         DUST_USD = float(slot_plan.get("dust_threshold_usd", 3.0))
         RUNNER_EXEMPT_USD = float(slot_plan.get("runner_exempt_margin_usd", 6.0))
         slot_base_margin = slot_plan["slot_base_margin"]
-        HALF_SLOT_CEILING_USD = round(slot_base_margin * 0.60, 2)  # Legacy $100-era positions (< 60% of $28.10 = < $16.86)
+        from src import risk_config
+        _gv = risk_config.get()["governor"]
+        HALF_SLOT_CEILING_USD = round(slot_base_margin * _gv["half_slot_ratio"], 2)  # Legacy $100-era positions (< 60% of $28.10 = < $16.86)
 
         active_coins = []
         swing_coins = []
@@ -259,8 +261,8 @@ class AutonomousEngine:
         base_max_swing = slot_plan["max_swing"]
         max_intraday = slot_plan["max_intraday"]
         # Elastic Slot Borrowing: if intraday has 0 active positions, Swing can borrow 1 unused slot
-        max_swing = min(max_pos - 1, base_max_swing + (1 if len(intraday_coins) == 0 else 0))
-        max_directional = max(3, int(round(max_pos * 0.67)))
+        max_swing = min(max_pos - 1, base_max_swing + (int(_gv["elastic_swing_borrow"]) if len(intraday_coins) == 0 else 0))
+        max_directional = max(int(_gv["max_directional_min"]), int(round(max_pos * _gv["max_directional_ratio"])))
 
         reserve_usd = slot_plan["reserve_usd"]
         free_above_reserve = round(max(0.0, available - reserve_usd), 2)
@@ -438,7 +440,7 @@ class AutonomousEngine:
         for t in reversed(closed_trades):
             pnl = float(t.get("realized_pnl") or t.get("final_pnl_usd", 0.0))
             # Ignore near-zero dust/stalemate scratches ($-0.08 to $+0.08) for loss streak penalty
-            if abs(pnl) <= 0.08 and "STALEMATE" in str(t.get("exit_reason", "")):
+            if abs(pnl) <= float(__import__("src.risk_config", fromlist=["get"]).get()["thermostat"]["stalemate_scratch_usd"]) and "STALEMATE" in str(t.get("exit_reason", "")):
                 continue
             if pnl > 0:
                 if loss_streak == 0:
@@ -480,63 +482,10 @@ class AutonomousEngine:
         daily_dd_pct = abs(min(0.0, today_pnl)) / equity * 100.0 if equity > 0 else 0.0
 
         thermo = state["thermostat"]
-        base_sw = float(thermo.get("base_min_score_swing", thermo.get("min_score_swing", 78.0)))
-        base_dt = float(thermo.get("base_min_score_intraday", thermo.get("min_score_intraday", 75.0)))
-        thermo["base_min_score_swing"] = base_sw
-        thermo["base_min_score_intraday"] = base_dt
-
-        if loss_streak >= 3 or daily_dd_pct >= 5.0:
-            thermo.update({
-                "mode": "CIRCUIT_BREAKER",
-                "badge": "🛑 CIRCUIT BREAKER (Auto-Pause Entry)",
-                "reserve_pct": 30.0,
-                "min_score_intraday": max(70.0, min(88.0, base_dt + 7.0)),
-                "min_score_swing": max(72.0, min(88.0, base_sw + 6.0)),
-                "min_ai_confidence": 85,
-                "sizing_mult": 0.75,
-                "circuit_breaker_pause": True,
-                "pause_until_ts": now_ts + (6 * 3600),
-                "reason": f"Terdeteksi {loss_streak}x loss beruntun / drawdown harian {daily_dd_pct:.1f}%. Entry baru di-pause 6 jam untuk proteksi modal."
-            })
-        elif loss_streak == 2:
-            thermo.update({
-                "mode": "DEFENSIVE_SHIELD",
-                "badge": "🟡 DEFENSIVE SHIELD (Mode Waspada)",
-                "reserve_pct": 25.0,
-                "min_score_intraday": max(70.0, min(85.0, base_dt + 5.0)),
-                "min_score_swing": max(72.0, min(85.0, base_sw + 4.0)),
-                "min_ai_confidence": 80,
-                "sizing_mult": 0.80,
-                "circuit_breaker_pause": False,
-                "pause_until_ts": 0.0,
-                "reason": "Terdeteksi 2x loss beruntun. Cadangan kas dinaikkan ke 25% ekuitas, syarat skor diperketat, ukuran peluru dipangkas 20%."
-            })
-        elif win_streak >= 3 and net_realized_pnl > 0:
-            thermo.update({
-                "mode": "COMPOUND_BOOST",
-                "badge": "🚀 COMPOUND BOOST (Win Streak Aktif)",
-                "reserve_pct": 15.0,
-                "min_score_intraday": max(68.0, min(82.0, base_dt)),
-                "min_score_swing": max(70.0, min(82.0, base_sw - 1.0)),
-                "min_ai_confidence": 75,
-                "sizing_mult": 1.08,
-                "circuit_breaker_pause": False,
-                "pause_until_ts": 0.0,
-                "reason": f"Win streak {win_streak}x berturut-turut (Win Rate {win_rate}%, Net +${net_realized_pnl:.2f}). Mode Compounding Optimal aktif."
-            })
-        else:
-            thermo.update({
-                "mode": "OPTIMAL",
-                "badge": "🟢 OPTIMAL (Standard Disiplin)",
-                "reserve_pct": 15.0,
-                "min_score_intraday": base_dt,
-                "min_score_swing": base_sw,
-                "min_ai_confidence": 75,
-                "sizing_mult": 1.00,
-                "circuit_breaker_pause": False,
-                "pause_until_ts": 0.0,
-                "reason": f"Portofolio stabil (Win Rate {win_rate}%, PF {profit_factor}). Cadangan kas 15% ekuitas, filter wajib Grade A."
-            })
+        # 2026-10-22 (ROADMAP 2.3): aturan & angka thermostat dari src/risk_config.py (nilai sama seperti sebelumnya)
+        from src import risk_config
+        risk_config.apply_thermostat(thermo, loss_streak, win_streak, net_realized_pnl, daily_dd_pct,
+                                     win_rate, profit_factor, now_ts)
 
         # 4. Adaptive Weights Calibration (Loop 2) - Disabled until unified scoring connects weights to screener
         ENABLE_WEIGHT_CALIBRATION = False

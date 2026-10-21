@@ -49,6 +49,9 @@ from src.trade_db import trade_db
 
 STATE_FILE = os.path.join(ROOT_DIR, "data", "positions_lifecycle.json")
 PID_FILE = os.path.join(ROOT_DIR, "data", "autopilot.pid")
+# 2026-10-22 (ROADMAP 1.7): file penanda "daemon sengaja ditahan" (maintenance). Dibuat saat daemon dimatikan
+# lewat menu [4]->[6]; dihapus saat dinyalakan lewat menu [4]->[5]. Selama ada, menu & watchdog TIDAK auto-start.
+HOLD_FILE = os.path.join(ROOT_DIR, "data", "daemon_hold.flag")
 LOG_FILE = os.path.join(ROOT_DIR, "logs", "autopilot.log")
 
 
@@ -1598,7 +1601,16 @@ class PositionManager:
             return None
 
     @staticmethod
+    def is_daemon_held() -> bool:
+        return os.path.exists(HOLD_FILE)
+
+    @staticmethod
     def start_daemon() -> Dict:
+        try:
+            if os.path.exists(HOLD_FILE):
+                os.remove(HOLD_FILE)
+        except Exception:
+            pass
         pid = PositionManager.is_daemon_running()
         if pid:
             return {"success": True, "message": f"Auto-Pilot & Autonomous AI sudah berjalan (PID: {pid}).", "pid": pid}
@@ -1627,7 +1639,13 @@ class PositionManager:
         return {"success": True, "message": f"Auto-Pilot & Autonomous AI berhasil dinyalakan 24/7! (PID: {actual_pid})", "pid": actual_pid}
 
     @staticmethod
-    def stop_daemon() -> Dict:
+    def stop_daemon(hold: bool = True) -> Dict:
+        if hold:
+            try:
+                with open(HOLD_FILE, "w") as f:
+                    f.write(time.strftime("%Y-%m-%d %H:%M:%S"))
+            except Exception:
+                pass
         pid = PositionManager.is_daemon_running()
         if not pid:
             if os.path.exists(PID_FILE):
@@ -1635,7 +1653,10 @@ class PositionManager:
             return {"success": True, "message": "Auto-Pilot Background memang sedang tidak aktif."}
 
         try:
-            os.kill(pid, signal.SIGTERM)
+            try:
+                os.killpg(os.getpgid(pid), signal.SIGTERM)  # caffeinate + python anak (start_new_session=True)
+            except Exception:
+                os.kill(pid, signal.SIGTERM)
             time.sleep(0.5)
             if os.path.exists(PID_FILE):
                 os.remove(PID_FILE)
@@ -1657,6 +1678,8 @@ class PositionManager:
 
         if cls.is_daemon_running():
             return True
+        if cls.is_daemon_held():
+            return False
 
         try:
             from src.autonomous_engine import AutonomousEngine

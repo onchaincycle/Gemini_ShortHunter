@@ -434,20 +434,24 @@ class HyperliquidTrader:
         Computes dynamic slot capacity N_max(E), reserve floor (%), dynamic dust/runner threshold,
         and per-slot margin allocation as a pure mathematical function of Total Account Equity (USDC).
         """
+        # 2026-10-22 (ROADMAP 2.3): semua angka dari src/risk_config.py (nilai sama seperti sebelumnya)
+        from src import risk_config
+        sp = risk_config.get()["slot_plan"]
         if equity <= 0:
+            e = sp["empty_equity_plan"]
             return {
                 "equity": 0.0,
                 "reserve_pct": reserve_pct,
                 "reserve_usd": 0.0,
                 "deployable_usd": 0.0,
-                "max_positions": 5,
-                "max_swing": 3,
-                "max_intraday": 2,
-                "slot_base_margin": 14.0,
-                "min_slot_margin": 10.5,
-                "max_slot_margin": 17.5,
-                "dust_threshold_usd": 3.0,
-                "runner_exempt_margin_usd": 6.0,
+                "max_positions": e["max_positions"],
+                "max_swing": e["max_swing"],
+                "max_intraday": e["max_intraday"],
+                "slot_base_margin": e["slot_base_margin"],
+                "min_slot_margin": e["min_slot_margin"],
+                "max_slot_margin": e["max_slot_margin"],
+                "dust_threshold_usd": e["dust_threshold_usd"],
+                "runner_exempt_margin_usd": e["runner_exempt_margin_usd"],
             }
 
         # Tiered High-Conviction Slot Curve (prevents slot dilution when equity doubles from $100 to $200):
@@ -455,31 +459,30 @@ class HyperliquidTrader:
         # - Equity $120-$260 -> 6 slots (e.g., $200 -> ~$28.10/slot base, Grade A/A+ -> $32-$40/slot!)
         # - Equity $260-$420 -> 7 slots
         # - Equity > $420  -> 8 to 10 slots
-        if equity < 120.0:
-            max_positions = 5
-        elif equity < 260.0:
-            max_positions = 6
-        elif equity < 420.0:
-            max_positions = 7
-        else:
-            max_positions = min(10, int(5 + (equity / 110.0)))
+        max_positions = None
+        for limit, n in sp["equity_tiers"]:
+            if equity < float(limit):
+                max_positions = int(n)
+                break
+        if max_positions is None:
+            max_positions = min(int(sp["max_positions_cap"]), int(sp["above_tiers_base"] + (equity / sp["above_tiers_per_usd"])))
 
         # Split between Swing (~65%) and Intraday (~35%)
-        max_swing = max(3, int(round(max_positions * 0.65)))
-        max_intraday = max(2, max_positions - max_swing)
+        max_swing = max(int(sp["min_swing"]), int(round(max_positions * sp["swing_share"])))
+        max_intraday = max(int(sp["min_intraday"]), max_positions - max_swing)
 
         reserve_usd = round(equity * (reserve_pct / 100.0), 2)
         deployable_usd = round(max(0.0, equity - reserve_usd), 2)
         slot_base_margin = round(deployable_usd / max_positions, 2)
 
-        min_slot_margin = round(max(12.0, slot_base_margin * 0.80), 2)
+        min_slot_margin = round(max(sp["min_slot_margin_floor"], slot_base_margin * sp["min_slot_margin_ratio"]), 2)
         # Allow Grade A / A+ & Under-Deployed Portfolio Boost up to 1.45x of slot_base_margin
-        max_slot_margin = round(max(18.0, slot_base_margin * 1.45 * thermostat_mult), 2)
+        max_slot_margin = round(max(sp["max_slot_margin_floor"], slot_base_margin * sp["max_slot_margin_ratio"] * thermostat_mult), 2)
 
         # Dynamic dust threshold (2.5% of equity, clamped [$3.0, $8.0]) -> ~$4.96 at $198 equity
-        dust_threshold_usd = round(max(3.0, min(8.0, equity * 0.025)), 2)
+        dust_threshold_usd = round(max(sp["dust_min_usd"], min(sp["dust_max_usd"], equity * sp["dust_equity_pct"])), 2)
         # Risk-free runner exemption ceiling (50% of slot_base_margin) for positions already trimmed / BE-locked
-        runner_exempt_margin_usd = round(slot_base_margin * 0.50, 2)
+        runner_exempt_margin_usd = round(slot_base_margin * sp["runner_exempt_ratio"], 2)
 
         return {
             "equity": round(equity, 2),

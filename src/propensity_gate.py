@@ -6,6 +6,10 @@ and Hyperliquid L1/L2 Microstructure.
 
 Calculates P(Win) where Win is defined as reaching +3.0R before -1.0R.
 Sinyal dengan P(Win) < 0.60 otomatis di-VETO.
+
+CATATAN KEJUJURAN (2026-10-22): ini BUKAN model ML/LightGBM. Bobot logit di calculate_propensity()
+diisi manual dan belum dikalibrasi terhadap hasil trade. "P(Win)" = skor heuristik 0-1, bukan
+probabilitas teruji. Validasi & pengganti berbasis data: ROADMAP_INTEGRASI.md Tahap 3.
 """
 
 import os

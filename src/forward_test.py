@@ -15,9 +15,20 @@ from src.trade_db import trade_db
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 JOURNAL_FILE = os.path.join(ROOT_DIR, "data", "forward_test_journal.json")
 
+def _rec_hash(pos: Dict) -> str:
+    try:
+        return json.dumps(pos, sort_keys=True, default=str)
+    except Exception:
+        return repr(pos)
+
+
 class ForwardTestManager:
     def __init__(self, journal_file: str = JOURNAL_FILE):
         self.journal_file = journal_file
+        # 2026-10-22 (ROADMAP 1.7): sidik record per id saat dibaca dari DB. save_journal hanya menulis
+        # record yang berubah, supaya salinan lama di memori tidak menimpa perubahan dari proses lain
+        # (mis. backfill/rekonsiliasi) yang terjadi di antara load dan save.
+        self._loaded_hashes: Dict = {}
         self._ensure_file()
 
     def _ensure_file(self):
@@ -31,6 +42,9 @@ class ForwardTestManager:
             # Primary: Load from SQLite WAL TradeDatabase
             journal = trade_db.load_journal()
             if journal:
+                for _k, _v in journal.items():
+                    if _v.get("id"):
+                        self._loaded_hashes[_v["id"]] = _rec_hash(_v)
                 return journal
         except Exception:
             pass
@@ -47,7 +61,12 @@ class ForwardTestManager:
         # Primary: Persist each position record to SQLite
         try:
             for key, pos in journal.items():
+                pid = pos.get("id")
+                if pid and self._loaded_hashes.get(pid) == _rec_hash(pos):
+                    continue  # tidak berubah sejak dibaca -> jangan tulis ulang
                 trade_db.save_journal_position(pos)
+                if pid:
+                    self._loaded_hashes[pid] = _rec_hash(pos)
         except Exception as e:
             print(f"[!] Warning: Gagal simpan jurnal ke SQLite: {e}")
 

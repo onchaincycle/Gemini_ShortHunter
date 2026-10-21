@@ -44,13 +44,15 @@ class SpotStrategyEngine:
 
     @classmethod
     def _get_scr_db_conn(cls) -> Optional[sqlite3.Connection]:
-        if os.path.exists(SCR_DB_PATH):
-            try:
-                conn = sqlite3.connect(SCR_DB_PATH)
+        # 2026-10-22 (ROADMAP 2.2): baca file kontrak SCR, bukan scr.db
+        try:
+            from src import scr_contract
+            conn = scr_contract.connect()
+            if conn is not None:
                 conn.row_factory = sqlite3.Row
-                return conn
-            except Exception as e:
-                logger.error(f"Gagal membuka koneksi scr.db: {e}")
+            return conn
+        except Exception as e:
+            logger.error(f"Gagal memuat kontrak SCR: {e}")
         return None
 
     # =========================================================================

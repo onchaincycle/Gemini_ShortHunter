@@ -298,4 +298,18 @@ class IntradayLongEngine:
 
         df_res = pd.DataFrame(results)
         df_res = df_res.sort_values(by=["score", "rrr"], ascending=[False, False]).reset_index(drop=True)
+        # Tahap 3.1: catat SEMUA kandidat LONG intraday (bukan hanya yang dieksekusi) untuk uji prediktif skor
+        try:
+            now_ms = int(time.time() * 1000)
+            records = df_res.to_dict("records")
+            for r in records:
+                r["strategy"] = "DAYTRADE_LONG"
+                r["side"] = "LONG"
+                r["symbol"] = r.get("coin")
+                r["timestamp"] = now_ms
+                r["signal_id"] = f"DTL_{r.get('coin')}_{now_ms}"
+            from src.trade_db import trade_db
+            trade_db.log_signals(records)
+        except Exception as e:
+            print(f"[!] Gagal mencatat sinyal DAYTRADE_LONG: {e}")
         return df_res

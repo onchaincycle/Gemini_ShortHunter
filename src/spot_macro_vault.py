@@ -39,9 +39,10 @@ class SpotMacroVault:
 
     @classmethod
     def get_db_path(cls) -> Optional[str]:
-        if os.path.exists(SCR_DB_PATH):
-            return SCR_DB_PATH
-        return None
+        # 2026-10-22 (ROADMAP 2.2): sumber = file kontrak SCR (scr_signals.json), bukan scr.db.
+        # None bila kontrak tidak ada / basi (> MAX_AGE_DAYS) -> fitur Spot tampil "offline", bukan angka tebakan.
+        from src import scr_contract
+        return scr_contract.CONTRACT_PATH if scr_contract.is_fresh() else None
 
     @classmethod
     def get_portfolio_csv_path(cls) -> Optional[str]:
@@ -120,7 +121,8 @@ class SpotMacroVault:
             return res
 
         try:
-            conn = sqlite3.connect(db_path)
+            from src import scr_contract
+            conn = scr_contract.connect()
             cursor = conn.cursor()
 
             # 1. Ambil Fear & Greed & Market Info terakhir
@@ -146,15 +148,10 @@ class SpotMacroVault:
 
             conn.close()
 
-            # 3. Panggil cycle.build jika modul SCR v10 dapat diakses
+            # 3. Siklus BTC dari kontrak SCR (dulu: impor langsung scr.cycle dari Claude_Crypto)
             try:
-                import sys
-                if CLAUDE_CRYPTO_DIR not in sys.path:
-                    sys.path.insert(0, CLAUDE_CRYPTO_DIR)
-                from scr.store import Store
-                from scr.cycle import build
-                store = Store(db_path)
-                c = build(store)
+                from src import scr_contract
+                c = scr_contract.cycle() or {}
                 if c.get("ok"):
                     res["available"] = True
                     res["btc_price"] = float(c.get("price", 0.0))
@@ -168,8 +165,9 @@ class SpotMacroVault:
                     res["gain_from_bottom"] = round(float(c.get("naik_dari_dasar", 0.39)) * 100, 1)
                     res["mayer_multiple"] = round(float(c.get("mayer", 1.13)), 2)
                     res["sma200"] = round(float(c.get("sma200", 72256.0)), 1)
-            except Exception:
-                res["available"] = True  # Gunakan data default hasil estimasi tanggal
+            except Exception as e:
+                # 2026-10-22: dulu available=True dengan angka default -> kini jujur "tidak tersedia"
+                print(f"[SpotMacroVault] Siklus BTC dari kontrak SCR tidak tersedia: {e}")
         except Exception as e:
             print(f"[SpotMacroVault] Gagal mengambil siklus makro: {e}")
 
@@ -200,7 +198,8 @@ class SpotMacroVault:
 
         if db_path:
             try:
-                conn = sqlite3.connect(db_path)
+                from src import scr_contract
+                conn = scr_contract.connect()
                 cursor = conn.cursor()
 
                 # Tanggal terbaru di database
@@ -369,7 +368,8 @@ class SpotMacroVault:
 
         candidates = []
         try:
-            conn = sqlite3.connect(db_path)
+            from src import scr_contract
+            conn = scr_contract.connect()
             cursor = conn.cursor()
 
             # Tanggal terbaru di scores
