@@ -34,7 +34,12 @@ PROFILES = {
         "early_be_pct": 4.0,        # Step 2 (+4.0% move / +8.0% ROE): Early Trigger (+1.5R)
         "tier1_lock_profit_pct": 1.5, # Tier-1 Lock: Kunci minimal +1.5% net profit (+3.0% ROE) alih-alih BE polos
         "trim_pct": 7.0,            # Step 3 (+7.0% move / +14% ROE): Trim 50% + lock SL at +2.0% profit
-        "periodic_trail_start_pct": 8.5,  # Step 4 (>= +8.5% move): Periodic HWM ratchet locking 55% of peak move
+        "continuous_trail_enabled": True, # Continuous Trailing Engine
+        "continuous_trail_start_pct": 4.0, # Aktif sejak >= +4.0% move (+8.0% ROE / +1.5R)
+        "continuous_trail_ratio": 0.55,    # Kunci 55% dari peak move (HWM)
+        "continuous_trail_step_pct": 0.5,  # Ratchet on-chain per kenaikan peak >= +0.5% move
+        "periodic_trail_start_pct": 8.5,  # Legacy fallback
+        "hwm_lock_ratio": 0.55,
         "tp2_pct": 18.0,            # TP2 at +18% price move (36% ROE)
         "runner_pct": 30.0,         # Runner at +30% price move (60% ROE)
         "max_hold_hours": 72,
@@ -51,7 +56,7 @@ PROFILES = {
         "session_gate": False,
         "poll_seconds": 25,
         "fee_roundtrip_pct": 0.09,  # taker 0.045% x 2
-        "target_desc": "Half-Risk @ ±2.2% ➔ Tier-1 Lock (+1.5% profit) @ ±4% ➔ Trim 50% @ ±7% (+HWM Ratchet) ➔ TP @ ±18% ➔ Runner @ ±30%"
+        "target_desc": "Half-Risk @ ±2.2% ➔ Tier-1 Lock (+1.5% net) @ ±4% ➔ Continuous Trailing (55% HWM) ➔ Trim 50% @ ±7% ➔ TP @ ±18% ➔ Runner @ ±30%"
     },
     "DAYTRADE": {
         "key": "DAYTRADE",
@@ -70,6 +75,11 @@ PROFILES = {
         "early_be_r": 0.65,         # Step 2 (0.65R / ~2.1% move): Geser SL on-chain ke Breakeven + Fee
         "tier1_trigger_r": 1.5,     # Step 2.5 (+1.5R move / >=+4.0%): Trigger Tier-1 Profit Lock
         "tier1_lock_r": 0.5,        # Kunci minimal +0.5R profit (~1.5% move)
+        "tier1_lock_profit_pct": 1.5, # Minimum net profit lock %
+        "continuous_trail_enabled": True, # Continuous Trailing Engine
+        "continuous_trail_start_r": 1.2,   # Aktif sejak >= 1.2R (~3.0-3.8% move) atau >= 4.0%
+        "continuous_trail_ratio": 0.50,     # Kunci 50% dari peak R / move
+        "continuous_trail_step_r": 0.25,   # Ratchet on-chain per kenaikan peak >= 0.25R
         "tp1_r": 1.0,               # Step 3 (1.0R / 2.5-4.5% move): Trim 50% & kunci SL di profit +0.3R
         "tp2_r": 2.0,               # Step 4 (2.0R / 5.0-9.0% move): Tutup sisa (Hard Cap 9.0% gerak harga)
         "trim_pct": 3.2,            # = 1.0R dari default SL (fallback)
@@ -91,7 +101,7 @@ PROFILES = {
         "session_gate": True,       # hanya London/NY (14:00-23:59 WIB)
         "poll_seconds": 10,
         "fee_roundtrip_pct": 0.09,
-        "target_desc": "Half-Risk @ 0.45R ➔ Early BE @ 0.65R ➔ TP1 1.0R (2.5-4.5% | Trim 50%) ➔ TP2 2.0R (5.0-9.0% | ~10-18% ROE) | Auto-Close: 6 Jam"
+        "target_desc": "Half-Risk @ 0.45R ➔ Early BE @ 0.65R ➔ Continuous Trailing (50% HWM) ➔ TP1 1.0R (Trim 50%) ➔ TP2 2.0R | Auto-Close: 6 Jam"
     }
 }
 
