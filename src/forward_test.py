@@ -301,6 +301,40 @@ class ForwardTestManager:
                 journal[coin] = pos
                 self.save_journal(journal)
 
+    @staticmethod
+    def compute_r_multiple(net_pnl_usd: float, entry_px: float, size: float, prev: Dict, is_long: bool) -> Optional[float]:
+        """R = PnL bersih / risiko awal USD (|entry - initial SL| x size). Akurat juga untuk partial TP."""
+        try:
+            isl = float(prev.get("initial_sl_px") or 0.0)
+            if isl <= 0 or entry_px <= 0 or size <= 0:
+                r1 = float(prev.get("risk_pct_1r") or 0.0)
+                if r1 <= 0:
+                    return None
+                risk_usd = entry_px * size * r1 / 100.0
+            else:
+                if (is_long and isl >= entry_px) or ((not is_long) and isl <= entry_px):
+                    return None  # SL awal tidak di sisi rugi -> R tidak terdefinisi
+                risk_usd = abs(entry_px - isl) * size
+            return round(net_pnl_usd / risk_usd, 2) if risk_usd > 0 else None
+        except Exception:
+            return None
+
+    @staticmethod
+    def _match_pending_close(journal: Dict, coin: str, close_ts_ms: int, max_gap_hours: float = 6.0) -> Optional[Dict]:
+        """Record CLOSED (pending rekonsiliasi) untuk coin ini dengan exit_time terdekat dari fill close."""
+        best, best_gap = None, None
+        for k, v in journal.items():
+            if not (k == coin or k.startswith(f"{coin}@")) or v.get("status") != "CLOSED" or not v.get("pending_fill_reconcile"):
+                continue
+            try:
+                ex = datetime.strptime(v.get("exit_time"), "%Y-%m-%d %H:%M:%S").timestamp()
+            except Exception:
+                continue
+            gap = abs(ex - close_ts_ms / 1000.0) / 3600.0
+            if gap <= max_gap_hours and (best_gap is None or gap < best_gap):
+                best, best_gap = v, gap
+        return best
+
     def sync_with_exchange(self, trader=None) -> Dict:
         """
         Synchronizes local forward_test_journal.json directly with live Hyperliquid
@@ -377,7 +411,9 @@ class ForwardTestManager:
         # 2. Check Hyperliquid user_fills to reconcile any position that closed on-chain
         journal = self.load_journal()
         try:
-            raw_fills = self.trader.info.user_fills(self.trader.account_address) if (hasattr(self.trader, 'info') and self.trader.account_address) else []
+            # FIX 2026-10-22: dulu memakai self.trader (atribut tidak ada) -> AttributeError tertelan
+            # oleh except -> rekonsiliasi fill tidak pernah jalan (PnL/fee/R kosong di jurnal).
+            raw_fills = trader.info.user_fills(trader.account_address) if (hasattr(trader, 'info') and trader.account_address) else []
             # Sesi forward test aktif dimulai sejak batch posisi live saat ini (2026-10-16 19:56:40)
             # Fills sebelum timestamp ini diabaikan agar trade riwayat lama yang sudah close tidak masuk kembali.
             SESSION_START_MS = 1792155400000
@@ -431,6 +467,8 @@ class ForwardTestManager:
                     # Lewati jika sudah tersinkron rapi & tidak pending rekonsiliasi
                     if existing_closed and not existing_closed.get("pending_fill_reconcile"):
                         continue
+                    if not existing_closed:
+                        existing_closed = self._match_pending_close(journal, coin, cyc_close[-1].get("time", 0))
 
                     open_sz = sum(float(f.get("sz", 0.0)) for f in cyc_open)
                     entry_px = (sum(float(f.get("px", 0.0)) * float(f.get("sz", 0.0)) for f in cyc_open) / open_sz) if open_sz > 0 else float(cyc_close[-1].get("px", 0.0))
@@ -445,7 +483,9 @@ class ForwardTestManager:
                     else:
                         move_pct = ((entry_px - exit_px) / entry_px) * 100.0 if entry_px > 0 else 0.0
 
-                    prev = existing_closed or journal.get(coin, {})
+                    # Jangan menimpa record trade lain yang sudah rekonsiliasi; tanpa pasangan -> record baru
+                    _cand = journal.get(coin, {})
+                    prev = existing_closed or (_cand if _cand.get("pending_fill_reconcile") else {})
                     strategy = prev.get("strategy") or get_strategy(coin)
                     sl_loss_thresh = -2.5 if strategy == "DAYTRADE" else -8.0
                     if prev.get("exit_reason"):
@@ -477,10 +517,10 @@ class ForwardTestManager:
                         "snapshots": prev.get("snapshots", []),
                         "event_logs": prev.get("event_logs", [])
                     })
-                    if strategy == "DAYTRADE":
-                        r1 = float(prev.get("risk_pct_1r") or 0.0)
-                        if r1 > 0:
-                            rec["realized_r"] = round(move_pct / r1, 2)
+                    rec["realized_pnl"] = rec["final_pnl_usd"]
+                    r_mult = self.compute_r_multiple(rec["final_pnl_usd"], entry_px, open_sz, prev, is_long)
+                    rec["r_multiple"] = r_mult
+                    rec["realized_r"] = r_mult
                     try:
                         hrs = (datetime.strptime(exit_dt, "%Y-%m-%d %H:%M:%S") - datetime.strptime(rec["entry_time"], "%Y-%m-%d %H:%M:%S")).total_seconds() / 3600.0
                         rec["hold_hours"] = round(hrs, 2)
@@ -497,8 +537,8 @@ class ForwardTestManager:
                     journal[coin] = rec
 
             self.save_journal(journal)
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[!] Rekonsiliasi fill Hyperliquid gagal: {type(e).__name__}: {e}")
 
         return self.load_journal()
 
