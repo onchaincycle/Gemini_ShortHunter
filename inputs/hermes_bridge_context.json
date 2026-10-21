@@ -1,5 +1,5 @@
 {
-  "synced_at": "2026-10-22 03:00:02",
+  "synced_at": "2026-10-22 05:59:57",
   "project": "Gemini_ShortHunter",
   "active_backlog": [
     {
@@ -176,16 +176,16 @@
   "live_tools_state": {
     "thermostat_mode": "\ud83d\udfe2 OPTIMAL (Standard Disiplin)",
     "reserve_pct": 15.0,
-    "last_hunt_time": "2026-10-22 02:46:16",
-    "last_hunt_status": "\ud83d\ude80 AUTO-OPEN SUKSES: SHORT ENA [DAYTRADE] | Grade A+ (85/100) | Margin: $121.97 (3x) | Entry: $0.218035 | SL On-Chain: $0.22369 | TP1 On-Chain: $0.21238",
+    "last_hunt_time": "2026-10-22 05:46:51",
+    "last_hunt_status": "Ditahan oleh Filter Disiplin: XMR (DAYTRADE): Skor 65.0 < Threshold 75.0; SUPER (DAYTRADE): Skor 55.0 < Threshold 75.0",
     "active_positions": [
-      "SHORT TIA (SWING, PnL: $-0.57)",
-      "LONG WIF (SWING, PnL: $+2.23)",
-      "LONG POL (SWING, PnL: $+1.50)",
-      "LONG DOGE (SWING, PnL: $+1.14)",
-      "LONG HYPE (SWING, PnL: $+4.18)",
-      "SHORT AERO (SWING, PnL: $+1.17)",
-      "SHORT ENA (DAYTRADE, PnL: $+1.11)"
+      "SHORT TIA (SWING, PnL: $+0.47)",
+      "LONG WIF (SWING, PnL: $+2.10)",
+      "LONG POL (SWING, PnL: $+0.26)",
+      "LONG DOGE (SWING, PnL: $+0.38)",
+      "LONG HYPE (SWING, PnL: $+1.91)",
+      "SHORT AERO (SWING, PnL: $+8.77)",
+      "SHORT ENA (DAYTRADE, PnL: $+5.97)"
     ],
     "episodic_rules": [
       "[MEM-017] (DAYTRADE/LONG): Gunakan time-stop 6 jam untuk mengamankan keuntungan pada strategi daytrade jika momentum melambat.",
