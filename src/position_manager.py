@@ -279,7 +279,7 @@ class PositionManager:
             sz_dec = self.trader.get_asset_precision(coin)
             state["remaining_sz"] = sz
 
-            # 1a. Detect if On-Chain TP1 filled automatically while offline / between polls
+            # 1a. Detect if On-Chain TP1 / TP2 filled automatically while offline / between polls
             if not state.get("trimmed_10pct") and initial_sz > 0 and sz <= initial_sz * 0.65:
                 state["trimmed_10pct"] = True
                 prof = get_profile(strategy)
@@ -298,6 +298,11 @@ class PositionManager:
                 res_be = self.trader.set_stop_loss_trigger(coin, sz, be_px, side=side)
                 state["native_sl_active"] = res_be.get("success", False)
                 msg = f"⚡ ON-CHAIN TP1 TERDETEKSI ({coin} {side}): Size turun {initial_sz} -> {sz}. SL otomatis digeser ke Breakeven (${be_px})!"
+                self.log_event(msg, strategy)
+
+            if state.get("trimmed_10pct") and not state.get("tp_20pct") and initial_sz > 0 and sz <= initial_sz * 0.35:
+                state["tp_20pct"] = True
+                msg = f"⚡ ON-CHAIN TP2 TERDETEKSI ({coin} {side}): Size turun ke {sz} (sisa runner). SL tetap mengawal!"
                 self.log_event(msg, strategy)
 
             # 1b. Deduplicate & size-sync Native Server-Side SL orders
@@ -369,29 +374,73 @@ class PositionManager:
                     state["native_sl_active"] = False
                     self.log_event(f"⚠️ Gagal pasang Native Server SL {coin} ({side}): {res.get('error')}", strategy)
 
-            # 1c. Ensure Native Server-Side TP1 / TP2 exists on Hyperliquid
+            # 1c. Ensure Native Server-Side Simultaneous Multi-TP Bracket exists on Hyperliquid
             coin_tp_orders = tp_orders_by_coin.get(coin, [])
-            if not coin_tp_orders:
-                if not state.get("trimmed_10pct") and state.get("tp1_px"):
-                    tp1_sz = round(initial_sz * 0.50, sz_dec) if sz_dec > 0 else int(initial_sz * 0.50)
-                    tp1_sz = min(tp1_sz, sz)
-                    tp1_px = self.trader.round_price(coin, float(state["tp1_px"]))
-                    if tp1_sz > 0 and tp1_px > 0:
-                        res_tp = self.trader.set_take_profit_trigger(coin, tp1_sz, tp1_px, side=side)
-                        if res_tp.get("success"):
-                            state["native_tp_active"] = True
-                            self.log_event(f"🎯 Native Server TP1 aktif untuk {coin} ({side}) @ ${tp1_px} (Size: {tp1_sz})", strategy)
-                elif state.get("trimmed_10pct") and not state.get("tp_20pct") and state.get("tp2_px"):
-                    tp2_sz = sz if strategy == "DAYTRADE" else (round(initial_sz * 0.30, sz_dec) if sz_dec > 0 else int(initial_sz * 0.30))
-                    tp2_sz = min(tp2_sz, sz)
-                    tp2_px = self.trader.round_price(coin, float(state["tp2_px"]))
-                    if tp2_sz > 0 and tp2_px > 0:
-                        res_tp2 = self.trader.set_take_profit_trigger(coin, tp2_sz, tp2_px, side=side)
-                        if res_tp2.get("success"):
-                            state["native_tp_active"] = True
-                            self.log_event(f"🎯 Native Server TP2 aktif untuk {coin} ({side}) @ ${tp2_px} (Size: {tp2_sz})", strategy)
-            else:
-                state["native_tp_active"] = True
+            mark_px_est = (float(p.get("pos_value", 0.0)) / sz) if sz > 0 else entry_px
+
+            def _has_tp_near(target_px: float) -> bool:
+                if target_px <= 0:
+                    return False
+                for o in coin_tp_orders:
+                    opx = float(o.get("triggerPx") or o.get("limitPx") or 0.0)
+                    if opx > 0 and abs(opx - target_px) / target_px < 0.005:  # tolerance 0.5%
+                        return True
+                return False
+
+            tp1_px = self.trader.round_price(coin, float(state.get("tp1_px") or 0.0))
+            tp2_px = self.trader.round_price(coin, float(state.get("tp2_px") or 0.0))
+            runner_px = self.trader.round_price(coin, float(state.get("runner_px") or 0.0)) if state.get("runner_px") else 0.0
+
+            if not state.get("trimmed_10pct"):
+                tp1_sz = round(initial_sz * 0.50, sz_dec) if sz_dec > 0 else int(initial_sz * 0.50)
+                if strategy == "DAYTRADE":
+                    tp2_sz = round(initial_sz - tp1_sz, sz_dec) if sz_dec > 0 else int(initial_sz - tp1_sz)
+                    runner_sz = 0
+                else:
+                    tp2_sz = round(initial_sz * 0.30, sz_dec) if sz_dec > 0 else int(initial_sz * 0.30)
+                    runner_sz = round(initial_sz - tp1_sz - tp2_sz, sz_dec) if sz_dec > 0 else int(initial_sz - tp1_sz - tp2_sz)
+                    # Min Notional Guard ($11 Hyperliquid rule)
+                    if runner_sz > 0 and (runner_sz * mark_px_est) < 11.0:
+                        tp2_sz = round(tp2_sz + runner_sz, sz_dec) if sz_dec > 0 else int(tp2_sz + runner_sz)
+                        runner_sz = 0
+                    if tp2_sz > 0 and (tp2_sz * mark_px_est) < 11.0:
+                        tp1_sz = round(tp1_sz + tp2_sz, sz_dec) if sz_dec > 0 else int(tp1_sz + tp2_sz)
+                        tp2_sz = 0
+
+                if tp1_sz > 0 and tp1_px > 0 and not _has_tp_near(tp1_px):
+                    time.sleep(0.2)
+                    res_tp1 = self.trader.set_take_profit_trigger(coin, tp1_sz, tp1_px, side=side)
+                    if res_tp1.get("success"):
+                        self.log_event(f"🎯 Native Server TP1 aktif untuk {coin} ({side}) @ ${tp1_px} (Size: {tp1_sz})", strategy)
+
+                if tp2_sz > 0 and tp2_px > 0 and not _has_tp_near(tp2_px):
+                    time.sleep(0.2)
+                    res_tp2 = self.trader.set_take_profit_trigger(coin, tp2_sz, tp2_px, side=side)
+                    if res_tp2.get("success"):
+                        self.log_event(f"🎯 Native Server TP2 aktif untuk {coin} ({side}) @ ${tp2_px} (Size: {tp2_sz})", strategy)
+
+                if runner_sz > 0 and runner_px > 0 and not _has_tp_near(runner_px):
+                    time.sleep(0.2)
+                    res_runner = self.trader.set_take_profit_trigger(coin, runner_sz, runner_px, side=side)
+                    if res_runner.get("success"):
+                        self.log_event(f"🎯 Native Server Runner TP aktif untuk {coin} ({side}) @ ${runner_px} (Size: {runner_sz})", strategy)
+
+            elif state.get("trimmed_10pct") and not state.get("tp_20pct"):
+                tp2_sz = sz if strategy == "DAYTRADE" else (round(initial_sz * 0.30, sz_dec) if sz_dec > 0 else int(initial_sz * 0.30))
+                tp2_sz = min(tp2_sz, sz)
+                if tp2_sz > 0 and tp2_px > 0 and not _has_tp_near(tp2_px):
+                    time.sleep(0.2)
+                    res_tp2 = self.trader.set_take_profit_trigger(coin, tp2_sz, tp2_px, side=side)
+                    if res_tp2.get("success"):
+                        self.log_event(f"🎯 Native Server TP2 aktif untuk {coin} ({side}) @ ${tp2_px} (Size: {tp2_sz})", strategy)
+                runner_sz = round(sz - tp2_sz, sz_dec) if sz_dec > 0 else int(sz - tp2_sz)
+                if runner_sz > 0 and (runner_sz * mark_px_est) >= 11.0 and runner_px > 0 and not _has_tp_near(runner_px):
+                    time.sleep(0.2)
+                    res_runner = self.trader.set_take_profit_trigger(coin, runner_sz, runner_px, side=side)
+                    if res_runner.get("success"):
+                        self.log_event(f"🎯 Native Server Runner TP aktif untuk {coin} ({side}) @ ${runner_px} (Size: {runner_sz})", strategy)
+
+            state["native_tp_active"] = bool(coin_tp_orders or not state.get("tp1_px"))
 
             lifecycle[coin] = state
 

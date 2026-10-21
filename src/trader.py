@@ -302,12 +302,36 @@ class HyperliquidTrader:
                 # Auto-place Native Server-Side Stop Loss Trigger on Hyperliquid
                 sl_trigger_res = self.set_stop_loss_trigger(coin=coin, sz=sz_coin, trigger_px=sl_price)
 
-                # Auto-place Native Server-Side Take Profit 1 (50% size) on Hyperliquid
+                # Auto-place Native Server-Side Multi-TP Bracket on Hyperliquid
                 tp1_sz = round(sz_coin * 0.50, sz_dec) if sz_dec > 0 else int(sz_coin * 0.50)
+                if plan["strategy"] == "DAYTRADE":
+                    tp2_sz = round(sz_coin - tp1_sz, sz_dec) if sz_dec > 0 else int(sz_coin - tp1_sz)
+                    runner_sz = 0
+                else:
+                    tp2_sz = round(sz_coin * 0.30, sz_dec) if sz_dec > 0 else int(sz_coin * 0.30)
+                    runner_sz = round(sz_coin - tp1_sz - tp2_sz, sz_dec) if sz_dec > 0 else int(sz_coin - tp1_sz - tp2_sz)
+                    # Min Notional Guard ($11 Hyperliquid rule)
+                    if runner_sz > 0 and (runner_sz * mark_px) < 11.0:
+                        tp2_sz = round(tp2_sz + runner_sz, sz_dec) if sz_dec > 0 else int(tp2_sz + runner_sz)
+                        runner_sz = 0
+                    if tp2_sz > 0 and (tp2_sz * mark_px) < 11.0:
+                        tp1_sz = round(tp1_sz + tp2_sz, sz_dec) if sz_dec > 0 else int(tp1_sz + tp2_sz)
+                        tp2_sz = 0
+
                 tp1_trigger_res = {"success": False}
                 if tp1_sz > 0 and trim_price > 0:
                     time.sleep(0.2)
                     tp1_trigger_res = self.set_take_profit_trigger(coin=coin, sz=tp1_sz, trigger_px=trim_price)
+
+                tp2_trigger_res = {"success": False}
+                if tp2_sz > 0 and tp2_price > 0:
+                    time.sleep(0.2)
+                    tp2_trigger_res = self.set_take_profit_trigger(coin=coin, sz=tp2_sz, trigger_px=tp2_price)
+
+                runner_trigger_res = {"success": False}
+                if runner_sz > 0 and runner_price and runner_price > 0:
+                    time.sleep(0.2)
+                    runner_trigger_res = self.set_take_profit_trigger(coin=coin, sz=runner_sz, trigger_px=runner_price)
 
                 return {
                     "success": True,
@@ -323,6 +347,8 @@ class HyperliquidTrader:
                     "runner_35pct_px": runner_price,
                     "native_sl_placed": sl_trigger_res.get("success", False),
                     "native_tp1_placed": tp1_trigger_res.get("success", False),
+                    "native_tp2_placed": tp2_trigger_res.get("success", False),
+                    "native_runner_placed": runner_trigger_res.get("success", False),
                     "order_result": order_res
                 }
             except Exception as e:
@@ -679,12 +705,36 @@ class HyperliquidTrader:
                 # Auto-place Native Server-Side Stop Loss Trigger on Hyperliquid (side="LONG")
                 sl_trigger_res = self.set_stop_loss_trigger(coin=coin, sz=sz_coin, trigger_px=sl_price, side="LONG")
 
-                # Auto-place Native Server-Side Take Profit 1 (50% size) on Hyperliquid (side="LONG")
+                # Auto-place Native Server-Side Multi-TP Bracket on Hyperliquid (side="LONG")
                 tp1_sz = round(sz_coin * 0.50, sz_dec) if sz_dec > 0 else int(sz_coin * 0.50)
+                if plan["strategy"] == "DAYTRADE":
+                    tp2_sz = round(sz_coin - tp1_sz, sz_dec) if sz_dec > 0 else int(sz_coin - tp1_sz)
+                    runner_sz = 0
+                else:
+                    tp2_sz = round(sz_coin * 0.30, sz_dec) if sz_dec > 0 else int(sz_coin * 0.30)
+                    runner_sz = round(sz_coin - tp1_sz - tp2_sz, sz_dec) if sz_dec > 0 else int(sz_coin - tp1_sz - tp2_sz)
+                    # Min Notional Guard ($11 Hyperliquid rule)
+                    if runner_sz > 0 and (runner_sz * mark_px) < 11.0:
+                        tp2_sz = round(tp2_sz + runner_sz, sz_dec) if sz_dec > 0 else int(tp2_sz + runner_sz)
+                        runner_sz = 0
+                    if tp2_sz > 0 and (tp2_sz * mark_px) < 11.0:
+                        tp1_sz = round(tp1_sz + tp2_sz, sz_dec) if sz_dec > 0 else int(tp1_sz + tp2_sz)
+                        tp2_sz = 0
+
                 tp1_trigger_res = {"success": False}
                 if tp1_sz > 0 and trim_price > 0:
                     time.sleep(0.2)
                     tp1_trigger_res = self.set_take_profit_trigger(coin=coin, sz=tp1_sz, trigger_px=trim_price, side="LONG")
+
+                tp2_trigger_res = {"success": False}
+                if tp2_sz > 0 and tp2_price > 0:
+                    time.sleep(0.2)
+                    tp2_trigger_res = self.set_take_profit_trigger(coin=coin, sz=tp2_sz, trigger_px=tp2_price, side="LONG")
+
+                runner_trigger_res = {"success": False}
+                if runner_sz > 0 and runner_price and runner_price > 0:
+                    time.sleep(0.2)
+                    runner_trigger_res = self.set_take_profit_trigger(coin=coin, sz=runner_sz, trigger_px=runner_price, side="LONG")
 
                 return {
                     "success": True,
@@ -701,6 +751,8 @@ class HyperliquidTrader:
                     "runner_35pct_px": runner_price,
                     "native_sl_placed": sl_trigger_res.get("success", False),
                     "native_tp1_placed": tp1_trigger_res.get("success", False),
+                    "native_tp2_placed": tp2_trigger_res.get("success", False),
+                    "native_runner_placed": runner_trigger_res.get("success", False),
                     "order_result": order_res
                 }
             except Exception as e:
