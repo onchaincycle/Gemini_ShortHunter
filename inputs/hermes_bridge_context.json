@@ -1,5 +1,5 @@
 {
-  "synced_at": "2026-10-21 17:59:32",
+  "synced_at": "2026-10-21 21:00:16",
   "project": "Gemini_ShortHunter",
   "active_backlog": [
     {
@@ -176,15 +176,18 @@
   "live_tools_state": {
     "thermostat_mode": "\ud83d\udfe1 DEFENSIVE SHIELD (Mode Waspada)",
     "reserve_pct": 25.0,
-    "last_hunt_time": "2026-10-21 17:29:46",
-    "last_hunt_status": "Ditahan oleh Filter Disiplin: kPEPE (DAYTRADE): Skor 70.0 < Threshold 80.0; WLD (DAYTRADE): Skor 65.0 < Threshold 80.0",
+    "last_hunt_time": "2026-10-21 20:30:31",
+    "last_hunt_status": "Ditahan oleh Filter Disiplin: NEAR (Layer-1): Batas diversifikasi sektor tercapai (2/2 posisi Layer-1 aktif); ETH (Layer-1): Batas diversifikasi sektor tercapai (2/2 posisi Layer-1 aktif)",
     "active_positions": [
-      "SHORT TIA (SWING, PnL: $-0.26)",
-      "LONG WIF (SWING, PnL: $+0.50)",
-      "LONG POL (SWING, PnL: $+1.39)",
-      "LONG DOGE (SWING, PnL: $+0.08)",
-      "LONG HYPE (SWING, PnL: $+2.38)",
-      "SHORT AERO (SWING, PnL: $+0.07)"
+      "SHORT TIA (SWING, PnL: $-0.15)",
+      "LONG WIF (SWING, PnL: $+0.70)",
+      "LONG POL (SWING, PnL: $+0.60)",
+      "LONG DOGE (SWING, PnL: $+0.24)",
+      "LONG HYPE (SWING, PnL: $+0.53)",
+      "SHORT AERO (SWING, PnL: $-2.37)",
+      "SHORT ALT (SWING, PnL: $+0.31)",
+      "LONG PAXG (DAYTRADE, PnL: $-0.78)",
+      "LONG EIGEN (DAYTRADE, PnL: $-3.03)"
     ],
     "episodic_rules": [
       "[MEM-014] (DAYTRADE/LONG): Gunakan stop loss yang lebih ketat atau lakukan exit bertahap jika momentum melemah setelah MFE mencapai di bawah 0.5 persen.",
