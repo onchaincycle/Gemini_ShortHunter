@@ -5632,11 +5632,11 @@
     "is_on_chain_sl": true,
     "max_favorable_drop_pct": 1.91,
     "max_adverse_pump_pct": 6.87,
-    "current_drop_pct": 0.38,
-    "current_px": 0.61376,
-    "unrealized_pnl": 0.14,
-    "roe_pct": 0.77,
-    "last_updated": "2026-10-21 11:59:56",
+    "current_drop_pct": -3.46,
+    "current_px": 0.63742,
+    "unrealized_pnl": -1.24,
+    "roe_pct": -6.88,
+    "last_updated": "2026-10-21 15:00:02",
     "id": 5094,
     "coin": "TIA",
     "strategy": "SWING",
@@ -5647,55 +5647,13 @@
     "exit_px": null,
     "size": 58.5,
     "leverage": 2,
-    "margin_used": 17.95131,
+    "margin_used": 18.64044,
     "realized_pnl": null,
     "fee_usd": 0.0,
     "exit_reason": null,
     "r_multiple": null,
     "hold_hours": null,
     "snapshots": [
-      {
-        "timestamp": "2026-10-20T11:00:01.672925",
-        "price": 0.62023,
-        "drop_pct": -0.67,
-        "pnl_usd": -0.25,
-        "roe_pct": -1.36
-      },
-      {
-        "timestamp": "2026-10-20T11:30:02.579713",
-        "price": 0.61547,
-        "drop_pct": 0.1,
-        "pnl_usd": 0.03,
-        "roe_pct": 0.14
-      },
-      {
-        "timestamp": "2026-10-20T12:00:25.876258",
-        "price": 0.61189,
-        "drop_pct": 0.68,
-        "pnl_usd": 0.24,
-        "roe_pct": 1.34
-      },
-      {
-        "timestamp": "2026-10-20T12:30:48.052034",
-        "price": 0.61069,
-        "drop_pct": 0.88,
-        "pnl_usd": 0.31,
-        "roe_pct": 1.74
-      },
-      {
-        "timestamp": "2026-10-20T13:01:10.907131",
-        "price": 0.62228,
-        "drop_pct": -1.0,
-        "pnl_usd": -0.37,
-        "roe_pct": -2.03
-      },
-      {
-        "timestamp": "2026-10-20T13:31:33.763784",
-        "price": 0.63728,
-        "drop_pct": -3.44,
-        "pnl_usd": -1.26,
-        "roe_pct": -7.0
-      },
       {
         "timestamp": "2026-10-20T14:01:55.707587",
         "price": 0.6358,
@@ -6003,6 +5961,48 @@
         "drop_pct": 0.72,
         "pnl_usd": 0.26,
         "roe_pct": 1.43
+      },
+      {
+        "timestamp": "2026-10-21T12:08:31.013396",
+        "price": 0.61201,
+        "drop_pct": 0.66,
+        "pnl_usd": 0.24,
+        "roe_pct": 1.33
+      },
+      {
+        "timestamp": "2026-10-21T12:38:50.501198",
+        "price": 0.6156,
+        "drop_pct": 0.08,
+        "pnl_usd": 0.03,
+        "roe_pct": 0.16
+      },
+      {
+        "timestamp": "2026-10-21T13:08:57.582163",
+        "price": 0.617,
+        "drop_pct": -0.15,
+        "pnl_usd": -0.06,
+        "roe_pct": -0.36
+      },
+      {
+        "timestamp": "2026-10-21T13:39:00.301868",
+        "price": 0.62685,
+        "drop_pct": -1.75,
+        "pnl_usd": -0.62,
+        "roe_pct": -3.42
+      },
+      {
+        "timestamp": "2026-10-21T14:09:11.258290",
+        "price": 0.6333,
+        "drop_pct": -2.79,
+        "pnl_usd": -1.0,
+        "roe_pct": -5.57
+      },
+      {
+        "timestamp": "2026-10-21T14:39:12.038647",
+        "price": 0.63538,
+        "drop_pct": -3.13,
+        "pnl_usd": -1.12,
+        "roe_pct": -6.21
       }
     ],
     "event_logs": [],
@@ -6231,11 +6231,11 @@
     "is_on_chain_sl": true,
     "max_favorable_drop_pct": 1.53,
     "max_adverse_pump_pct": 1.66,
-    "current_drop_pct": -0.16,
-    "current_px": 0.20663,
-    "unrealized_pnl": -0.14,
-    "roe_pct": -0.31,
-    "last_updated": "2026-10-21 11:59:56",
+    "current_drop_pct": 1.0,
+    "current_px": 0.20902,
+    "unrealized_pnl": 0.88,
+    "roe_pct": 1.96,
+    "last_updated": "2026-10-21 15:00:02",
     "id": 5097,
     "coin": "WIF",
     "strategy": "SWING",
@@ -6246,7 +6246,7 @@
     "exit_px": null,
     "size": 432.0,
     "leverage": 2,
-    "margin_used": 44.63424,
+    "margin_used": 45.14184,
     "realized_pnl": null,
     "fee_usd": 0.0,
     "exit_reason": null,
@@ -6462,6 +6462,48 @@
         "drop_pct": -0.6,
         "pnl_usd": -0.54,
         "roe_pct": -1.22
+      },
+      {
+        "timestamp": "2026-10-21T12:16:39.909913",
+        "price": 0.20592,
+        "drop_pct": -0.5,
+        "pnl_usd": -0.46,
+        "roe_pct": -1.04
+      },
+      {
+        "timestamp": "2026-10-21T12:47:00.663261",
+        "price": 0.20675,
+        "drop_pct": -0.1,
+        "pnl_usd": -0.11,
+        "roe_pct": -0.24
+      },
+      {
+        "timestamp": "2026-10-21T13:17:07.494995",
+        "price": 0.206895,
+        "drop_pct": -0.03,
+        "pnl_usd": -0.03,
+        "roe_pct": -0.07
+      },
+      {
+        "timestamp": "2026-10-21T13:47:09.773252",
+        "price": 0.20775,
+        "drop_pct": 0.38,
+        "pnl_usd": 0.33,
+        "roe_pct": 0.75
+      },
+      {
+        "timestamp": "2026-10-21T14:17:22.090246",
+        "price": 0.208155,
+        "drop_pct": 0.58,
+        "pnl_usd": 0.52,
+        "roe_pct": 1.17
+      },
+      {
+        "timestamp": "2026-10-21T14:47:27.883633",
+        "price": 0.208695,
+        "drop_pct": 0.84,
+        "pnl_usd": 0.74,
+        "roe_pct": 1.66
       }
     ],
     "event_logs": [],
@@ -6748,13 +6790,13 @@
     "initial_sl_px": 0.085236,
     "current_sl_px": 0.08526,
     "is_on_chain_sl": true,
-    "max_favorable_drop_pct": 1.05,
+    "max_favorable_drop_pct": 1.7,
     "max_adverse_pump_pct": 0.6,
-    "current_drop_pct": 0.4,
-    "current_px": 0.095089,
-    "unrealized_pnl": 0.43,
-    "roe_pct": 0.81,
-    "last_updated": "2026-10-21 11:59:56",
+    "current_drop_pct": 1.55,
+    "current_px": 0.096178,
+    "unrealized_pnl": 1.65,
+    "roe_pct": 3.09,
+    "last_updated": "2026-10-21 15:00:02",
     "id": 5100,
     "coin": "POL",
     "strategy": "SWING",
@@ -6765,7 +6807,7 @@
     "exit_px": null,
     "size": 1126.0,
     "leverage": 2,
-    "margin_used": 53.53567,
+    "margin_used": 54.143147,
     "realized_pnl": null,
     "fee_usd": 0.0,
     "exit_reason": null,
@@ -6911,6 +6953,48 @@
         "drop_pct": 0.36,
         "pnl_usd": 0.37,
         "roe_pct": 0.7
+      },
+      {
+        "timestamp": "2026-10-21T12:13:39.684475",
+        "price": 0.095317,
+        "drop_pct": 0.64,
+        "pnl_usd": 0.69,
+        "roe_pct": 1.29
+      },
+      {
+        "timestamp": "2026-10-21T12:43:59.616912",
+        "price": 0.095211,
+        "drop_pct": 0.53,
+        "pnl_usd": 0.57,
+        "roe_pct": 1.07
+      },
+      {
+        "timestamp": "2026-10-21T13:14:07.246581",
+        "price": 0.095179,
+        "drop_pct": 0.5,
+        "pnl_usd": 0.53,
+        "roe_pct": 1.0
+      },
+      {
+        "timestamp": "2026-10-21T13:44:09.762193",
+        "price": 0.095633,
+        "drop_pct": 0.98,
+        "pnl_usd": 1.07,
+        "roe_pct": 2.0
+      },
+      {
+        "timestamp": "2026-10-21T14:14:20.754296",
+        "price": 0.095603,
+        "drop_pct": 0.95,
+        "pnl_usd": 1.02,
+        "roe_pct": 1.92
+      },
+      {
+        "timestamp": "2026-10-21T14:44:23.972375",
+        "price": 0.096194,
+        "drop_pct": 1.57,
+        "pnl_usd": 1.67,
+        "roe_pct": 3.14
       }
     ],
     "event_logs": [],
@@ -6932,12 +7016,12 @@
     "current_sl_px": 0.07374,
     "is_on_chain_sl": true,
     "max_favorable_drop_pct": 0.46,
-    "max_adverse_pump_pct": 0.63,
-    "current_drop_pct": -0.46,
-    "current_px": 0.081539,
-    "unrealized_pnl": -0.42,
-    "roe_pct": -0.93,
-    "last_updated": "2026-10-21 11:59:56",
+    "max_adverse_pump_pct": 0.79,
+    "current_drop_pct": 0.18,
+    "current_px": 0.082063,
+    "unrealized_pnl": 0.16,
+    "roe_pct": 0.34,
+    "last_updated": "2026-10-21 15:00:02",
     "id": 5101,
     "coin": "DOGE",
     "strategy": "SWING",
@@ -6948,7 +7032,7 @@
     "exit_px": null,
     "size": 1120.0,
     "leverage": 2,
-    "margin_used": 45.6624,
+    "margin_used": 45.95248,
     "realized_pnl": null,
     "fee_usd": 0.0,
     "exit_reason": null,
@@ -7066,6 +7150,48 @@
         "drop_pct": -0.6,
         "pnl_usd": -0.55,
         "roe_pct": -1.2
+      },
+      {
+        "timestamp": "2026-10-21T12:23:06.066795",
+        "price": 0.081696,
+        "drop_pct": -0.27,
+        "pnl_usd": -0.26,
+        "roe_pct": -0.56
+      },
+      {
+        "timestamp": "2026-10-21T12:53:27.423242",
+        "price": 0.081342,
+        "drop_pct": -0.7,
+        "pnl_usd": -0.65,
+        "roe_pct": -1.42
+      },
+      {
+        "timestamp": "2026-10-21T13:23:34.343812",
+        "price": 0.081394,
+        "drop_pct": -0.64,
+        "pnl_usd": -0.59,
+        "roe_pct": -1.29
+      },
+      {
+        "timestamp": "2026-10-21T13:53:37.053088",
+        "price": 0.081551,
+        "drop_pct": -0.45,
+        "pnl_usd": -0.42,
+        "roe_pct": -0.91
+      },
+      {
+        "timestamp": "2026-10-21T14:23:48.742396",
+        "price": 0.081775,
+        "drop_pct": -0.18,
+        "pnl_usd": -0.16,
+        "roe_pct": -0.35
+      },
+      {
+        "timestamp": "2026-10-21T14:53:59.150276",
+        "price": 0.082171,
+        "drop_pct": 0.31,
+        "pnl_usd": 0.29,
+        "roe_pct": 0.63
       }
     ],
     "event_logs": [],
@@ -7088,11 +7214,11 @@
     "is_on_chain_sl": true,
     "max_favorable_drop_pct": 2.32,
     "max_adverse_pump_pct": 0.22,
-    "current_drop_pct": 0.35,
-    "current_px": 80.6815,
-    "unrealized_pnl": 0.86,
-    "roe_pct": 0.7,
-    "last_updated": "2026-10-21 11:59:56",
+    "current_drop_pct": 1.57,
+    "current_px": 81.6595,
+    "unrealized_pnl": 3.84,
+    "roe_pct": 3.13,
+    "last_updated": "2026-10-21 15:00:02",
     "id": 5102,
     "coin": "HYPE",
     "strategy": "SWING",
@@ -7103,7 +7229,7 @@
     "exit_px": null,
     "size": 3.05,
     "leverage": 2,
-    "margin_used": 123.04005,
+    "margin_used": 124.529365,
     "realized_pnl": null,
     "fee_usd": 0.0,
     "exit_reason": null,
@@ -7186,6 +7312,48 @@
         "drop_pct": 0.47,
         "pnl_usd": 1.14,
         "roe_pct": 0.93
+      },
+      {
+        "timestamp": "2026-10-21T12:16:14.008966",
+        "price": 80.7895,
+        "drop_pct": 0.48,
+        "pnl_usd": 1.2,
+        "roe_pct": 0.98
+      },
+      {
+        "timestamp": "2026-10-21T12:46:35.053985",
+        "price": 80.7005,
+        "drop_pct": 0.37,
+        "pnl_usd": 0.92,
+        "roe_pct": 0.75
+      },
+      {
+        "timestamp": "2026-10-21T13:16:41.912519",
+        "price": 80.7775,
+        "drop_pct": 0.47,
+        "pnl_usd": 1.12,
+        "roe_pct": 0.91
+      },
+      {
+        "timestamp": "2026-10-21T13:46:44.171964",
+        "price": 80.8655,
+        "drop_pct": 0.58,
+        "pnl_usd": 1.43,
+        "roe_pct": 1.17
+      },
+      {
+        "timestamp": "2026-10-21T14:16:56.430461",
+        "price": 80.9885,
+        "drop_pct": 0.73,
+        "pnl_usd": 1.79,
+        "roe_pct": 1.46
+      },
+      {
+        "timestamp": "2026-10-21T14:47:06.380273",
+        "price": 81.5775,
+        "drop_pct": 1.46,
+        "pnl_usd": 3.58,
+        "roe_pct": 2.92
       }
     ],
     "event_logs": [],
@@ -7289,6 +7457,199 @@
         "drop_pct": -0.96,
         "pnl_usd": -3.6,
         "roe_pct": -2.94
+      }
+    ],
+    "event_logs": [],
+    "ai_review": null,
+    "milestones": {
+      "trimmed_10pct": false,
+      "trimmed_time": null,
+      "tp_20pct": false,
+      "tp_time": null,
+      "runner_35pct": false,
+      "runner_time": null,
+      "sl_hit": false,
+      "sl_time": null
+    }
+  },
+  "AERO": {
+    "side": "SHORT",
+    "initial_sl_px": 0.93247,
+    "current_sl_px": 0.93221,
+    "is_on_chain_sl": true,
+    "max_favorable_drop_pct": 0.44,
+    "max_adverse_pump_pct": 0.29,
+    "current_drop_pct": 0.16,
+    "current_px": 0.84637,
+    "unrealized_pnl": 0.39,
+    "roe_pct": 0.32,
+    "last_updated": "2026-10-21 15:00:02",
+    "id": 5104,
+    "coin": "AERO",
+    "strategy": "SWING",
+    "status": "OPEN",
+    "entry_time": "2026-10-21 12:56:56",
+    "exit_time": null,
+    "entry_px": 0.847697,
+    "exit_px": null,
+    "size": 288.0,
+    "leverage": 2,
+    "margin_used": 121.8744,
+    "realized_pnl": null,
+    "fee_usd": 0.0,
+    "exit_reason": null,
+    "r_multiple": null,
+    "hold_hours": null,
+    "snapshots": [
+      {
+        "timestamp": "2026-10-21T12:56:56.576536",
+        "price": 0.847355,
+        "drop_pct": 0.04,
+        "pnl_usd": 0.09,
+        "roe_pct": 0.07
+      },
+      {
+        "timestamp": "2026-10-21T13:26:58.615677",
+        "price": 0.845005,
+        "drop_pct": 0.32,
+        "pnl_usd": 0.81,
+        "roe_pct": 0.66
+      },
+      {
+        "timestamp": "2026-10-21T13:57:09.162058",
+        "price": 0.847215,
+        "drop_pct": 0.06,
+        "pnl_usd": 0.16,
+        "roe_pct": 0.13
+      },
+      {
+        "timestamp": "2026-10-21T14:27:33.150441",
+        "price": 0.846235,
+        "drop_pct": 0.17,
+        "pnl_usd": 0.45,
+        "roe_pct": 0.37
+      },
+      {
+        "timestamp": "2026-10-21T14:57:41.318505",
+        "price": 0.846,
+        "drop_pct": 0.2,
+        "pnl_usd": 0.53,
+        "roe_pct": 0.44
+      }
+    ],
+    "event_logs": [],
+    "ai_review": null,
+    "milestones": {
+      "trimmed_10pct": false,
+      "trimmed_time": null,
+      "tp_20pct": false,
+      "tp_time": null,
+      "runner_35pct": false,
+      "runner_time": null,
+      "sl_hit": false,
+      "sl_time": null
+    }
+  },
+  "PAXG": {
+    "side": "LONG",
+    "initial_sl_px": 4024.5,
+    "current_sl_px": 4024.5,
+    "is_on_chain_sl": true,
+    "max_favorable_drop_pct": 0.0,
+    "max_adverse_pump_pct": 0.09,
+    "current_drop_pct": -0.02,
+    "current_px": 4128.15,
+    "unrealized_pnl": -0.07,
+    "roe_pct": -0.06,
+    "last_updated": "2026-10-21 15:00:02",
+    "risk_pct_1r": 2.531,
+    "current_r": -0.01,
+    "mfe_r": 0.0,
+    "mae_r": 0.04,
+    "id": 5105,
+    "coin": "PAXG",
+    "strategy": "DAYTRADE",
+    "status": "OPEN",
+    "entry_time": "2026-10-21 14:27:33",
+    "exit_time": null,
+    "entry_px": 4129.0,
+    "exit_px": null,
+    "size": 0.089,
+    "leverage": 3,
+    "margin_used": 122.469933,
+    "realized_pnl": null,
+    "fee_usd": 0.0,
+    "exit_reason": null,
+    "r_multiple": null,
+    "hold_hours": null,
+    "snapshots": [
+      {
+        "timestamp": "2026-10-21T14:27:33.171879",
+        "price": 4128.95,
+        "drop_pct": -0.0,
+        "pnl_usd": 0.0,
+        "roe_pct": 0.0
+      },
+      {
+        "timestamp": "2026-10-21T14:57:41.341871",
+        "price": 4127.85,
+        "drop_pct": -0.03,
+        "pnl_usd": -0.1,
+        "roe_pct": -0.08
+      }
+    ],
+    "event_logs": [],
+    "ai_review": null,
+    "milestones": {
+      "trimmed_10pct": false,
+      "trimmed_time": null,
+      "tp_20pct": false,
+      "tp_time": null,
+      "runner_35pct": false,
+      "runner_time": null,
+      "sl_hit": false,
+      "sl_time": null
+    }
+  },
+  "ALT": {
+    "side": "LONG",
+    "initial_sl_px": 0.009808,
+    "current_sl_px": 0.009808,
+    "is_on_chain_sl": true,
+    "max_favorable_drop_pct": 0.0,
+    "max_adverse_pump_pct": 0.37,
+    "current_drop_pct": -0.32,
+    "current_px": 0.010027,
+    "unrealized_pnl": -1.13,
+    "roe_pct": -0.92,
+    "last_updated": "2026-10-21 15:00:02",
+    "risk_pct_1r": 2.5,
+    "current_r": -0.13,
+    "mfe_r": 0.0,
+    "mae_r": 0.15,
+    "id": 5106,
+    "coin": "ALT",
+    "strategy": "DAYTRADE",
+    "status": "OPEN",
+    "entry_time": "2026-10-21 14:57:09",
+    "exit_time": null,
+    "entry_px": 0.010059,
+    "exit_px": null,
+    "size": 36621.0,
+    "leverage": 3,
+    "margin_used": 122.424003,
+    "realized_pnl": null,
+    "fee_usd": 0.0,
+    "exit_reason": null,
+    "r_multiple": null,
+    "hold_hours": null,
+    "snapshots": [
+      {
+        "timestamp": "2026-10-21T14:57:09.131302",
+        "price": 0.010057,
+        "drop_pct": -0.02,
+        "pnl_usd": -0.07,
+        "roe_pct": -0.06
       }
     ],
     "event_logs": [],
