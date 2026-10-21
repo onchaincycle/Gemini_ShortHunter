@@ -94,21 +94,27 @@ def generate_daily_performance_section(root_dir: str, trader = None) -> str:
 
     svg_w = 760
     svg_h = 220
-    zero_y = 115
+    zero_y = 120
     n_days = len(daily_rows)
     slot_w = 640 / max(1, n_days)
     svg_bars = []
+
+    # Sumbu Y difokuskan murni pada persentase (%) ROI harian
+    # Skala: 1.0% = 12.0 px (grid: +6%, +4%, +2%, 0%, -2%)
+    px_per_pct = 12.0
 
     for i, row in enumerate(daily_rows):
         cx = 70 + i * slot_w + slot_w / 2
         pnl = row["net_pnl"]
         pct = row["pct_modal"]
-        bar_h = min(78, max(10, abs(pnl) * 12.0))
-        color = "#10b981" if pnl >= 0 else "#ef4444"
-        by = (zero_y - bar_h) if pnl >= 0 else zero_y
+        # Tinggi bar dihitung murni proporsional dari persentase (%) harian terhadap modal disetor
+        bar_h = min(78, max(5, abs(pct) * px_per_pct))
+        color = "#10b981" if pct >= 0 else "#ef4444"
+        by = (zero_y - bar_h) if pct >= 0 else zero_y
         
-        val_y = by - 16 if pnl >= 0 else by + bar_h + 15
-        pct_y = by - 4 if pnl >= 0 else by + bar_h + 27
+        # Persentase sebagai metrik utama yang menonjol di atas/bawah bar
+        pct_y = by - 16 if pct >= 0 else by + bar_h + 16
+        val_y = by - 4 if pct >= 0 else by + bar_h + 28
         
         dt_obj = datetime.strptime(row["date"], "%Y-%m-%d")
         d_label = dt_obj.strftime("%d %b")
@@ -118,10 +124,10 @@ def generate_daily_performance_section(root_dir: str, trader = None) -> str:
         bar_snippet = f"""
             <g class="bar-group">
                 <rect x="{cx - 24:.1f}" y="{by:.1f}" width="48" height="{bar_h:.1f}" rx="5" fill="{color}" opacity="0.9" />
-                <text x="{cx:.1f}" y="{val_y:.1f}" text-anchor="middle" fill="{color}" font-size="11" font-weight="700">{'+' if pnl >= 0 else ''}${pnl:.2f}</text>
-                <text x="{cx:.1f}" y="{pct_y:.1f}" text-anchor="middle" fill="{color}" font-size="10" font-weight="800">({pct:+.2f}%)</text>
-                <text x="{cx:.1f}" y="175" text-anchor="middle" fill="var(--text-main)" font-size="11" font-weight="600">{d_label}</text>
-                <text x="{cx:.1f}" y="190" text-anchor="middle" fill="var(--text-muted)" font-size="9">{row['wins']}W/{row['losses']}L • M:${row['modal']:.0f}</text>
+                <text x="{cx:.1f}" y="{pct_y:.1f}" text-anchor="middle" fill="{color}" font-size="12" font-weight="800">{pct:+.2f}%</text>
+                <text x="{cx:.1f}" y="{val_y:.1f}" text-anchor="middle" fill="{color}" font-size="10" font-weight="600" opacity="0.85">({'+' if pnl >= 0 else ''}${pnl:.2f})</text>
+                <text x="{cx:.1f}" y="180" text-anchor="middle" fill="var(--text-main)" font-size="11" font-weight="600">{d_label}</text>
+                <text x="{cx:.1f}" y="195" text-anchor="middle" fill="var(--text-muted)" font-size="9">{row['wins']}W/{row['losses']}L • M:${row['modal']:.0f}</text>
             </g>"""
         svg_bars.append(bar_snippet)
 
@@ -185,27 +191,37 @@ def generate_daily_performance_section(root_dir: str, trader = None) -> str:
                 </div>
             </div>
 
-            <!-- SVG Performance Chart -->
+            <!-- SVG Performance Chart (Sumbu Y Fokus Persentase %) -->
             <div style="width: 100%; overflow-x: auto; padding-bottom: 8px;">
                 <svg viewBox="0 0 {svg_w} {svg_h}" style="min-width: 620px; width: 100%; height: auto; font-family: inherit;">
-                    <!-- Zero line -->
-                    <line x1="50" y1="{zero_y}" x2="{svg_w - 30}" y2="{zero_y}" stroke="var(--card-border)" stroke-dasharray="4" stroke-width="1.5" />
-                    <text x="20" y="{zero_y + 4}" fill="var(--text-muted)" font-size="11" font-weight="600">$0</text>
+                    <!-- Zero reference line (0.0%) -->
+                    <line x1="55" y1="{zero_y}" x2="{svg_w - 25}" y2="{zero_y}" stroke="var(--card-border)" stroke-dasharray="4" stroke-width="1.5" />
+                    <text x="14" y="{zero_y + 4}" fill="var(--text-muted)" font-size="11" font-weight="700">0.0%</text>
 
-                    <!-- Grid Reference lines -->
-                    <line x1="50" y1="{zero_y - 60}" x2="{svg_w - 30}" y2="{zero_y - 60}" stroke="rgba(255,255,255,0.05)" stroke-width="1" />
-                    <text x="15" y="{zero_y - 56}" fill="var(--text-muted)" font-size="10">+$5</text>
+                    <!-- Percentage Grid Reference lines -->
+                    <!-- +6.0% -->
+                    <line x1="55" y1="{zero_y - 72}" x2="{svg_w - 25}" y2="{zero_y - 72}" stroke="rgba(255,255,255,0.06)" stroke-width="1" stroke-dasharray="2" />
+                    <text x="10" y="{zero_y - 68}" fill="var(--text-muted)" font-size="10" font-weight="600">+6.0%</text>
 
-                    <line x1="50" y1="{zero_y + 40}" x2="{svg_w - 30}" y2="{zero_y + 40}" stroke="rgba(255,255,255,0.05)" stroke-width="1" />
-                    <text x="15" y="{zero_y + 44}" fill="var(--text-muted)" font-size="10">-$3</text>
+                    <!-- +4.0% -->
+                    <line x1="55" y1="{zero_y - 48}" x2="{svg_w - 25}" y2="{zero_y - 48}" stroke="rgba(255,255,255,0.05)" stroke-width="1" />
+                    <text x="10" y="{zero_y - 44}" fill="var(--text-muted)" font-size="10" font-weight="600">+4.0%</text>
+
+                    <!-- +2.0% (Target Minimum) -->
+                    <line x1="55" y1="{zero_y - 24}" x2="{svg_w - 25}" y2="{zero_y - 24}" stroke="rgba(16,185,129,0.18)" stroke-width="1" stroke-dasharray="3" />
+                    <text x="10" y="{zero_y - 20}" fill="#10b981" font-size="10" font-weight="600">+2.0%</text>
+
+                    <!-- -2.0% (Drawdown Zone) -->
+                    <line x1="55" y1="{zero_y + 24}" x2="{svg_w - 25}" y2="{zero_y + 24}" stroke="rgba(239,68,68,0.15)" stroke-width="1" stroke-dasharray="3" />
+                    <text x="10" y="{zero_y + 28}" fill="#ef4444" font-size="10" font-weight="600">-2.0%</text>
 
                     {svg_bars_html}
                 </svg>
             </div>
 
             <div style="margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--card-border); font-size: 0.8rem; color: var(--text-muted); display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
-                <span>{today_summary}🛡️ Formula: <code>% Profit = (Net PnL / Total Modal Harian) × 100%</code></span>
-                <span>💡 Top-Up Modal (+$194.61) tercatat terpisah & tidak mendistorsi % ROI</span>
+                <span>{today_summary}🛡️ Formula: <code>% Profit Harian = (Net PnL / Total Modal Efektif) × 100%</code></span>
+                <span>💡 Sumbu Y murni persentase (%) ROI harian | Setoran deposit tercatat terpisah</span>
             </div>
         </div>
 
