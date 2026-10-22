@@ -47,3 +47,4 @@ Daftar fitur dan peningkatan yang dijadwalkan untuk tahap berikutnya:
 ## Dari Tahap 3.1 (2026-10-22)
 - Pencatatan `screener_signals` bergantung slot: auto_hunter hanya scan kuadran yang slotnya terbuka → data uji skor bolong saat slot penuh. Opsi: scan ringan terjadwal (mis. tiap 1 jam) khusus pencatatan, terlepas dari slot. Perhatikan beban API Hyperliquid.
 - Rekam candle OHLC 15m untuk koin kandidat screener (label triple-barrier lebih akurat dari snapshot mark price).
+- Riset LONG intraday: ambil candle 15m HL ±95 koin × 90 hari (skrip dijalankan di Mac); uji konsep LONG ikut-tren/breakout vs placebo; uji sisi SHORT intraday dengan kerangka `scripts/research/bt_long_intraday.py`.
