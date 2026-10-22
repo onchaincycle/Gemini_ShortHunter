@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-10-22 06:13:30",
+  "updated_at": "2026-10-22 16:54:42",
   "total_rules_learned": 23,
   "rules": [
     {
@@ -92,8 +92,9 @@
       "stream": "SWING",
       "side": "SHORT",
       "root_cause": "CLEAN_WIN",
-      "rule": "Pastikan toleransi MAE mencukupi untuk menampung volatilitas awal sebelum tren berjalan sesuai rencana.",
-      "source_coin": "AERO"
+      "rule": "Pertahankan posisi swing short selama struktur tren masih menunjukkan lower high dan lower low.",
+      "source_coin": "AERO",
+      "updated_at": "2026-10-22 16:54:42"
     },
     {
       "id": "MEM-011",
