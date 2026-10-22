@@ -5,3 +5,11 @@ requests>=2.31.0
 ccxt>=4.4.0
 tqdm>=4.66.0
 python-dotenv>=1.0.0
+# --- Tahap 4A (2026-10-22): paket yang dipakai kode tapi belum tercantum (dicocokkan dgn .venv Mac) ---
+eth_account>=0.13.7
+hyperliquid-python-sdk>=0.24.0
+google-genai>=2.31.0
+pydantic>=2.14.1
+rich>=15.0.0
+pyflakes>=4.0.3
+# Versi persis seperti di Mac: requirements-lock.txt (dipakai di VPS: pip install -r requirements-lock.txt)

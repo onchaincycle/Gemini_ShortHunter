@@ -16,9 +16,12 @@ from datetime import date, datetime
 from typing import Any, Dict, Optional
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-CONTRACT_PATH = os.path.abspath(os.path.join(BASE_DIR, "..", "Claude_Crypto", "SCR_v10", "output", "scr_signals.json"))
+try:
+    from src.paths import SCR_CONTRACT_PATH as CONTRACT_PATH  # Tahap 4A: bisa di-override SH_SCR_CONTRACT
+except ImportError:
+    from paths import SCR_CONTRACT_PATH as CONTRACT_PATH
 SUPPORTED_SCHEMA = 1
-MAX_AGE_DAYS = 3
+MAX_AGE_DAYS = 7  # 2026-10-22 keputusan user (Tahap 4A): 3 -> 7 hari, agar Mac mini tidak wajib menyala tiap hari saat bot di VPS
 
 _cache: Dict[str, Any] = {"mtime": None, "data": None}
 

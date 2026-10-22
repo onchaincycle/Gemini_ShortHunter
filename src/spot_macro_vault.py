@@ -24,7 +24,10 @@ import pandas as pd
 import numpy as np
 
 # Path default ke project Claude_Crypto SCR v10
-CLAUDE_CRYPTO_DIR = "/Users/imansulaiman/Documents/Claude_Crypto/SCR_v10"
+try:
+    from src.paths import SCR_DIR as CLAUDE_CRYPTO_DIR  # Tahap 4A: tanpa jalur /Users
+except ImportError:
+    from paths import SCR_DIR as CLAUDE_CRYPTO_DIR
 SCR_DB_PATH = os.path.join(CLAUDE_CRYPTO_DIR, "data", "scr.db")
 PORTFOLIO_CSV_PATH = os.path.join(CLAUDE_CRYPTO_DIR, "inputs", "portfolio.csv")
 LOCAL_DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")

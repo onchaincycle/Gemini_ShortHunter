@@ -124,6 +124,7 @@ class SystemGuardianAgent:
 
         # 3. Scrub local macOS/Linux username paths
         cleaned = re.sub(r"/Users/[A-Za-z0-9._\-]+", "/Users/[LOCAL_USER]", cleaned)
+        cleaned = re.sub(r"/home/[A-Za-z0-9._\-]+", "/home/[LOCAL_USER]", cleaned)  # Tahap 4A: Linux/VPS
         cleaned = re.sub(r"/home/[A-Za-z0-9._\-]+", "/home/[LOCAL_USER]", cleaned)
 
         return cleaned

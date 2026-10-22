@@ -26,7 +26,10 @@ from typing import Dict, List, Optional, Tuple, Any
 import numpy as np
 import pandas as pd
 
-CLAUDE_CRYPTO_BASE = "/Users/imansulaiman/Documents/Claude_Crypto"
+try:
+    from src.paths import CLAUDE_CRYPTO_DIR as CLAUDE_CRYPTO_BASE  # Tahap 4A: tanpa jalur /Users
+except ImportError:  # dijalankan dari dalam src/
+    from paths import CLAUDE_CRYPTO_DIR as CLAUDE_CRYPTO_BASE
 COIN_CLASSES_CSV = os.path.join(CLAUDE_CRYPTO_BASE, "SCR_v10", "inputs", "coin_classes.csv")
 LOCAL_DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
 LOCAL_CLASSES_CACHE = os.path.join(LOCAL_DATA_DIR, "coin_classes.json")

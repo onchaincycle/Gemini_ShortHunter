@@ -2021,8 +2021,11 @@ def menu_forward_test_journal():
                     print(f"  📦 Link Repository GitHub        : {res['repo_url']}")
                 open_browser = input("\nBuka dashboard di browser laptop sekarang? (Y/N) [default: Y]: ").strip().upper()
                 if open_browser in ["", "Y", "YES"]:
-                    import subprocess
-                    subprocess.run(["open", "docs/index.html"])
+                    import subprocess, sys as _sys
+                    if _sys.platform == "darwin":
+                        subprocess.run(["open", "docs/index.html"])
+                    else:  # Linux/VPS: tidak ada browser lokal
+                        print(f"  Buka file: {os.path.abspath('docs/index.html')}")
             else:
                 print(f"\n[!] Gagal push ke GitHub: {res.get('error')}")
             input("\nTekan ENTER untuk kembali ke Jurnal...")

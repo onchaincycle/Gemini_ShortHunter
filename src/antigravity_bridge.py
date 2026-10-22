@@ -14,6 +14,10 @@ from typing import Dict, List, Optional, Any
 
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
+
+def _uri(rel):  # Tahap 4A: tautan file mengikuti lokasi repo (Mac atau VPS)
+    return "file://" + os.path.join(ROOT_DIR, rel)
+
 BRIDGE_JSON_PATH = os.path.join(ROOT_DIR, "data", "antigravity_bridge.json")
 QA_JSONL_LOG_PATH = os.path.join(ROOT_DIR, "logs", "war_room_qa_transcript.jsonl")
 AGENTS_MD_PATH = os.path.join(ROOT_DIR, "AGENTS.md")
@@ -347,9 +351,9 @@ class AntigravityBridge:
         lines = [
             "# ShortHunter <-> Antigravity Live Two-Way Communication Bridge",
             "",
-            "File ini disinkronkan secara otomatis oleh [`src/antigravity_bridge.py`](file:///Users/imansulaiman/Documents/Gemini_ShortHunter/src/antigravity_bridge.py) setiap kali User berdiskusi dengan **AI War Room** di [`menu.py`](file:///Users/imansulaiman/Documents/Gemini_ShortHunter/menu.py).",
-            "- **Arah 1 (Tools Trading baca Project):** AI Trading membaca [`BACKLOG.md`](file:///Users/imansulaiman/Documents/Gemini_ShortHunter/BACKLOG.md), daftar modul `src/`, dan pesan dari Antigravity via `get_context_for_trading_ai()`.",
-            "- **Arah 2 (Project/Antigravity baca Tools Trading):** Antigravity otomatis membaca file `AGENTS.md` ini, [`logs/war_room_qa_transcript.jsonl`](file:///Users/imansulaiman/Documents/Gemini_ShortHunter/logs/war_room_qa_transcript.jsonl), dan [`data/antigravity_bridge.json`](file:///Users/imansulaiman/Documents/Gemini_ShortHunter/data/antigravity_bridge.json) di setiap giliran.",
+            f"File ini disinkronkan secara otomatis oleh [`src/antigravity_bridge.py`]({_uri('src/antigravity_bridge.py')}) setiap kali User berdiskusi dengan **AI War Room** di [`menu.py`]({_uri('menu.py')}).",
+            f"- **Arah 1 (Tools Trading baca Project):** AI Trading membaca [`BACKLOG.md`]({_uri('BACKLOG.md')}), daftar modul `src/`, dan pesan dari Antigravity via `get_context_for_trading_ai()`.",
+            f"- **Arah 2 (Project/Antigravity baca Tools Trading):** Antigravity otomatis membaca file `AGENTS.md` ini, [`logs/war_room_qa_transcript.jsonl`]({_uri('logs/war_room_qa_transcript.jsonl')}), dan [`data/antigravity_bridge.json`]({_uri('data/antigravity_bridge.json')}) di setiap giliran.",
             f"- **Terakhir Disinkronkan:** `{now_sync}` | **Total Q&A Tercatat:** `{len(digest)}`",
             "",
             "## 1. Tiket Pengembangan dari Trading AI untuk Antigravity (Open Dev Backlog)",
@@ -396,7 +400,7 @@ class AntigravityBridge:
 
         lines.append("")
         lines.append("## 5. Instruksi Kerja untuk Antigravity")
-        lines.append("- Saat User meminta pengembangan berikutnya atau bertanya tentang diskusi di aplikasi trading, selalu periksa bagian **Tiket Pengembangan**, **Log Tanya-Jawab**, dan **Snapshot Status Live Tools Trading** di atas (serta [`BACKLOG.md`](file:///Users/imansulaiman/Documents/Gemini_ShortHunter/BACKLOG.md)).")
+        lines.append(f"- Saat User meminta pengembangan berikutnya atau bertanya tentang diskusi di aplikasi trading, selalu periksa bagian **Tiket Pengembangan**, **Log Tanya-Jawab**, dan **Snapshot Status Live Tools Trading** di atas (serta [`BACKLOG.md`]({_uri('BACKLOG.md')})).")
         lines.append("- Setelah selesai mengimplementasikan fitur/perbaikan baru, panggil `antigravity_bridge.post_message_from_antigravity(...)` agar AI Trading di dalam aplikasi mengetahui pembaruan tersebut.")
         lines.append("")
 
