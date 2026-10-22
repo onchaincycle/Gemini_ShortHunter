@@ -1,5 +1,5 @@
 {
-  "synced_at": "2026-10-23 02:55:21",
+  "synced_at": "2026-10-23 05:59:52",
   "project": "Gemini_ShortHunter",
   "active_backlog": [
     {
@@ -176,12 +176,12 @@
   "live_tools_state": {
     "thermostat_mode": "\ud83d\udfe1 DEFENSIVE SHIELD (Mode Waspada)",
     "reserve_pct": 25.0,
-    "last_hunt_time": "2026-10-23 02:47:44",
+    "last_hunt_time": "2026-10-23 05:49:58",
     "last_hunt_status": "Skip Scan (Hemat Token): Mode Otonom dibekukan (Menunggu penutupan posisi aktif)",
     "active_positions": [
-      "SHORT TIA (SWING, PnL: $+1.51)",
-      "LONG DOGE (SWING, PnL: $-3.58)",
-      "LONG HYPE (SWING, PnL: $-8.66)"
+      "SHORT TIA (SWING, PnL: $+1.70)",
+      "LONG DOGE (SWING, PnL: $-3.71)",
+      "LONG HYPE (SWING, PnL: $-10.20)"
     ],
     "episodic_rules": [
       "[MEM-020] (DAYTRADE/SHORT): Pastikan target profit pada posisi short dikunci secara disiplin saat kondisi pasar mendukung.",
