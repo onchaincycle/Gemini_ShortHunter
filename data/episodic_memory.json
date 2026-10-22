@@ -1,6 +1,6 @@
 {
-  "updated_at": "2026-10-22 01:15:41",
-  "total_rules_learned": 22,
+  "updated_at": "2026-10-22 06:13:30",
+  "total_rules_learned": 23,
   "rules": [
     {
       "id": "MEM-001",
@@ -205,6 +205,15 @@
       "root_cause": "NORMAL_SL",
       "rule": "Hindari membuka posisi short pada PYTH ketika MAE mencapai lebih dari 1 persen tanpa konfirmasi tren turun yang kuat.",
       "source_coin": "PYTH"
+    },
+    {
+      "id": "MEM-023",
+      "created_at": "2026-10-22 06:13:30",
+      "stream": "DAYTRADE",
+      "side": "SHORT",
+      "root_cause": "CLEAN_WIN",
+      "rule": "Pertahankan disiplin eksekusi target take profit pada perdagangan intraday ketika tren harga mendukung.",
+      "source_coin": "ENA"
     }
   ]
 }

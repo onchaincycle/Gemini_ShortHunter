@@ -354,6 +354,27 @@ class ForwardTestManager:
                 best, best_gap = v, gap
         return best
 
+    @staticmethod
+    def _same_time(a: Optional[str], b: Optional[str], tol_s: float = 5.0) -> bool:
+        try:
+            fa = datetime.strptime(a, "%Y-%m-%d %H:%M:%S").timestamp()
+            fb = datetime.strptime(b, "%Y-%m-%d %H:%M:%S").timestamp()
+            return abs(fa - fb) <= tol_s
+        except Exception:
+            return a == b
+
+    @staticmethod
+    def _same_trade(rec: Dict, fill_entry_px: float, is_long: bool, tol: float = 0.02) -> bool:
+        """Record OPEN di jurnal = siklus fill yang baru tutup? (arah sama & harga entry selisih < 2%)."""
+        try:
+            side = rec.get("side")
+            if side and side != ("LONG" if is_long else "SHORT"):
+                return False
+            e = float(rec.get("entry_px") or 0.0)
+            return e > 0 and fill_entry_px > 0 and abs(e - fill_entry_px) / e < tol
+        except Exception:
+            return False
+
     def sync_with_exchange(self, trader=None) -> Dict:
         """
         Synchronizes local forward_test_journal.json directly with live Hyperliquid
@@ -480,7 +501,10 @@ class ForwardTestManager:
                     exit_dt = datetime.fromtimestamp(cyc_close[-1].get("time", 0) / 1000.0).strftime("%Y-%m-%d %H:%M:%S")
 
                     existing_closed = next(
-                        (v for k, v in journal.items() if (k == coin or k.startswith(f"{coin}@")) and v.get("status") == "CLOSED" and v.get("exit_time") == exit_dt),
+                        # FIX 2026-10-22c: toleransi 5 detik (backfill membulatkan ms ke atas, sync memotong ->
+                        # selisih 1 detik dulu dianggap trade baru -> record CLOSED ganda: INIT, VVV, BERA)
+                        (v for k, v in journal.items() if (k == coin or k.startswith(f"{coin}@")) and v.get("status") == "CLOSED"
+                         and self._same_time(v.get("exit_time"), exit_dt)),
                         None
                     )
                     # Lewati jika sudah tersinkron rapi & tidak pending rekonsiliasi
@@ -504,7 +528,16 @@ class ForwardTestManager:
 
                     # Jangan menimpa record trade lain yang sudah rekonsiliasi; tanpa pasangan -> record baru
                     _cand = journal.get(coin, {})
-                    prev = existing_closed or (_cand if _cand.get("pending_fill_reconcile") else {})
+                    if existing_closed:
+                        prev = existing_closed
+                    elif _cand.get("pending_fill_reconcile"):
+                        prev = _cand
+                    elif _cand.get("status") == "OPEN" and self._same_trade(_cand, entry_px, is_long):
+                        # FIX 2026-10-22b: posisi sudah tutup on-chain sebelum close_position_record jalan.
+                        # Pakai record OPEN yang sama (id sama) -> tidak ada record ganda & R dihitung dari SL awal.
+                        prev = _cand
+                    else:
+                        prev = {}
                     strategy = prev.get("strategy") or get_strategy(coin)
                     sl_loss_thresh = -2.5 if strategy == "DAYTRADE" else -8.0
                     if prev.get("exit_reason"):
@@ -517,6 +550,7 @@ class ForwardTestManager:
                     rec = dict(prev)
                     rec.update({
                         "coin": coin,
+                        "side": "LONG" if is_long else "SHORT",
                         "strategy": strategy,
                         "status": "CLOSED",
                         "pending_fill_reconcile": False,
