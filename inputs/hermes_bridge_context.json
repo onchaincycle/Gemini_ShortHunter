@@ -1,5 +1,5 @@
 {
-  "synced_at": "2026-10-22 06:55:04",
+  "synced_at": "2026-10-22 20:59:42",
   "project": "Gemini_ShortHunter",
   "active_backlog": [
     {
@@ -174,17 +174,16 @@
     }
   ],
   "live_tools_state": {
-    "thermostat_mode": "\ud83d\udfe2 OPTIMAL (Standard Disiplin)",
+    "thermostat_mode": "\ud83d\ude80 COMPOUND BOOST (Win Streak Aktif)",
     "reserve_pct": 15.0,
-    "last_hunt_time": "2026-10-22 06:43:40",
-    "last_hunt_status": "Ditahan oleh Filter Disiplin: ZRO (SWING): Skor 73.0 < Threshold 78.0; ZK (SWING): Skor 58.0 < Threshold 78.0",
+    "last_hunt_time": "2026-10-22 20:59:13",
+    "last_hunt_status": "Skip Scan (Hemat Token): Mode Otonom dibekukan (Menunggu penutupan posisi aktif)",
     "active_positions": [
-      "SHORT TIA (SWING, PnL: $+1.11)",
-      "LONG WIF (SWING, PnL: $+1.41)",
-      "LONG POL (SWING, PnL: $-0.20)",
-      "LONG DOGE (SWING, PnL: $-0.07)",
-      "LONG HYPE (SWING, PnL: $+0.35)",
-      "SHORT AERO (SWING, PnL: $+10.43)"
+      "SHORT TIA (SWING, PnL: $+0.96)",
+      "LONG WIF (SWING, PnL: $-2.98)",
+      "LONG POL (SWING, PnL: $-3.94)",
+      "LONG DOGE (SWING, PnL: $-2.38)",
+      "LONG HYPE (SWING, PnL: $-5.45)"
     ],
     "episodic_rules": [
       "[MEM-018] (DAYTRADE/LONG): Pastikan konfirmasi momentum tren lebih ketat pada altcoin sebelum melakukan entry posisi short untuk menghindari MAE yang tinggi.",
