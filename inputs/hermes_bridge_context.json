@@ -1,5 +1,5 @@
 {
-  "synced_at": "2026-10-22 23:45:35",
+  "synced_at": "2026-10-23 02:55:21",
   "project": "Gemini_ShortHunter",
   "active_backlog": [
     {
@@ -174,23 +174,22 @@
     }
   ],
   "live_tools_state": {
-    "thermostat_mode": "\ud83d\udfe2 OPTIMAL (Standard Disiplin)",
-    "reserve_pct": 15.0,
-    "last_hunt_time": "2026-10-22 23:45:08",
+    "thermostat_mode": "\ud83d\udfe1 DEFENSIVE SHIELD (Mode Waspada)",
+    "reserve_pct": 25.0,
+    "last_hunt_time": "2026-10-23 02:47:44",
     "last_hunt_status": "Skip Scan (Hemat Token): Mode Otonom dibekukan (Menunggu penutupan posisi aktif)",
     "active_positions": [
-      "SHORT TIA (SWING, PnL: $+1.44)",
-      "LONG POL (SWING, PnL: $-4.93)",
-      "LONG DOGE (SWING, PnL: $-3.39)",
-      "LONG HYPE (SWING, PnL: $-8.18)"
+      "SHORT TIA (SWING, PnL: $+1.51)",
+      "LONG DOGE (SWING, PnL: $-3.58)",
+      "LONG HYPE (SWING, PnL: $-8.66)"
     ],
     "episodic_rules": [
-      "[MEM-019] (DAYTRADE/LONG): Gunakan manajemen risiko ketat pada aset komoditas token seperti PAXG ketika momentum tidak kunjung terkonfirmasi.",
       "[MEM-020] (DAYTRADE/SHORT): Pastikan target profit pada posisi short dikunci secara disiplin saat kondisi pasar mendukung.",
       "[MEM-021] (SWING/LONG): Pastikan toleransi MAE hingga 5 persen diakomodasi dengan ukuran posisi yang tepat pada swing ZEC.",
       "[MEM-022] (DAYTRADE/SHORT): Hindari membuka posisi short pada PYTH ketika MAE mencapai lebih dari 1 persen tanpa konfirmasi tren turun yang kuat.",
       "[MEM-023] (DAYTRADE/SHORT): Pertahankan disiplin eksekusi target take profit pada perdagangan intraday ketika tren harga mendukung.",
-      "[MEM-024] (SWING/LONG): Amankan profit parsial jika MFE mendekati 4% pada swing trade WIF untuk menghindari pullback penuh ke area stop loss."
+      "[MEM-024] (SWING/LONG): Amankan profit parsial jika MFE mendekati 4% pada swing trade WIF untuk menghindari pullback penuh ke area stop loss.",
+      "[MEM-025] (SWING/LONG): Waspadai volatilitas berlawanan pada POL (SWING); wajib cek orderbook wall sebelum entry ulang."
     ]
   },
   "antigravity_messages": [

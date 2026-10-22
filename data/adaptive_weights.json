@@ -1,23 +1,23 @@
 {
   "SWING": {
-    "gain_90d": 15.0,
-    "rsi_daily": 15.0,
+    "gain_90d": 20.0,
+    "rsi_daily": 12.0,
     "rsi_divergence": 15.0,
-    "upper_wick_exhaustion": 15.0,
-    "h4_choch_breakdown": 20.0,
-    "funding_rate_euphoria": 10.0,
+    "upper_wick_exhaustion": 18.0,
+    "h4_choch_breakdown": 25.0,
+    "funding_rate_euphoria": 15.0,
     "nansen_smart_money": 10.0,
     "tokenomics_dilution": 10.0
   },
   "DAYTRADE": {
     "liquidity_sweep": 25.0,
-    "m15_pinbar": 22.0,
+    "m15_pinbar": 24.0,
     "bos_ema_breakdown": 10.0,
-    "funding_rate_guard": 20.0,
-    "volume_climax": 22.0
+    "funding_rate_guard": 22.0,
+    "volume_climax": 18.0
   },
   "DAYTRADE_meta": {
-    "rationale": "Based on the recent trade outcomes, liquidity sweeps continue to provide the best directional clues for reversals leading to successful take profits and positive MFE excursions. Minor adjustments have been made to down-weight unreliable structure breakdowns while prioritizing liquidity sweeps and robust funding rate guards.",
-    "updated_at": "2026-10-20T02:45:29.259328"
+    "rationale": "Based on recent trade outcomes, trades that hit take-profit and achieved high MFE showed strong alignment with liquidity sweeps and clear pinbars. Meanwhile, breakdown setups resulted in deeper MAE and larger losses, suggesting a reduction in bos_ema_breakdown weight and an increased focus on liquidity sweep confirmation.",
+    "updated_at": "2026-10-23T02:46:25.784112"
   }
 }

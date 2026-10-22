@@ -1,6 +1,6 @@
 {
-  "updated_at": "2026-10-22 22:10:41",
-  "total_rules_learned": 24,
+  "updated_at": "2026-10-23 00:01:49",
+  "total_rules_learned": 25,
   "rules": [
     {
       "id": "MEM-001",
@@ -224,6 +224,15 @@
       "root_cause": "NORMAL_SL",
       "rule": "Amankan profit parsial jika MFE mendekati 4% pada swing trade WIF untuk menghindari pullback penuh ke area stop loss.",
       "source_coin": "WIF"
+    },
+    {
+      "id": "MEM-025",
+      "created_at": "2026-10-23 00:01:49",
+      "stream": "SWING",
+      "side": "LONG",
+      "root_cause": "NORMAL_SL",
+      "rule": "Waspadai volatilitas berlawanan pada POL (SWING); wajib cek orderbook wall sebelum entry ulang.",
+      "source_coin": "POL"
     }
   ]
 }
