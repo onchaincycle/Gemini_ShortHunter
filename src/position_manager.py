@@ -1421,12 +1421,9 @@ class PositionManager:
             return {"success": False, "message": f"Gagal menyalakan Mesin via systemd: {out or 'PID belum muncul'} "
                                                  f"(cek: journalctl --user -u {SYSTEMD_UNIT} -n 30)"}
 
-        # Launch detached background process (wrapped with macOS caffeinate -i so system won't sleep unattended)
+        # Proses latar biasa. 2026-10-23 (keputusan user): TANPA caffeinate — Mac boleh tidur (Mesin utama di VPS).
         python_bin = sys.executable
-        if os.path.exists("/usr/bin/caffeinate"):
-            cmd = ["/usr/bin/caffeinate", "-i", python_bin, "-m", "src.position_manager", "--daemon-loop"]
-        else:
-            cmd = [python_bin, "-m", "src.position_manager", "--daemon-loop"]
+        cmd = [python_bin, "-m", "src.position_manager", "--daemon-loop"]
 
         with open(LOG_FILE, "a") as log_f:
             p = subprocess.Popen(

@@ -50,6 +50,9 @@ DEFAULTS: Dict[str, Any] = {
     "thermostat": {
         "stalemate_scratch_usd": 0.08,
         "circuit_breaker": {"loss_streak": 3, "daily_dd_pct": 5.0, "pause_hours": 6},
+        # 2026-10-24: streak loss hanya dihitung dari trade INTRADAY yang ditutup setelah waktu ini (WIB) — Mesin LIVE di VPS.
+        # Penutupan manual sebelum migrasi & trade swing lama tidak ikut. Setelah CB terpicu, hitungan direset (streak_reset_ts).
+        "streak_count_since": "2026-10-23 22:20:00",
         "defensive": {"loss_streak": 2},
         "compound": {"win_streak": 3},
         "modes": {

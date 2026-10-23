@@ -41,6 +41,40 @@ AUTONOMOUS_STATE_FILE = os.path.join(ROOT_DIR, "data", "autonomous_state.json")
 AUTONOMOUS_LOG_FILE = os.path.join(ROOT_DIR, "logs", "autonomous_ai.log")
 
 
+def _parse_local_dt(s) -> Optional[datetime]:
+    try:
+        return datetime.fromisoformat(str(s)[:19].replace("T", " "))
+    except Exception:
+        return None
+
+
+def streak_trades(closed_trades: List[Dict], since_str: Optional[str], reset_ts: float) -> List[Dict]:
+    """Trade yang boleh dihitung untuk streak thermostat (2026-10-24): hanya DAYTRADE, ditutup setelah `since_str`
+    (WIB, konfigurasi) DAN setelah Circuit Breaker terakhir terpicu (`reset_ts`). Urutan kronologis dipertahankan."""
+    floor = _parse_local_dt(since_str) if since_str else None
+    out = []
+    for t in closed_trades:
+        if str(t.get("strategy", "")).upper() != "DAYTRADE":
+            continue
+        dt = _parse_local_dt(t.get("exit_time"))
+        if dt is None:
+            continue
+        if floor is not None and dt < floor:
+            continue
+        if reset_ts and dt.timestamp() <= reset_ts:
+            continue
+        out.append((dt, t))
+    out.sort(key=lambda x: x[0])
+    return [t for _, t in out]
+
+
+def keep_active_circuit_breaker(thermo: Dict, now_ts: float) -> bool:
+    """CB yang dipasang aturan baru (punya streak_reset_ts) dipertahankan sampai jedanya habis.
+    CB lama (tanpa streak_reset_ts, aturan sebelum 2026-10-24) langsung dinilai ulang dengan aturan baru."""
+    return (bool(thermo.get("circuit_breaker_pause")) and now_ts < float(thermo.get("pause_until_ts", 0.0))
+            and "streak_reset_ts" in thermo)
+
+
 def _snapshot_candidate(cand: Dict) -> Dict:
     """Salinan fitur kandidat yang aman disimpan sebagai JSON (nilai skalar + list/dict kecil; tanpa DataFrame)."""
     out = {}
@@ -456,7 +490,10 @@ class AutonomousEngine:
         # Calculate current consecutive win/loss streak
         win_streak = 0
         loss_streak = 0
-        for t in reversed(closed_trades):
+        _tcfg = __import__("src.risk_config", fromlist=["get"]).get()["thermostat"]
+        _thermo_prev = state.get("thermostat") or {}
+        for t in reversed(streak_trades(closed_trades, _tcfg.get("streak_count_since"),
+                                        float(_thermo_prev.get("streak_reset_ts", 0.0) or 0.0))):
             pnl = float(t.get("realized_pnl") or t.get("final_pnl_usd", 0.0))
             # Ignore near-zero dust/stalemate scratches ($-0.08 to $+0.08) for loss streak penalty
             if abs(pnl) <= float(__import__("src.risk_config", fromlist=["get"]).get()["thermostat"]["stalemate_scratch_usd"]) and "STALEMATE" in str(t.get("exit_reason", "")):
@@ -501,8 +538,15 @@ class AutonomousEngine:
         thermo = state["thermostat"]
         # 2026-10-22 (ROADMAP 2.3): aturan & angka thermostat dari src/risk_config.py (nilai sama seperti sebelumnya)
         from src import risk_config
-        risk_config.apply_thermostat(thermo, loss_streak, win_streak, net_realized_pnl, daily_dd_pct,
-                                     win_rate, profit_factor, now_ts)
+        if keep_active_circuit_breaker(thermo, now_ts):
+            pass   # jeda CB masih berjalan -> jangan diperpanjang/ditimpa
+        else:
+            risk_config.apply_thermostat(thermo, loss_streak, win_streak, net_realized_pnl, daily_dd_pct,
+                                         win_rate, profit_factor, now_ts)
+            if thermo.get("mode") == "CIRCUIT_BREAKER":
+                thermo["streak_reset_ts"] = now_ts      # streak yang memicu CB tidak dihitung lagi sesudahnya
+            else:
+                thermo.setdefault("streak_reset_ts", 0.0)
 
         # 4. Adaptive Weights Calibration (Loop 2) - Disabled until unified scoring connects weights to screener
         ENABLE_WEIGHT_CALIBRATION = False

@@ -1,87 +1,16 @@
 {
-  "updated_at": "2026-10-23 16:06:40",
-  "total_rules_learned": 24,
+  "updated_at": "2026-10-23 22:43:02",
+  "total_rules_learned": 30,
   "rules": [
-    {
-      "id": "MEM-001",
-      "created_at": "2026-10-16 12:00:00",
-      "stream": "DAYTRADE",
-      "side": "SHORT",
-      "root_cause": "FUNDING_SQUEEZE",
-      "rule": "Jangan ambil Intraday SHORT apabila funding rate negatif ekstrem (< -0.02%/jam) kecuali ada tembok Ask Orderbook yang dominan.",
-      "source_coin": "GLOBAL"
-    },
-    {
-      "id": "MEM-002",
-      "created_at": "2026-10-16 18:00:00",
-      "stream": "SWING",
-      "side": "SHORT",
-      "root_cause": "CLEAN_WIN",
-      "rule": "Prioritaskan Swing SHORT dengan konfluensi 4H Breakdown + Upper Wick Exhaustion dan rasio Orderbook Ask >= 50%.",
-      "source_coin": "GLOBAL"
-    },
-    {
-      "id": "MEM-003",
-      "created_at": "2026-10-17 01:00:00",
-      "stream": "ALL",
-      "side": "ALL",
-      "root_cause": "PORTFOLIO_HEDGE",
-      "rule": "Berikan prioritas (Auto-Hedge Boost) pada sinyal Grade A yang menyeimbangkan ketimpangan arah Long vs Short portofolio.",
-      "source_coin": "GLOBAL"
-    },
-    {
-      "id": "MEM-004",
-      "created_at": "2026-10-23 16:04:28",
-      "stream": "SWING",
-      "side": "LONG",
-      "root_cause": "NORMAL_SL",
-      "rule": "Gunakan trailing stop atau batasi waktu tahan maksimal jika posisi tidak menunjukkan MFE positif dalam 24 jam pertama.",
-      "source_coin": "DOGE"
-    },
-    {
-      "id": "MEM-005",
-      "created_at": "2026-10-23 16:04:38",
-      "stream": "SWING",
-      "side": "LONG",
-      "root_cause": "NORMAL_SL",
-      "rule": "Pastikan struktur tren harian mendukung sebelum membuka posisi swing long pada altcoin.",
-      "source_coin": "PENDLE"
-    },
-    {
-      "id": "MEM-006",
-      "created_at": "2026-10-23 16:04:49",
-      "stream": "SWING",
-      "side": "LONG",
-      "root_cause": "NORMAL_SL",
-      "rule": "Tutup posisi swing jika tidak ada pergerakan MFE positif setelah 24 jam untuk menghindari modal tertahan.",
-      "source_coin": "POPCAT"
-    },
-    {
-      "id": "MEM-007",
-      "created_at": "2026-10-23 16:04:51",
-      "stream": "DAYTRADE",
-      "side": "SHORT",
-      "root_cause": "NORMAL_SL",
-      "rule": "Hindari membuka posisi short pada TRX ketika momentum harga sedang berada dalam fase konsolidasi naik.",
-      "source_coin": "TRX"
-    },
-    {
-      "id": "MEM-008",
-      "created_at": "2026-10-23 16:04:52",
-      "stream": "DAYTRADE",
-      "side": "LONG",
-      "root_cause": "NORMAL_SL",
-      "rule": "Terima stop loss secara disiplin saat harga langsung bergerak melawan posisi tanpa adanya MFE.",
-      "source_coin": "RUNE"
-    },
     {
       "id": "MEM-009",
       "created_at": "2026-10-23 16:05:02",
       "stream": "SWING",
       "side": "SHORT",
       "root_cause": "CLEAN_WIN",
-      "rule": "Pertahankan disiplin pada setup swing short ketika struktur tren mendukung profit terjaga.",
-      "source_coin": "ZRO"
+      "rule": "Pertahankan disiplin hold posisi swing trading sesuai target profit tanpa intervensi prematur.",
+      "source_coin": "ZRO",
+      "updated_at": "2026-10-23 22:42:33"
     },
     {
       "id": "MEM-010",
@@ -89,8 +18,9 @@
       "stream": "SWING",
       "side": "SHORT",
       "root_cause": "CLEAN_WIN",
-      "rule": "Pertahankan hold time swing trade hingga target take profit tercapai jika struktur tren masih mendukung.",
-      "source_coin": "ZK"
+      "rule": "Pertahankan disiplin pada swing trade koin kecil dan biarkan target profit tercapai sesuai rencana awal.",
+      "source_coin": "ZK",
+      "updated_at": "2026-10-23 22:42:27"
     },
     {
       "id": "MEM-011",
@@ -98,8 +28,9 @@
       "stream": "DAYTRADE",
       "side": "LONG",
       "root_cause": "NORMAL_SL",
-      "rule": "Tinjau ulang momentum order book pada aset komoditas seperti PAXG sebelum membuka posisi long intraday.",
-      "source_coin": "PAXG"
+      "rule": "Pastikan konfirmasi momentum lebih kuat sebelum membuka posisi long pada PAXG untuk menghindari stop loss cepat.",
+      "source_coin": "PAXG",
+      "updated_at": "2026-10-23 22:42:35"
     },
     {
       "id": "MEM-012",
@@ -107,8 +38,9 @@
       "stream": "DAYTRADE",
       "side": "LONG",
       "root_cause": "CLEAN_WIN",
-      "rule": "Pertahankan disiplin target take profit pada setup intraday yang searah dengan tren utama.",
-      "source_coin": "ETHFI"
+      "rule": "Amankan profit secara bertahap ketika momentum mendekati target resistance utama.",
+      "source_coin": "ETHFI",
+      "updated_at": "2026-10-23 22:42:36"
     },
     {
       "id": "MEM-013",
@@ -116,8 +48,9 @@
       "stream": "DAYTRADE",
       "side": "LONG",
       "root_cause": "CLEAN_WIN",
-      "rule": "Pastikan untuk selalu mempertahankan target take profit yang telah direncanakan pada instrumen berkapitalisasi menengah.",
-      "source_coin": "STBL"
+      "rule": "Pertahankan disiplin target profit pada tren yang sehat sesuai dengan rencana trading harian.",
+      "source_coin": "STBL",
+      "updated_at": "2026-10-23 22:42:28"
     },
     {
       "id": "MEM-014",
@@ -125,8 +58,9 @@
       "stream": "DAYTRADE",
       "side": "LONG",
       "root_cause": "NORMAL_SL",
-      "rule": "Jangan melakukan entry long pada BERA jika momentum intraday menunjukkan pelemahan dan MAE langsung menyentuh area stop loss.",
-      "source_coin": "BERA"
+      "rule": "Hindari entry LONG pada aset baru jika tidak ada konfirmasi momentum awal yang kuat untuk mencegah terkena stop loss normal.",
+      "source_coin": "BERA",
+      "updated_at": "2026-10-23 22:42:49"
     },
     {
       "id": "MEM-015",
@@ -134,8 +68,9 @@
       "stream": "DAYTRADE",
       "side": "SHORT",
       "root_cause": "NORMAL_SL",
-      "rule": "Jangan melakukan entry short pada PYTH jika momentum harga tidak menunjukkan pelemahan yang jelas.",
-      "source_coin": "PYTH"
+      "rule": "Pastikan konfirmasi momentum tren lebih kuat sebelum membuka posisi short pada altcoin.",
+      "source_coin": "PYTH",
+      "updated_at": "2026-10-23 22:42:24"
     },
     {
       "id": "MEM-016",
@@ -143,8 +78,9 @@
       "stream": "DAYTRADE",
       "side": "LONG",
       "root_cause": "CLEAN_WIN",
-      "rule": "Pertahankan kedisiplinan hold posisi intraday hingga target take profit tercapai jika tidak ada anomali pasar.",
-      "source_coin": "WLFI"
+      "rule": "Pertahankan disiplin pengambilan profit pada level target yang telah ditentukan sebelumnya untuk mengamankan gain.",
+      "source_coin": "WLFI",
+      "updated_at": "2026-10-23 22:42:59"
     },
     {
       "id": "MEM-017",
@@ -152,8 +88,9 @@
       "stream": "SWING",
       "side": "SHORT",
       "root_cause": "CLEAN_WIN",
-      "rule": "Pertahankan disiplin eksekusi swing short saat struktur pasar mendukung tren penurunan.",
-      "source_coin": "NEAR"
+      "rule": "Pertahankan disiplin hold posisi swing short hingga target take profit tercapai jika struktur tren masih mendukung.",
+      "source_coin": "NEAR",
+      "updated_at": "2026-10-23 22:42:56"
     },
     {
       "id": "MEM-018",
@@ -161,8 +98,9 @@
       "stream": "SWING",
       "side": "LONG",
       "root_cause": "NORMAL_SL",
-      "rule": "Evaluasi ulang struktur tren swing pada WIF dan perketat konfirmasi entry sebelum membuka posisi long.",
-      "source_coin": "WIF"
+      "rule": "Pastikan validasi momentum tren lebih ketat sebelum membuka posisi swing long pada altcoin untuk menghindari terjebak dalam tren turun.",
+      "source_coin": "WIF",
+      "updated_at": "2026-10-23 22:42:38"
     },
     {
       "id": "MEM-019",
@@ -170,8 +108,9 @@
       "stream": "DAYTRADE",
       "side": "SHORT",
       "root_cause": "CLEAN_WIN",
-      "rule": "Pertahankan disiplin pengambilan profit pada target terdekat saat tren jangka pendek menunjukkan pelemahan.",
-      "source_coin": "PUMP"
+      "rule": "Amankan profit secara bertahap saat target take profit tercapai pada pair berisiko tinggi.",
+      "source_coin": "PUMP",
+      "updated_at": "2026-10-23 22:42:53"
     },
     {
       "id": "MEM-020",
@@ -179,8 +118,9 @@
       "stream": "SWING",
       "side": "LONG",
       "root_cause": "NORMAL_SL",
-      "rule": "Terapkan stop-loss yang ketat dan batasi waktu tahanan jika harga gagal menunjukkan MFE positif dalam 24 jam pertama.",
-      "source_coin": "PEOPLE"
+      "rule": "Gunakan trailing stop atau keluar lebih awal jika harga gagal menunjukkan MFE positif setelah 24 jam.",
+      "source_coin": "PEOPLE",
+      "updated_at": "2026-10-23 22:42:42"
     },
     {
       "id": "MEM-021",
@@ -188,8 +128,9 @@
       "stream": "DAYTRADE",
       "side": "LONG",
       "root_cause": "CLEAN_WIN",
-      "rule": "Pertahankan disiplin eksekusi target take profit saat kondisi pasar stabil untuk mengamankan keuntungan.",
-      "source_coin": "INIT"
+      "rule": "Pertahankan disiplin pada target take profit yang telah ditetapkan sejak awal sesi perdagangan.",
+      "source_coin": "INIT",
+      "updated_at": "2026-10-23 22:42:46"
     },
     {
       "id": "MEM-022",
@@ -197,8 +138,9 @@
       "stream": "DAYTRADE",
       "side": "SHORT",
       "root_cause": "CLEAN_WIN",
-      "rule": "Pertahankan disiplin pengambilan profit pada level target yang telah ditentukan untuk strategi daytrade.",
-      "source_coin": "VVV"
+      "rule": "Pertahankan disiplin pengambilan profit pada target yang telah ditentukan untuk strategi daytrade.",
+      "source_coin": "VVV",
+      "updated_at": "2026-10-23 22:42:54"
     },
     {
       "id": "MEM-023",
@@ -206,8 +148,9 @@
       "stream": "SWING",
       "side": "LONG",
       "root_cause": "CLEAN_WIN",
-      "rule": "Pertahankan kesabaran pada swing trade dengan durasi tahan lama selama tren dan struktur harga mendukung target profit.",
-      "source_coin": "ZEC"
+      "rule": "Pertahankan disiplin pada strategi swing trading dan biarkan posisi berjalan hingga target take profit tercapai.",
+      "source_coin": "ZEC",
+      "updated_at": "2026-10-23 22:42:31"
     },
     {
       "id": "MEM-024",
@@ -215,8 +158,136 @@
       "stream": "DAYTRADE",
       "side": "SHORT",
       "root_cause": "CLEAN_WIN",
-      "rule": "Amankan profit secara bertahap saat melakukan short pada token dengan momentum intraday yang kuat.",
-      "source_coin": "ENA"
+      "rule": "Amankan profit secara bertahap saat target take profit tercapai pada pair berisiko menengah seperti ENA.",
+      "source_coin": "ENA",
+      "updated_at": "2026-10-23 22:42:52"
+    },
+    {
+      "id": "MEM-025",
+      "created_at": "2026-10-23 22:21:10",
+      "stream": "DAYTRADE",
+      "side": "LONG",
+      "root_cause": "CLEAN_WIN",
+      "rule": "Pertahankan eksekusi sesuai rencana saat target profit tercapai pada altcoin berkapitalisasi menengah.",
+      "source_coin": "EIGEN",
+      "updated_at": "2026-10-23 22:42:55"
+    },
+    {
+      "id": "MEM-026",
+      "created_at": "2026-10-24 05:39:46",
+      "stream": "DAYTRADE",
+      "side": "LONG",
+      "root_cause": "TIME_STOP_EXIT",
+      "rule": "Tutup posisi intraday jika tidak ada pergerakan positif dalam 3 jam pertama untuk menghindari time-stop yang merugikan.",
+      "source_coin": "DASH"
+    },
+    {
+      "id": "MEM-027",
+      "created_at": "2026-10-23 22:42:29",
+      "stream": "DAYTRADE",
+      "side": "LONG",
+      "root_cause": "NORMAL_SL",
+      "rule": "Pastikan konfirmasi struktur pasar lebih kuat sebelum entry long untuk menghindari MAE instan.",
+      "source_coin": "DASH"
+    },
+    {
+      "id": "MEM-028",
+      "created_at": "2026-10-23 22:42:32",
+      "stream": "DAYTRADE",
+      "side": "LONG",
+      "root_cause": "CLEAN_WIN",
+      "rule": "Pertahankan disiplin pengambilan profit pada level target yang telah ditentukan tanpa keraguan.",
+      "source_coin": "NIL"
+    },
+    {
+      "id": "MEM-029",
+      "created_at": "2026-10-23 22:42:39",
+      "stream": "DAYTRADE",
+      "side": "LONG",
+      "root_cause": "NORMAL_SL",
+      "rule": "Tutup posisi intraday jika tidak ada pergerakan MFE positif setelah 3 jam holding period.",
+      "source_coin": "FIL"
+    },
+    {
+      "id": "MEM-030",
+      "created_at": "2026-10-23 22:42:40",
+      "stream": "DAYTRADE",
+      "side": "SHORT",
+      "root_cause": "NORMAL_SL",
+      "rule": "Pastikan konfirmasi momentum tren sebelum membuka posisi short pada DOT agar terhindar dari pembalikan arah langsung.",
+      "source_coin": "DOT"
+    },
+    {
+      "id": "MEM-031",
+      "created_at": "2026-10-23 22:42:43",
+      "stream": "SWING",
+      "side": "LONG",
+      "root_cause": "CLEAN_WIN",
+      "rule": "Pertahankan disiplin memegang posisi swing long hingga mencapai target take profit jika struktur pasar tetap mendukung.",
+      "source_coin": "SPX"
+    },
+    {
+      "id": "MEM-031",
+      "created_at": "2026-10-23 22:42:47",
+      "stream": "SWING",
+      "side": "SHORT",
+      "root_cause": "CLEAN_WIN",
+      "rule": "Pertahankan disiplin hold posisi swing short hingga target take profit tercapai jika kondisi tren makro mendukung.",
+      "source_coin": "AERO"
+    },
+    {
+      "id": "MEM-031",
+      "created_at": "2026-10-23 22:42:50",
+      "stream": "SWING",
+      "side": "LONG",
+      "root_cause": "NORMAL_SL",
+      "rule": "Jangan paksakan posisi swing long jika altcoin gagal mencatatkan MFE positif dalam 24 jam pertama.",
+      "source_coin": "HYPE"
+    },
+    {
+      "id": "MEM-031",
+      "created_at": "2026-10-23 22:42:57",
+      "stream": "SWING",
+      "side": "LONG",
+      "root_cause": "NORMAL_SL",
+      "rule": "Jangan menahan posisi swing melebihi 40 jam jika harga gagal menunjukkan ekspansi MFE positif.",
+      "source_coin": "KAS"
+    },
+    {
+      "id": "MEM-031",
+      "created_at": "2026-10-23 22:43:00",
+      "stream": "SWING",
+      "side": "SHORT",
+      "root_cause": "NORMAL_SL",
+      "rule": "Jangan ambil posisi short pada altcoin dengan momentum bullish yang kuat tanpa konfirmasi pembalikan arah yang jelas.",
+      "source_coin": "ALT"
+    },
+    {
+      "id": "MEM-031",
+      "created_at": "2026-10-23 22:43:01",
+      "stream": "SWING",
+      "side": "SHORT",
+      "root_cause": "CLEAN_WIN",
+      "rule": "Pertahankan hold time untuk swing trading TIA hingga target profit tercapai jika struktur tren masih mendukung.",
+      "source_coin": "TIA"
+    },
+    {
+      "id": "MEM-031",
+      "created_at": "2026-10-23 22:43:02",
+      "stream": "SWING",
+      "side": "LONG",
+      "root_cause": "NORMAL_SL",
+      "rule": "Jangan ambil posisi swing long jika struktur harga gagal mencetak MFE positif dalam 12 jam pertama.",
+      "source_coin": "POPCAT"
+    },
+    {
+      "id": "MEM-031",
+      "created_at": "2026-10-23 22:43:02",
+      "stream": "SWING",
+      "side": "LONG",
+      "root_cause": "NORMAL_SL",
+      "rule": "Waspadai volatilitas berlawanan pada POL (SWING); wajib cek orderbook wall sebelum entry ulang.",
+      "source_coin": "POL"
     }
   ]
 }

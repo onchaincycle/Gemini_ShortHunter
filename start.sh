@@ -1,5 +1,6 @@
 #!/bin/bash
 cd "$(dirname "$0")"
+export TZ="${TZ:-Asia/Jakarta}"   # 2026-10-24: jam bot = WIB di Mac maupun VPS (jurnal konsisten)
 
 # Tes otomatis (ROADMAP 2.4): ./start.sh --test  -> wajib lulus sebelum restart daemon setelah ubah kode
 if [ "$1" == "--test" ]; then
