@@ -1,5 +1,5 @@
 """
-ShortHunter HTML Performance Dashboard Generator
+INTRADAY — HTML Performance Dashboard Generator
 Generates a standalone, dark-mode, mobile-responsive HTML dashboard (docs/index.html)
 displaying live positions, closed trade history, per-stream scorecards, and audit metrics.
 Ideal for remote monitoring via GitHub Pages or local browser.
@@ -101,7 +101,7 @@ def generate_html_report(output_path: str = OUTPUT_HTML) -> str:
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="refresh" content="60">
-    <title>ShortHunter AI — Live Trade Performance & Audit</title>
+    <title>INTRADAY — Live Trade Performance & Audit</title>
     <style>
         :root {{
             --bg-dark: #0a0e17;
@@ -328,8 +328,8 @@ def generate_html_report(output_path: str = OUTPUT_HTML) -> str:
     <div class="container">
         <header>
             <div class="brand">
-                <h1>⚡ ShortHunter AI</h1>
-                <span class="badge-live">LIVE AUTO-PILOT GUARD</span>
+                <h1>⚡ INTRADAY</h1>
+                <span class="badge-live">LIVE · 15m · VPS</span>
             </div>
             <div class="header-meta">
                 <div>Terakhir Disinkronkan: <strong>{now_str}</strong></div>
@@ -631,7 +631,7 @@ def generate_html_report(output_path: str = OUTPUT_HTML) -> str:
             <div class="metric-card">
                 <div class="metric-label">Kapasitas Slot N_max(E)</div>
                 <div class="metric-value">{gov.get('active_count', 0)} / {gov.get('max_positions', 5)} <span style="font-size:0.85rem; color:var(--text-muted);">Posisi</span></div>
-                <div class="metric-sub">Swing: {gov.get('swing_count', 0)}/{gov.get('max_swing', 3)} | Intra: {gov.get('intraday_count', 0)}/{gov.get('max_intraday', 2)}</div>
+                <div class="metric-sub">Intraday: {gov.get('intraday_count', 0)}/{gov.get('max_intraday', 4)}</div>
             </div>
             <div class="metric-card">
                 <div class="metric-label">Ukuran Peluru f(E)</div>
@@ -687,7 +687,7 @@ def generate_html_report(output_path: str = OUTPUT_HTML) -> str:
 
     html += f"""
         <footer>
-            ShortHunter Dual-Stream Autonomous Quant Engine &bull; Hyperliquid L1 Mainnet &bull; On-Chain Stop-Loss Protected
+            INTRADAY 15m &bull; Hyperliquid Mainnet &bull; Stop-Loss On-Chain
         </footer>
     </div>
 </body>

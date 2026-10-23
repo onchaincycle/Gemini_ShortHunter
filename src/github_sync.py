@@ -1,5 +1,5 @@
 """
-ShortHunter GitHub Sync Pipeline:
+INTRADAY GitHub Sync Pipeline:
 Generates the HTML performance dashboard and commits/pushes updates to GitHub.
 Allows remote monitoring of trade performance via GitHub repository and GitHub Pages.
 """
@@ -60,21 +60,21 @@ def ensure_git_setup() -> Dict:
         code, gh_auth, _ = run_cmd(["gh", "auth", "status"])
         if code == 0:
             # Create remote repo on GitHub
-            print("[*] Remote GitHub belum terhubung. Membuat repo 'Gemini_ShortHunter' di GitHub via gh CLI...")
+            print("[*] Remote GitHub belum terhubung. Membuat repo 'intraday' di GitHub via gh CLI...")
             code, gh_out, gh_err = run_cmd([
-                "gh", "repo", "create", "Gemini_ShortHunter",
+                "gh", "repo", "create", "intraday",
                 "--public",
                 "--source=.",
                 "--remote=origin",
-                "--description", "ShortHunter Dual-Stream Hyperliquid Trading Bot & Performance Dashboard"
+                "--description", "INTRADAY 15m Hyperliquid Trading Bot & Performance Dashboard"
             ])
             if code == 0:
                 print("[✓] Repo GitHub berhasil dibuat dan dihubungkan ke origin!")
-                repo_url = "https://github.com/onchaincycle/Gemini_ShortHunter"
+                repo_url = "https://github.com/onchaincycle/intraday"
             else:
                 if "already exists" in gh_err or "already exists" in gh_out:
-                    run_cmd(["git", "remote", "add", "origin", "https://github.com/onchaincycle/Gemini_ShortHunter.git"])
-                    repo_url = "https://github.com/onchaincycle/Gemini_ShortHunter"
+                    run_cmd(["git", "remote", "add", "origin", "https://github.com/onchaincycle/intraday.git"])
+                    repo_url = "https://github.com/onchaincycle/intraday"
                 else:
                     return {"success": False, "error": f"Gagal membuat repo via gh: {gh_err}"}
 
