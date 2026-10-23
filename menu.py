@@ -10,6 +10,9 @@ Swing multi-hari, Spot Vault, Gaji, AI War Room & Lab backtest lama dihapus dari
 import os
 import sys
 import time
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from src import waktu as _waktu  # noqa: F401,E402  jam WIB sebelum modul lain dimuat (2026-10-24)
 import unicodedata
 from typing import Dict, Optional
 

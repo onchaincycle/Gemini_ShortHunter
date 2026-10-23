@@ -15,6 +15,8 @@ and single-writer operations between background daemons and interactive CLI menu
 import os
 import json
 import sqlite3
+
+from src import waktu as _waktu  # noqa: F401  kunci jam WIB untuk semua penulis jurnal (2026-10-24)
 from datetime import datetime
 from typing import Dict, List, Optional, Any
 
