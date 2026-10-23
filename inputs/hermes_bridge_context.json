@@ -1,5 +1,5 @@
 {
-  "synced_at": "2026-10-23 14:59:55",
+  "synced_at": "2026-10-23 15:10:53",
   "project": "Gemini_ShortHunter",
   "active_backlog": [
     {
@@ -176,11 +176,11 @@
   "live_tools_state": {
     "thermostat_mode": "\ud83d\udfe2 OPTIMAL (Standard Disiplin)",
     "reserve_pct": 15.0,
-    "last_hunt_time": "2026-10-23 14:32:20",
+    "last_hunt_time": "2026-10-23 15:02:32",
     "last_hunt_status": "Skip Scan (Hemat Token): Mode Otonom dibekukan (Menunggu penutupan posisi aktif)",
     "active_positions": [
-      "LONG DOGE (SWING, PnL: $-2.33)",
-      "LONG HYPE (SWING, PnL: $-6.14)"
+      "LONG DOGE (SWING, PnL: $-2.10)",
+      "LONG HYPE (SWING, PnL: $-6.15)"
     ],
     "episodic_rules": [
       "[MEM-021] (SWING/LONG): Pastikan toleransi MAE hingga 5 persen diakomodasi dengan ukuran posisi yang tepat pada swing ZEC.",
