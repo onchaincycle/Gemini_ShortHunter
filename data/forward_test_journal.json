@@ -7450,11 +7450,11 @@
     "is_on_chain_sl": true,
     "max_favorable_drop_pct": 2.27,
     "max_adverse_pump_pct": 4.53,
-    "current_drop_pct": -3.06,
-    "current_px": 0.07941,
-    "unrealized_pnl": -2.81,
-    "roe_pct": -6.12,
-    "last_updated": "2026-10-23 11:59:46",
+    "current_drop_pct": -2.54,
+    "current_px": 0.07984,
+    "unrealized_pnl": -2.33,
+    "roe_pct": -5.08,
+    "last_updated": "2026-10-23 14:59:54",
     "id": 5101,
     "coin": "DOGE",
     "strategy": "SWING",
@@ -7465,55 +7465,13 @@
     "exit_px": null,
     "size": 1120.0,
     "leverage": 2,
-    "margin_used": 44.47128,
+    "margin_used": 44.70984,
     "realized_pnl": null,
     "fee_usd": 0.0,
     "exit_reason": null,
     "r_multiple": null,
     "hold_hours": null,
     "snapshots": [
-      {
-        "timestamp": "2026-10-21T21:25:02.145291",
-        "price": 0.082366,
-        "drop_pct": 0.55,
-        "pnl_usd": 0.49,
-        "roe_pct": 1.07
-      },
-      {
-        "timestamp": "2026-10-21T21:55:08.223383",
-        "price": 0.083175,
-        "drop_pct": 1.53,
-        "pnl_usd": 1.4,
-        "roe_pct": 3.05
-      },
-      {
-        "timestamp": "2026-10-21T22:25:15.248791",
-        "price": 0.083479,
-        "drop_pct": 1.9,
-        "pnl_usd": 1.74,
-        "roe_pct": 3.8
-      },
-      {
-        "timestamp": "2026-10-21T22:55:17.545988",
-        "price": 0.083498,
-        "drop_pct": 1.93,
-        "pnl_usd": 1.79,
-        "roe_pct": 3.91
-      },
-      {
-        "timestamp": "2026-10-21T23:25:19.887061",
-        "price": 0.083241,
-        "drop_pct": 1.61,
-        "pnl_usd": 1.48,
-        "roe_pct": 3.23
-      },
-      {
-        "timestamp": "2026-10-21T23:55:24.002290",
-        "price": 0.083325,
-        "drop_pct": 1.72,
-        "pnl_usd": 1.57,
-        "roe_pct": 3.42
-      },
       {
         "timestamp": "2026-10-22T00:25:29.168615",
         "price": 0.083196,
@@ -7821,6 +7779,48 @@
         "drop_pct": -2.94,
         "pnl_usd": -2.69,
         "roe_pct": -5.87
+      },
+      {
+        "timestamp": "2026-10-23T12:22:01.541224",
+        "price": 0.079719,
+        "drop_pct": -2.69,
+        "pnl_usd": -2.49,
+        "roe_pct": -5.42
+      },
+      {
+        "timestamp": "2026-10-23T12:52:13.534752",
+        "price": 0.080008,
+        "drop_pct": -2.33,
+        "pnl_usd": -2.14,
+        "roe_pct": -4.67
+      },
+      {
+        "timestamp": "2026-10-23T13:22:26.600463",
+        "price": 0.080068,
+        "drop_pct": -2.26,
+        "pnl_usd": -2.08,
+        "roe_pct": -4.53
+      },
+      {
+        "timestamp": "2026-10-23T13:52:32.282921",
+        "price": 0.080126,
+        "drop_pct": -2.19,
+        "pnl_usd": -2.01,
+        "roe_pct": -4.38
+      },
+      {
+        "timestamp": "2026-10-23T14:22:42.214536",
+        "price": 0.079933,
+        "drop_pct": -2.42,
+        "pnl_usd": -2.22,
+        "roe_pct": -4.85
+      },
+      {
+        "timestamp": "2026-10-23T14:52:53.747032",
+        "price": 0.079854,
+        "drop_pct": -2.52,
+        "pnl_usd": -2.32,
+        "roe_pct": -5.06
       }
     ],
     "event_logs": [],
@@ -7843,11 +7843,11 @@
     "is_on_chain_sl": true,
     "max_favorable_drop_pct": 2.51,
     "max_adverse_pump_pct": 4.57,
-    "current_drop_pct": -3.35,
-    "current_px": 77.7115,
-    "unrealized_pnl": -8.2,
-    "roe_pct": -6.69,
-    "last_updated": "2026-10-23 11:59:46",
+    "current_drop_pct": -2.5,
+    "current_px": 78.3885,
+    "unrealized_pnl": -6.14,
+    "roe_pct": -5.0,
+    "last_updated": "2026-10-23 14:59:54",
     "id": 5102,
     "coin": "HYPE",
     "strategy": "SWING",
@@ -7858,55 +7858,13 @@
     "exit_px": null,
     "size": 3.05,
     "leverage": 2,
-    "margin_used": 118.5108,
+    "margin_used": 119.543225,
     "realized_pnl": null,
     "fee_usd": 0.0,
     "exit_reason": null,
     "r_multiple": null,
     "hold_hours": null,
     "snapshots": [
-      {
-        "timestamp": "2026-10-21T21:48:10.881588",
-        "price": 80.8725,
-        "drop_pct": 0.59,
-        "pnl_usd": 1.44,
-        "roe_pct": 1.17
-      },
-      {
-        "timestamp": "2026-10-21T22:18:18.280958",
-        "price": 82.0445,
-        "drop_pct": 2.04,
-        "pnl_usd": 5.08,
-        "roe_pct": 4.15
-      },
-      {
-        "timestamp": "2026-10-21T22:48:18.626288",
-        "price": 81.3515,
-        "drop_pct": 1.18,
-        "pnl_usd": 2.89,
-        "roe_pct": 2.36
-      },
-      {
-        "timestamp": "2026-10-21T23:18:23.711738",
-        "price": 81.644,
-        "drop_pct": 1.55,
-        "pnl_usd": 3.84,
-        "roe_pct": 3.13
-      },
-      {
-        "timestamp": "2026-10-21T23:48:33.350632",
-        "price": 81.3235,
-        "drop_pct": 1.15,
-        "pnl_usd": 2.87,
-        "roe_pct": 2.34
-      },
-      {
-        "timestamp": "2026-10-22T00:19:33.044258",
-        "price": 81.0355,
-        "drop_pct": 0.79,
-        "pnl_usd": 1.94,
-        "roe_pct": 1.58
-      },
       {
         "timestamp": "2026-10-22T00:49:36.254111",
         "price": 81.5305,
@@ -8214,6 +8172,48 @@
         "drop_pct": -3.21,
         "pnl_usd": -7.89,
         "roe_pct": -6.44
+      },
+      {
+        "timestamp": "2026-10-23T12:22:01.624585",
+        "price": 77.8765,
+        "drop_pct": -3.14,
+        "pnl_usd": -7.75,
+        "roe_pct": -6.32
+      },
+      {
+        "timestamp": "2026-10-23T12:52:13.629912",
+        "price": 77.9465,
+        "drop_pct": -3.05,
+        "pnl_usd": -7.48,
+        "roe_pct": -6.1
+      },
+      {
+        "timestamp": "2026-10-23T13:22:26.698572",
+        "price": 78.3495,
+        "drop_pct": -2.55,
+        "pnl_usd": -6.26,
+        "roe_pct": -5.1
+      },
+      {
+        "timestamp": "2026-10-23T13:52:32.380410",
+        "price": 78.3515,
+        "drop_pct": -2.55,
+        "pnl_usd": -6.3,
+        "roe_pct": -5.14
+      },
+      {
+        "timestamp": "2026-10-23T14:22:42.423844",
+        "price": 78.229,
+        "drop_pct": -2.7,
+        "pnl_usd": -6.65,
+        "roe_pct": -5.42
+      },
+      {
+        "timestamp": "2026-10-23T14:52:53.850560",
+        "price": 78.4225,
+        "drop_pct": -2.46,
+        "pnl_usd": -6.04,
+        "roe_pct": -4.92
       }
     ],
     "event_logs": [],
