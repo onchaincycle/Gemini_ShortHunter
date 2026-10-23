@@ -12,6 +12,13 @@ from hyperliquid.exchange import Exchange
 from hyperliquid.info import Info
 from hyperliquid.utils import constants
 
+# KUNCI ENTRY OTOMATIS (keputusan user 2026-10-23 20:53): bot TIDAK boleh membuka / menambah posisi sendiri.
+# Order pembuka posisi hanya lewat menu manual (manual=True). Sengaja konstanta di kode, BUKAN risk_overrides.json,
+# supaya tidak bisa dibuka diam-diam oleh agen/AI. Membuka kunci = keputusan user + ubah kode + tes.
+# Tidak memengaruhi penutupan posisi, SL/TP on-chain, atau pembatalan order (semua tetap jalan).
+AUTO_ENTRY_LOCKED = True
+AUTO_ENTRY_LOCKED_MSG = "AUTO_ENTRY_LOCKED: order pembuka otomatis diblokir; buka posisi hanya manual dari menu."
+
 load_dotenv()
 
 # Global shared clients to eliminate duplicate Info and Exchange initializations
@@ -211,7 +218,8 @@ class HyperliquidTrader:
                       sl_pct: float = 10.0,
                       tp_pct: float = 20.0,
                       sl_px: Optional[float] = None,
-                      strategy: str = "SWING") -> Dict:
+                      strategy: str = "SWING",
+                      manual: bool = False) -> Dict:
         """
         Executes a Short Position on Hyperliquid:
         1. Sets cross/isolated leverage (max 3x for safety).
@@ -219,6 +227,8 @@ class HyperliquidTrader:
         3. Sets Stop-Loss trigger order at +sl_pct (atau di harga absolut `sl_px`, mis. pucuk jarum 15m).
         4. Returns target levels sesuai model exit strategi (SWING: % tetap, DAYTRADE: kelipatan R).
         """
+        if AUTO_ENTRY_LOCKED and not manual:
+            return {"success": False, "error": AUTO_ENTRY_LOCKED_MSG}
         if not self.is_configured():
             return {"success": False, "error": "Hyperliquid API keys not configured in .env"}
 
@@ -635,7 +645,8 @@ class HyperliquidTrader:
                      sl_pct: float = 10.0,
                      tp_pct: float = 20.0,
                      sl_px: Optional[float] = None,
-                     strategy: str = "SWING") -> Dict:
+                     strategy: str = "SWING",
+                     manual: bool = False) -> Dict:
         """
         Executes a LONG position on Hyperliquid:
         1. Sets cross/isolated leverage (max 3x for safety).
@@ -643,6 +654,8 @@ class HyperliquidTrader:
         3. Sets native Stop-Loss trigger order at -sl_pct (or absolute technical level sl_px).
         4. Returns target levels according to strategy exit model.
         """
+        if AUTO_ENTRY_LOCKED and not manual:
+            return {"success": False, "error": AUTO_ENTRY_LOCKED_MSG}
         if not self.is_configured():
             return {"success": False, "error": "Hyperliquid API keys not configured in .env"}
 

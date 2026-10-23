@@ -29,7 +29,7 @@ ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
 
-from src.trader import HyperliquidTrader
+from src.trader import HyperliquidTrader, AUTO_ENTRY_LOCKED, AUTO_ENTRY_LOCKED_MSG
 from src.forward_test import ForwardTestManager
 from src.profiles import get_profile
 from src import position_tags
@@ -814,6 +814,8 @@ class AutonomousEngine:
         Only scans & calls Gemini if capital governor confirms open slot & free margin > 15% reserve!
         Strictly opens positions ONLY when Score >= Threshold AND AI Gatekeeper = APPROVED + Grade A/A+.
         """
+        if AUTO_ENTRY_LOCKED:  # kunci entry otomatis (2026-10-23): tidak scan, tidak panggil AI, tidak order
+            return {"executed": False, "status": "AUTO_ENTRY_LOCKED", "reason": AUTO_ENTRY_LOCKED_MSG}
         state = self.load_state()
         now_ts = time.time()
 
@@ -1095,6 +1097,8 @@ class AutonomousEngine:
           4. Free margin above 15% Reserve is sufficient to cover the top-up delta (`topup_margin >= $6.00`).
           5. Automatically re-syncs on-chain Stop-Loss and TP1 trigger orders to the new combined position size!
         """
+        if AUTO_ENTRY_LOCKED:  # top-up/scale-in otomatis = menambah posisi -> diblokir
+            execute_topup = False
         from src.position_manager import PositionManager
         from src.hyperliquid_client import HyperliquidClient
 
@@ -1200,7 +1204,7 @@ class AutonomousEngine:
                 })
                 continue
 
-            if execute_topup:
+            if execute_topup and not AUTO_ENTRY_LOCKED:
                 add_notional = round(topup_margin * lev, 2)
                 sz_dec = self.trader.get_asset_precision(coin)
                 raw_add_sz = add_notional / cur_px if cur_px > 0 else 0

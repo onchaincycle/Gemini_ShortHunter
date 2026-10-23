@@ -747,12 +747,12 @@ def menu_auto_hunt_sniper(db):
         if side == "LONG":
             res = trader.execute_long(
                 coin=coin, usd_size=notional_usd, leverage=lev,
-                sl_pct=sl_pct, tp_pct=tp2_pct, sl_px=sl_px, strategy=strat
+                sl_pct=sl_pct, tp_pct=tp2_pct, sl_px=sl_px, strategy=strat, manual=True
             )
         else:
             res = trader.execute_short(
                 coin=coin, usd_size=notional_usd, leverage=lev,
-                sl_pct=sl_pct, tp_pct=tp2_pct, sl_px=sl_px, strategy=strat
+                sl_pct=sl_pct, tp_pct=tp2_pct, sl_px=sl_px, strategy=strat, manual=True
             )
 
         if res.get("success"):
@@ -1709,12 +1709,12 @@ def menu_execute_short():
         if is_long_dir:
             res = trader.execute_long(
                 coin=coin, usd_size=notional_usd, leverage=lev,
-                sl_pct=sl, tp_pct=tp, sl_px=sl_px_override, strategy=chosen_strategy
+                sl_pct=sl, tp_pct=tp, sl_px=sl_px_override, strategy=chosen_strategy, manual=True
             )
         else:
             res = trader.execute_short(
                 coin=coin, usd_size=notional_usd, leverage=lev,
-                sl_pct=sl, tp_pct=tp, sl_px=sl_px_override, strategy=chosen_strategy
+                sl_pct=sl, tp_pct=tp, sl_px=sl_px_override, strategy=chosen_strategy, manual=True
             )
         if res.get("success"):
             position_tags.tag_position(
