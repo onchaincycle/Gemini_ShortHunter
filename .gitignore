@@ -20,3 +20,9 @@ logs/*.log
 
 *.bak_*
 data/research/
+
+# 2026-10-23 INTRADAY: cadangan & ekspor analisis (lokal saja)
+data/backup/
+data/analisis/
+data/_sync/
+data/vps_mirror/

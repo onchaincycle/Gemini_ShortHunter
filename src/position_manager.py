@@ -965,6 +965,30 @@ class PositionManager:
     # ------------------------------------------------------------------
     # MAIN CYCLE
     # ------------------------------------------------------------------
+    EQUITY_SNAPSHOT_SEC = 900
+
+    def _record_equity_if_due(self, now_ts: float) -> bool:
+        """Simpan ekuitas, margin bebas, jumlah posisi & PnL mengambang. Tidak pernah melempar error."""
+        if now_ts - getattr(self, "_last_equity_snap_ts", 0.0) < self.EQUITY_SNAPSHOT_SEC:
+            return False
+        self._last_equity_snap_ts = now_ts
+        try:
+            if not self.trader.can_read():
+                return False
+            acc = self.trader.get_account_state()
+            if acc.get("error"):
+                return False
+            pos = [p for p in acc.get("positions", []) if p.get("side") in ("SHORT", "LONG")]
+            upnl = round(sum(float(p.get("unrealized_pnl", 0.0) or 0.0) for p in pos), 4)
+            trade_db.record_equity_snapshot(float(acc.get("equity", 0.0)), float(acc.get("available", 0.0)), len(pos), upnl)
+            return True
+        except Exception as e:
+            try:
+                self.log_event(f"Snapshot ekuitas gagal: {e}")
+            except Exception:
+                pass
+            return False
+
     def check_and_execute(self) -> List[Dict]:
         """
         Performs one check cycle across all monitored positions + Autonomous Hunter & Self-Evaluation.
@@ -972,6 +996,9 @@ class PositionManager:
         """
         now_ts = time.time()
         actions_taken = []
+
+        # 2026-10-23: kurva ekuitas (trade_db.equity_snapshots) tiap 15 menit -> basis analisis drawdown/performa
+        self._record_equity_if_due(now_ts)
 
         # Scenario 4: Periodic 4-hour AI Market Regime Pulse Check
         self._audit_macro_pulse_if_needed(now_ts)

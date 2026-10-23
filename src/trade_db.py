@@ -161,6 +161,36 @@ class TradeDatabase:
 
             # 7. AI Market Regime State
             conn.execute("""
+                CREATE TABLE IF NOT EXISTS entry_decisions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    ts TEXT NOT NULL,
+                    hunt_id TEXT,
+                    mode TEXT,
+                    coin TEXT,
+                    side TEXT,
+                    strategy TEXT,
+                    stage TEXT,
+                    outcome TEXT,
+                    reason TEXT,
+                    score REAL,
+                    ai_approve INTEGER,
+                    ai_grade TEXT,
+                    ai_confidence INTEGER,
+                    equity REAL,
+                    risk_pct REAL,
+                    margin_usd REAL,
+                    leverage INTEGER,
+                    entry_px REAL,
+                    sl_px REAL,
+                    tp1_px REAL,
+                    tp2_px REAL,
+                    candidate_json TEXT,
+                    audit_json TEXT,
+                    result_json TEXT
+                )
+            """)
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_decisions_coin_ts ON entry_decisions (coin, ts)")
+            conn.execute("""
                 CREATE TABLE IF NOT EXISTS market_regime (
                     timestamp DATETIME PRIMARY KEY,
                     regime_status TEXT NOT NULL,
@@ -443,6 +473,39 @@ class TradeDatabase:
                 INSERT OR REPLACE INTO equity_snapshots (timestamp, total_equity, available_margin, open_positions_count, unrealized_pnl)
                 VALUES (?, ?, ?, ?, ?)
             """, (now_str, total_equity, available_margin, open_positions_count, unrealized_pnl))
+
+    # -------------------------------------------------------------------------
+    # JEJAK KEPUTUSAN ENTRY (2026-10-23): setiap kandidat yang dinilai Mesin -> lolos/ditolak + alasan + fitur.
+    # Basis perbaikan strategi: gabungkan dengan trade_journal (coin + waktu) / position_tags.meta.decision_id.
+    # -------------------------------------------------------------------------
+    DECISION_COLS = ("hunt_id", "mode", "coin", "side", "strategy", "stage", "outcome", "reason", "score",
+                     "ai_approve", "ai_grade", "ai_confidence", "equity", "risk_pct", "margin_usd", "leverage",
+                     "entry_px", "sl_px", "tp1_px", "tp2_px")
+
+    def log_decision(self, row: Dict) -> Optional[int]:
+        """Catat satu keputusan. Tidak pernah melempar error (pencatatan tidak boleh mengganggu trading)."""
+        try:
+            def js(v):
+                return json.dumps(v, default=str, ensure_ascii=False) if v is not None else None
+            vals = [row.get(c) for c in self.DECISION_COLS]
+            with self.get_connection() as conn:
+                cur = conn.execute(
+                    f"INSERT INTO entry_decisions (ts, {', '.join(self.DECISION_COLS)}, candidate_json, audit_json, result_json) "
+                    f"VALUES (?, {', '.join('?' * len(self.DECISION_COLS))}, ?, ?, ?)",
+                    [row.get("ts") or datetime.now().isoformat(timespec="seconds"), *vals,
+                     js(row.get("candidate")), js(row.get("audit")), js(row.get("result"))])
+                return cur.lastrowid
+        except Exception as e:
+            print(f"[trade_db] log_decision gagal: {e}")
+            return None
+
+    def last_equity_snapshot_ts(self) -> Optional[str]:
+        try:
+            with self.get_connection() as conn:
+                r = conn.execute("SELECT MAX(timestamp) FROM equity_snapshots").fetchone()
+                return r[0] if r else None
+        except Exception:
+            return None
 
     # -------------------------------------------------------------------------
     # SCREENER SIGNALS PERSISTENCE

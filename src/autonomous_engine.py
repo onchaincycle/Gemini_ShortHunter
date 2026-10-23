@@ -41,6 +41,24 @@ AUTONOMOUS_STATE_FILE = os.path.join(ROOT_DIR, "data", "autonomous_state.json")
 AUTONOMOUS_LOG_FILE = os.path.join(ROOT_DIR, "logs", "autonomous_ai.log")
 
 
+def _snapshot_candidate(cand: Dict) -> Dict:
+    """Salinan fitur kandidat yang aman disimpan sebagai JSON (nilai skalar + list/dict kecil; tanpa DataFrame)."""
+    out = {}
+    for k, v in (cand or {}).items():
+        if v is None or isinstance(v, (bool, int, float, str)):
+            out[k] = v
+        elif isinstance(v, (list, tuple)) and len(v) <= 30 and all(isinstance(x, (bool, int, float, str, type(None))) for x in v):
+            out[k] = list(v)
+        elif isinstance(v, dict) and len(v) <= 30 and all(isinstance(x, (bool, int, float, str, type(None))) for x in v.values()):
+            out[k] = dict(v)
+        else:
+            try:
+                out[k] = float(v)          # numpy scalar
+            except Exception:
+                pass
+    return out
+
+
 class AutonomousEngine:
     def __init__(self, trader: Optional[HyperliquidTrader] = None):
         self.trader = trader or HyperliquidTrader()
@@ -654,6 +672,25 @@ class AutonomousEngine:
         selected_audit = None
         skip_logs = []
 
+        # Jejak keputusan (2026-10-23): setiap kandidat dicatat ke trade_db.entry_decisions -> basis perbaikan strategi
+        from src.trade_db import trade_db as _tdb
+        hunt_id = datetime.now().strftime("%Y%m%d-%H%M%S")
+
+        def _dec(cand, stage, outcome, reason, audit=None, **extra):
+            row = {"hunt_id": hunt_id, "mode": mode, "coin": cand.get("coin"), "side": cand.get("side"),
+                   "strategy": cand.get("stream"), "stage": stage, "outcome": outcome, "reason": reason,
+                   "score": cand.get("score"), "equity": equity, "candidate": _snapshot_candidate(cand), "audit": audit}
+            if audit:
+                row.update({"ai_approve": int(bool(audit.get("approve", False))),
+                            "ai_grade": str(audit.get("conviction_grade", "")).upper(),
+                            "ai_confidence": int(audit.get("confidence_score", 0) or 0)})
+            row.update(extra)
+            return _tdb.log_decision(row)
+
+        def _skip(cand, msg):
+            skip_logs.append(msg)
+            _dec(cand, "FILTER", "SKIP", msg)
+
         for cand in leaderboard:
             coin = cand["coin"]
             side = cand["side"]
@@ -661,28 +698,28 @@ class AutonomousEngine:
             score = float(cand["score"])
             req_score = min_score_dt
             if strat != "DAYTRADE":
-                skip_logs.append(f"{coin}: stream {strat} tidak didukung (intraday saja)")
+                _skip(cand, f"{coin}: stream {strat} tidak didukung (intraday saja)")
                 continue
             if not cand.get("ready", False):
-                skip_logs.append(f"{coin}: gerbang wajib v3 belum lengkap ({'; '.join(cand.get('vetoes', [])[:2]) or 'tren/penolakan/BOS/volume'})")
+                _skip(cand, f"{coin}: gerbang wajib v3 belum lengkap ({'; '.join(cand.get('vetoes', [])[:2]) or 'tren/penolakan/BOS/volume'})")
                 continue
 
             # Check quantitative score threshold
             if score < req_score:
-                skip_logs.append(f"{coin} ({strat}): Skor {score:.1f} < Threshold {req_score:.1f}")
+                _skip(cand, f"{coin} ({strat}): Skor {score:.1f} < Threshold {req_score:.1f}")
                 continue
 
             # Kuota slot intraday (capital-weighted)
             if strat == "DAYTRADE" and gov.get("effective_intraday_slots", gov["intraday_count"]) >= gov["max_intraday"]:
-                skip_logs.append(f"{coin} (DAYTRADE): Kuota Intraday efektif penuh ({gov.get('effective_intraday_slots')}/{gov['max_intraday']})")
+                _skip(cand, f"{coin} (DAYTRADE): Kuota Intraday efektif penuh ({gov.get('effective_intraday_slots')}/{gov['max_intraday']})")
                 continue
 
             # Check Directional Hedge Guard (prevent 100% one-sided portfolio)
             if side == "LONG" and gov["long_count"] >= gov["max_directional"]:
-                skip_logs.append(f"{coin} (LONG): Batas arah LONG penuh ({gov['long_count']}/{gov['max_directional']})")
+                _skip(cand, f"{coin} (LONG): Batas arah LONG penuh ({gov['long_count']}/{gov['max_directional']})")
                 continue
             if side == "SHORT" and gov["short_count"] >= gov["max_directional"]:
-                skip_logs.append(f"{coin} (SHORT): Batas arah SHORT penuh ({gov['short_count']}/{gov['max_directional']})")
+                _skip(cand, f"{coin} (SHORT): Batas arah SHORT penuh ({gov['short_count']}/{gov['max_directional']})")
                 continue
 
             # Check Claude_Crypto Sector Diversification Guard (Max 2 positions per sector)
@@ -690,7 +727,7 @@ class AutonomousEngine:
             sec_label = sec_info["label"]
             sec_count = gov.get("sector_distribution", {}).get(sec_label, 0)
             if sec_count >= 2:
-                skip_logs.append(f"{coin} ({sec_label}): Batas diversifikasi sektor tercapai ({sec_count}/2 posisi {sec_label} aktif)")
+                _skip(cand, f"{coin} ({sec_label}): Batas diversifikasi sektor tercapai ({sec_count}/2 posisi {sec_label} aktif)")
                 continue
 
             # Passed quantitative & portfolio guards -> Run AI Gatekeeper Audit
@@ -707,10 +744,12 @@ class AutonomousEngine:
             if is_app and grade in allowed_grades and conf >= min_conf:
                 selected_cand = cand
                 selected_audit = audit
+                _dec(cand, "AI_GATE", "APPROVED", reason, audit=audit)
                 break
             else:
                 veto_msg = f"{side} {coin} (Skor {score:.1f}) -> AI Grade {grade} ({conf}/100, Approve={is_app}). Syarat: Wajib Grade A (>={min_conf}). Alasan: {reason[:90]}"
                 skip_logs.append(veto_msg)
+                _dec(cand, "AI_GATE", "REJECTED", reason, audit=audit)
                 self.log_telemetry(
                     category="AI_GATEKEEPER",
                     action="Skip (Bukan Grade A)",
@@ -759,6 +798,7 @@ class AutonomousEngine:
 
         if order_margin < min_margin_usd or (available - order_margin) < gov["reserve_usd"]:
             msg = f"Margin tidak cukup (risiko {risk_pct:.2f}% -> ${order_margin:.2f}) / cadangan {gov['reserve_pct']}% (${gov['reserve_usd']:.2f}) untuk {coin}."
+            _dec(selected_cand, "SIZING", "SKIP", msg, audit=selected_audit, risk_pct=risk_pct, margin_usd=order_margin, leverage=lev)
             state = self.load_state()
             state["last_hunt_status"] = msg
             self.save_state(state)
@@ -769,6 +809,9 @@ class AutonomousEngine:
             from src import paper_trader
             ptrade = paper_trader.open_paper_trade(selected_cand, selected_audit, margin_usd=order_margin, leverage=lev,
                                                    risk_pct=risk_pct, equity=equity)
+            _dec(selected_cand, "ENTRY", "PAPER_OPEN", "trade kertas dibuka", audit=selected_audit, risk_pct=risk_pct,
+                 margin_usd=order_margin, leverage=lev, entry_px=ptrade.get("entry_px"), sl_px=ptrade.get("sl_px"),
+                 tp1_px=ptrade.get("tp1_px"), tp2_px=ptrade.get("tp2_px"), result=ptrade)
             msg = (f"📝 PAPER OPEN: {side} {coin} @ {ptrade['entry_px']} | SL {ptrade['sl_px']} | TP1 {ptrade['tp1_px']} | "
                    f"TP2 {ptrade['tp2_px']} | Grade {grade} ({conf}/100) | Margin kertas ${order_margin:.2f} ({lev}x)")
             state = self.load_state()
@@ -792,6 +835,13 @@ class AutonomousEngine:
                 sl_pct=sl_pct, tp_pct=tp2_pct, sl_px=sl_px, strategy=strat
             )
 
+        plan_r = res.get("plan") or {}
+        decision_id = _dec(selected_cand, "ENTRY", "LIVE_OPEN" if res.get("success") else "ORDER_FAILED",
+                           "order terkirim" if res.get("success") else str(res.get("error")), audit=selected_audit,
+                           risk_pct=risk_pct, margin_usd=order_margin, leverage=lev,
+                           entry_px=res.get("entry_est") or plan_r.get("entry_px"),
+                           sl_px=res.get("stop_loss_px") or sl_px, tp1_px=plan_r.get("tp1_px"), tp2_px=plan_r.get("tp2_px"),
+                           result={k: v for k, v in res.items() if k != "raw"})
         if res.get("success"):
             position_tags.tag_position(
                 coin=coin,
@@ -802,7 +852,18 @@ class AutonomousEngine:
                     "ai_grade": grade,
                     "ai_conviction": conf,
                     "equity_at_entry": equity,
-                    "reserve_pct_enforced": gov["reserve_pct"]
+                    "reserve_pct_enforced": gov["reserve_pct"],
+                    # 2026-10-23: konteks entry untuk analisis perbaikan
+                    "decision_id": decision_id,
+                    "hunt_id": hunt_id,
+                    "mode": mode,
+                    "risk_pct": round(risk_pct, 4),
+                    "margin_usd": order_margin,
+                    "leverage": lev,
+                    "signal_score": selected_cand.get("score"),
+                    "engine_version": selected_cand.get("engine_version"),
+                    "signal_bar_ts": selected_cand.get("signal_bar_ts"),
+                    "ai_reason": str(selected_audit.get("verdict_reason", ""))[:500],
                 }
             )
             state = self.load_state()
