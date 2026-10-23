@@ -7458,19 +7458,19 @@
     "id": 5101,
     "coin": "DOGE",
     "strategy": "SWING",
-    "status": "OPEN",
-    "entry_time": "2026-10-21 04:20:11",
-    "exit_time": null,
+    "status": "CLOSED",
+    "entry_time": "2026-10-21 04:19:57",
+    "exit_time": "2026-10-23 21:29:29",
     "entry_px": 0.081919,
-    "exit_px": null,
+    "exit_px": 0.079501,
     "size": 1120.0,
     "leverage": 2,
     "margin_used": 44.9876,
-    "realized_pnl": null,
-    "fee_usd": 0.0,
-    "exit_reason": null,
-    "r_multiple": null,
-    "hold_hours": null,
+    "realized_pnl": -2.79,
+    "fee_usd": 0.0814,
+    "exit_reason": "MANUAL_OR_SL_CLOSE",
+    "r_multiple": -0.3,
+    "hold_hours": 65.16,
     "snapshots": [
       {
         "timestamp": "2026-10-22T00:55:31.595647",
@@ -7824,7 +7824,14 @@
       }
     ],
     "event_logs": [],
-    "ai_review": null,
+    "ai_review": {
+      "execution_grade": "C",
+      "root_cause": "NORMAL_SL",
+      "lessons_learned": "Posisi mengalami stop loss normal setelah volatilitas merugikan sebesar 4.53% dalam durasi swing yang panjang. Manajemen risiko berfungsi dengan baik untuk membatasi kerugian ekstrim.",
+      "episodic_rule_to_remember": "Pastikan penempatan stop loss pada swing trade mengakomodasi MAE yang lebih besar tanpa mengabaikan batas risiko portofolio.",
+      "rule_violation_detected": false,
+      "ai_generated": true
+    },
     "milestones": {
       "trimmed_10pct": false,
       "trimmed_time": null,
@@ -7834,7 +7841,13 @@
       "runner_time": null,
       "sl_hit": false,
       "sl_time": null
-    }
+    },
+    "pending_fill_reconcile": false,
+    "final_pnl_usd": -2.79,
+    "gross_pnl_usd": -2.71,
+    "realized_move_pct": -2.95,
+    "realized_roe_pct": -5.9,
+    "realized_r": -0.3
   },
   "HYPE": {
     "side": "LONG",
@@ -7851,19 +7864,19 @@
     "id": 5102,
     "coin": "HYPE",
     "strategy": "SWING",
-    "status": "OPEN",
-    "entry_time": "2026-10-21 06:44:36",
-    "exit_time": null,
+    "status": "CLOSED",
+    "entry_time": "2026-10-21 06:44:08",
+    "exit_time": "2026-10-23 21:29:34",
     "entry_px": 80.401,
-    "exit_px": null,
+    "exit_px": 77.729,
     "size": 3.05,
     "leverage": 2,
     "margin_used": 119.255,
-    "realized_pnl": null,
-    "fee_usd": 0.0,
-    "exit_reason": null,
-    "r_multiple": null,
-    "hold_hours": null,
+    "realized_pnl": -8.37,
+    "fee_usd": 0.217,
+    "exit_reason": "MANUAL_OR_SL_CLOSE",
+    "r_multiple": -0.34,
+    "hold_hours": 62.76,
     "snapshots": [
       {
         "timestamp": "2026-10-22T01:19:37.331636",
@@ -8217,7 +8230,14 @@
       }
     ],
     "event_logs": [],
-    "ai_review": null,
+    "ai_review": {
+      "execution_grade": "C",
+      "root_cause": "NORMAL_SL",
+      "lessons_learned": "Posisi mengalami stop loss normal setelah volatilitas harga melawan arah swing. Manajemen risiko berjalan baik dengan R-multiple yang terkontrol.",
+      "episodic_rule_to_remember": "Pastikan validasi struktur tren swing lebih ketat sebelum entri jangka panjang pada koin berisiko tinggi.",
+      "rule_violation_detected": false,
+      "ai_generated": true
+    },
     "milestones": {
       "trimmed_10pct": false,
       "trimmed_time": null,
@@ -8227,7 +8247,13 @@
       "runner_time": null,
       "sl_hit": false,
       "sl_time": null
-    }
+    },
+    "pending_fill_reconcile": false,
+    "final_pnl_usd": -8.37,
+    "gross_pnl_usd": -8.15,
+    "realized_move_pct": -3.32,
+    "realized_roe_pct": -6.65,
+    "realized_r": -0.34
   },
   "PYTH@2026-10-21 11:54:00": {
     "side": "SHORT",
@@ -9399,19 +9425,19 @@
     "id": 5117,
     "coin": "RUNE",
     "strategy": "DAYTRADE",
-    "status": "OPEN",
-    "entry_time": "2026-10-23 20:51:22",
-    "exit_time": null,
-    "entry_px": 0.6446,
-    "exit_px": null,
-    "size": 153.4,
+    "status": "CLOSED",
+    "entry_time": "2026-10-23 20:51:01",
+    "exit_time": "2026-10-23 21:29:31",
+    "entry_px": 0.6446085528031291,
+    "exit_px": 0.6348045827900912,
+    "size": 153.39999999999998,
     "leverage": 2,
     "margin_used": 49.363353,
-    "realized_pnl": null,
-    "fee_usd": 0.0,
-    "exit_reason": null,
-    "r_multiple": null,
-    "hold_hours": null,
+    "realized_pnl": -1.59,
+    "fee_usd": 0.0883,
+    "exit_reason": "MANUAL_OR_SL_CLOSE",
+    "r_multiple": -0.63,
+    "hold_hours": 0.64,
     "snapshots": [
       {
         "timestamp": "2026-10-23T20:51:22.209173",
@@ -9422,7 +9448,14 @@
       }
     ],
     "event_logs": [],
-    "ai_review": null,
+    "ai_review": {
+      "execution_grade": "C",
+      "root_cause": "NORMAL_SL",
+      "lessons_learned": "Entry dilakukan pada momentum yang lemah sehingga harga langsung mengalami adverse excursion tanpa mencapai profit. Selalu pastikan ada konfirmasi volume sebelum melakukan buy.",
+      "episodic_rule_to_remember": "Jangan melakukan entry long pada altcoin jika MFE langsung menyentuh 0% dan MAE mendahului.",
+      "rule_violation_detected": false,
+      "ai_generated": true
+    },
     "milestones": {
       "trimmed_10pct": false,
       "trimmed_time": null,
@@ -9432,6 +9465,12 @@
       "runner_time": null,
       "sl_hit": false,
       "sl_time": null
-    }
+    },
+    "pending_fill_reconcile": false,
+    "final_pnl_usd": -1.59,
+    "gross_pnl_usd": -1.5,
+    "realized_move_pct": -1.52,
+    "realized_roe_pct": -3.04,
+    "realized_r": -0.63
   }
 }

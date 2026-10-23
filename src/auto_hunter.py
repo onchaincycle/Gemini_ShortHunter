@@ -1,17 +1,10 @@
 """
-Auto-Hunt AI Sniper Engine (Omni-Stream 1-Click Execution)
-Scans all 4 strategy streams simultaneously:
-  1. ⚡ Intraday Short (15m Liquidity Sweep High & Pinbar)
-  2. ⚡ Intraday Long  (15m Bottom Sweep & Squeeze)
-  3. 🌊 Swing Short    (Daily/4H True Peak Breakdown)
-  4. 🚀 Swing Long     (Daily/4H Whale Absorption & Reclaim)
-
-Applies:
-  - Active position exclusion (anti-pyramiding / anti-cannibalization)
-  - Slot quota limits per stream and direction
-  - Market session & Circuit breaker gating
-  - Unified Alpha Index ranking (Score * RRR * Session * Funding)
-  - AI Gemini Flash Waterfall Gatekeeper & Conviction Sizing
+Auto-Hunt Intraday (2026-10-23: INTRADAY SAJA — swing dihapus atas keputusan user).
+Memindai 2 kuadran: ⚡ Intraday Short & ⚡ Intraday Long (logika v3 di src/intraday_core.py), lalu:
+  - Mengecualikan koin yang sudah punya posisi (anti-pyramiding)
+  - Kuota slot per arah & circuit breaker harian
+  - Ranking Alpha (skor x RRR x sesi x funding) + filter spread orderbook
+  - AI Gemini gatekeeper (dipertahankan atas keputusan user)
 """
 
 import time
@@ -25,8 +18,6 @@ from src.database import Database
 from src.downloader import DataDownloader
 from src.daytrade_engine import IntradayDaytradeEngine
 from src.daytrade_long_engine import IntradayLongEngine
-from src.screener import ShortScreener
-from src.long_screener import LongScreener
 from src.trader import HyperliquidTrader
 from src.position_manager import PositionManager
 from src.profiles import get_profile
@@ -104,7 +95,7 @@ class AutoHuntSniper:
             if coin and float(p.get("size", 0)) > 0:
                 side = p.get("side", "SHORT")
                 lc = lifecycle.get(coin, {})
-                strat = lc.get("strategy") or position_tags.get_strategy(coin) or "SWING"
+                strat = "DAYTRADE"
                 margin_used = float(p.get("margin_used", 0.0))
                 is_risk_free_runner = bool(lc.get("trimmed_10pct") or lc.get("early_be_shield")) and margin_used <= RUNNER_EXEMPT_USD
                 active_positions_map[coin] = {
@@ -114,80 +105,64 @@ class AutoHuntSniper:
                     "is_dust": (margin_used < DUST_THRESHOLD_USD) or is_risk_free_runner
                 }
 
-        # 3. Check Stream & Direction slot limits from live positions map (excluding dust & risk-free runners)
-        dt_short_coins = [c for c, s in active_positions_map.items() if s.get("strategy") == "DAYTRADE" and s.get("side") == "SHORT" and not s.get("is_dust")]
-        dt_long_coins = [c for c, s in active_positions_map.items() if s.get("strategy") == "DAYTRADE" and s.get("side") == "LONG" and not s.get("is_dust")]
-        sw_short_coins = [c for c, s in active_positions_map.items() if s.get("strategy") == "SWING" and s.get("side") == "SHORT" and not s.get("is_dust")]
-        sw_long_coins = [c for c, s in active_positions_map.items() if s.get("strategy") == "SWING" and s.get("side") == "LONG" and not s.get("is_dust")]
+        # Mode PAPER: trade kertas terbuka ikut dihitung sebagai posisi (slot & anti-dobel koin) agar simulasi realistis
+        try:
+            from src import trading_mode, paper_trader
+            if trading_mode.get_mode() == "PAPER":
+                for t in paper_trader.open_trades():
+                    active_positions_map.setdefault(t["coin"], {"strategy": "DAYTRADE", "side": t["side"],
+                                                                "margin_used": float(t.get("margin_usd", 0.0)),
+                                                                "is_dust": False, "paper": True})
+        except Exception:
+            pass
 
+        # 3. Kuota slot intraday per arah (dust & runner bebas-risiko tidak dihitung)
+        dt_short_coins = [c for c, s in active_positions_map.items() if s.get("side") == "SHORT" and not s.get("is_dust")]
+        dt_long_coins = [c for c, s in active_positions_map.items() if s.get("side") == "LONG" and not s.get("is_dust")]
         dust_coins = [f"{c} (${s.get('margin_used', 0):.2f})" for c, s in active_positions_map.items() if s.get("is_dust")]
-
         dt_short_count = len(dt_short_coins)
         dt_long_count = len(dt_long_coins)
-        sw_short_count = len(sw_short_coins)
-        sw_long_count = len(sw_long_coins)
 
         prof_dt = get_profile("DAYTRADE")
-        prof_sw = get_profile("SWING")
+        max_total = min(int(prof_dt.get("max_concurrent", 4)), int(slot_plan.get("max_intraday", 4)))
+        max_dt_short = int(prof_dt.get("max_concurrent_short", 2))
+        max_dt_long = int(prof_dt.get("max_concurrent_long", 2))
+        total_open = (dt_short_count + dt_long_count) < max_total
 
-        # Scale directional quotas dynamically with equity slot plan
-        dyn_max_sw = slot_plan.get("max_swing", 5) + (1 if (dt_short_count + dt_long_count) == 0 else 0)
-        dyn_max_dt = slot_plan.get("max_intraday", 3)
-        max_dt_short = max(prof_dt.get("max_concurrent_short", 2), (dyn_max_dt + 1) // 2)
-        max_dt_long = max(prof_dt.get("max_concurrent_long", 2), (dyn_max_dt + 1) // 2)
-        # FIX 2026-10-22 (ROADMAP 1.3): pinjaman slot elastis (+1 saat intraday kosong) hanya menambah TOTAL swing,
-        # tidak menaikkan batas per arah. Dulu batas swing long ikut naik 3->4 lalu turun lagi -> tampil "4/3"
-        # dan 4 swing long searah (WIF/POL/DOGE/HYPE) terbuka bersamaan.
-        from src import risk_config
-        _qc = risk_config.get()["quadrant_caps"]
-        base_max_sw = dyn_max_sw if _qc.get("swing_elastic_raises_direction_cap") else slot_plan.get("max_swing", 5)
-        max_sw_short = max(prof_sw.get("max_concurrent_short", 3), (base_max_sw + 1) // 2)
-        max_sw_long = max(prof_sw.get("max_concurrent_long", 3), (base_max_sw + 1) // 2)
-
-        # 4. Check Market Session & Intraday Circuit Breaker
+        # 4. Sesi & circuit breaker intraday
         day_engine = IntradayDaytradeEngine()
         session_info = day_engine.get_market_session()
         losses_today = self.ft.count_losses_today("DAYTRADE")
         max_losses = prof_dt.get("max_daily_losses") or 2
         circuit_breaker_active = (losses_today >= max_losses)
+        session_blocked = bool(prof_dt.get("session_gate")) and not session_info.get("is_prime")
 
         slot_status = {
-            "dt_short": {"active": dt_short_count, "max": max_dt_short, "coins": dt_short_coins, "open": dt_short_count < max_dt_short and not circuit_breaker_active},
-            "dt_long": {"active": dt_long_count, "max": max_dt_long, "coins": dt_long_coins, "open": dt_long_count < max_dt_long and not circuit_breaker_active},
-            "sw_short": {"active": sw_short_count, "max": max_sw_short, "coins": sw_short_coins, "open": sw_short_count < max_sw_short and (sw_short_count + sw_long_count) < dyn_max_sw},
-            "sw_long": {"active": sw_long_count, "max": max_sw_long, "coins": sw_long_coins, "open": sw_long_count < max_sw_long and (sw_short_count + sw_long_count) < dyn_max_sw},
+            "dt_short": {"active": dt_short_count, "max": max_dt_short, "coins": dt_short_coins,
+                         "open": dt_short_count < max_dt_short and total_open and not circuit_breaker_active and not session_blocked},
+            "dt_long": {"active": dt_long_count, "max": max_dt_long, "coins": dt_long_coins,
+                        "open": dt_long_count < max_dt_long and total_open and not circuit_breaker_active and not session_blocked},
             "circuit_breaker": circuit_breaker_active,
+            "session_blocked": session_blocked,
             "losses_today": losses_today,
             "session": session_info,
             "dust_coins": dust_coins
         }
 
-        print("\n🔍 PRA-SCAN RADAR: AUDIT POSISI AKTIF & STATUS SLOT:")
+        print("\n🔍 PRA-SCAN: STATUS SLOT INTRADAY")
         if dust_coins:
-            print(f"  • 🧹 Posisi Dust / Free-Runner (< ${DUST_THRESHOLD_USD:.2f} / BE-Locked): {', '.join(dust_coins)} ➔ Kuota slot dibypass otomatis")
-        if not slot_status["dt_short"]["open"]:
-            reason = "Circuit Breaker Aktif" if circuit_breaker_active else f"Slot Penuh ({dt_short_count}/{max_dt_short}: {', '.join(dt_short_coins)})"
-            print(f"  • [⚡ Intraday Short] : 🛑 {reason} ➔ SCREENER DILEWATI (BYPASS)")
-        else:
-            print(f"  • [⚡ Intraday Short] : 🔍 Slot Terbuka ({dt_short_count}/{max_dt_short}) ➔ Menyisir candle 15m...")
+            print(f"  • 🧹 Dust / runner bebas-risiko: {', '.join(dust_coins)} (tidak dihitung slot)")
+        for key, label in (("dt_short", "⚡ Intraday Short"), ("dt_long", "⚡ Intraday Long ")):
+            st = slot_status[key]
+            if st["open"]:
+                print(f"  • [{label}] : 🔍 Slot terbuka ({st['active']}/{st['max']}) -> memindai candle 15m...")
+            else:
+                why = ("Circuit breaker aktif" if circuit_breaker_active else
+                       "Di luar sesi London/NY" if session_blocked else
+                       f"Slot penuh ({st['active']}/{st['max']}; total maks {max_total})")
+                print(f"  • [{label}] : 🛑 {why} -> dilewati")
 
-        if not slot_status["dt_long"]["open"]:
-            reason = "Circuit Breaker Aktif" if circuit_breaker_active else f"Slot Penuh ({dt_long_count}/{max_dt_long}: {', '.join(dt_long_coins)})"
-            print(f"  • [⚡ Intraday Long ] : 🛑 {reason} ➔ SCREENER DILEWATI (BYPASS)")
-        else:
-            print(f"  • [⚡ Intraday Long ] : 🔍 Slot Terbuka ({dt_long_count}/{max_dt_long}) ➔ Menyisir candle 15m...")
-
-        if not slot_status["sw_short"]["open"]:
-            print(f"  • [🌊 Swing Short   ] : 🛑 Slot Penuh ({sw_short_count}/{max_sw_short}: {', '.join(sw_short_coins)}) ➔ SCREENER DILEWATI (BYPASS)")
-        else:
-            print(f"  • [🌊 Swing Short   ] : 🔍 Slot Terbuka ({sw_short_count}/{max_sw_short}) ➔ Menyisir Daily/4H...")
-
-        if not slot_status["sw_long"]["open"]:
-            print(f"  • [🚀 Swing Long    ] : 🛑 Slot Penuh ({sw_long_count}/{max_sw_long}: {', '.join(sw_long_coins)}) ➔ SCREENER DILEWATI (BYPASS)")
-        else:
-            print(f"  • [🚀 Swing Long    ] : 🔍 Slot Terbuka ({sw_long_count}/{max_sw_long}) ➔ Menyisir Daily/4H...")
-
-        # 5. Scan 4 Quadrants
+        # 5. Scan 2 kuadran intraday
         all_candidates: List[Dict] = []
 
         # Quadrant 1: Intraday Short
@@ -217,34 +192,6 @@ class AutoHuntSniper:
             except Exception as e:
                 print(f"[!] Warning: Gagal scan Intraday Long: {e}")
 
-        # Quadrant 3: Swing Short
-        if slot_status["sw_short"]["open"]:
-            try:
-                screener_s = ShortScreener(self.db)
-                df_sw_s = screener_s.scan(min_90d_gain=35.0, min_score=40.0)
-                if not df_sw_s.empty:
-                    for _, r in df_sw_s.iterrows():
-                        c = r["symbol"]
-                        if c in active_positions_map:
-                            continue
-                        all_candidates.append(self._format_swing_candidate(r, "SHORT"))
-            except Exception as e:
-                print(f"[!] Warning: Gagal scan Swing Short: {e}")
-
-        # Quadrant 4: Swing Long
-        if slot_status["sw_long"]["open"]:
-            try:
-                screener_l = LongScreener(self.db)
-                df_sw_l = screener_l.scan(min_score=40.0)
-                if not df_sw_l.empty:
-                    for _, r in df_sw_l.iterrows():
-                        c = r["symbol"]
-                        if c in active_positions_map:
-                            continue
-                        all_candidates.append(self._format_swing_candidate(r, "LONG"))
-            except Exception as e:
-                print(f"[!] Warning: Gagal scan Swing Long: {e}")
-
         if not all_candidates:
             return {
                 "equity": equity,
@@ -254,7 +201,7 @@ class AutoHuntSniper:
                 "leaderboard": [],
                 "winner": None,
                 "ai_audit": None,
-                "waterfall_log": ["Tidak ada koin yang memenuhi kriteria setup pada kuadran yang slotnya masih terbuka."]
+                "waterfall_log": ["Tidak ada koin yang memenuhi kriteria setup intraday pada slot yang masih terbuka."]
             }
 
         # 6. Compute Unified Alpha Score & Enrich Top Candidates with 5-Minute Orderbook Spread Filter
@@ -421,66 +368,10 @@ class AutoHuntSniper:
             "sector": sec_info["label"],
             "sector_badge": sec_info["badge"],
             "max_hold_hours": 6,
-            "timeframe": "15-Menit"
-        }
-
-    def _format_swing_candidate(self, r: pd.Series, side: str) -> Dict:
-        coin = r["symbol"]
-        curr_px = float(r["price"])
-        score = float(r.get("score", 75.0))
-        pb_pct = float(r.get("pullback_pct", 0.0))
-
-        sl_pct = 10.0
-        tp1_pct = 10.0
-        tp2_pct = 20.0
-        runner_pct = 35.0
-
-        if side == "SHORT":
-            sl_px = round(curr_px * 1.10, 5)
-            tp1_px = round(curr_px * 0.90, 5)
-            tp2_px = round(curr_px * 0.80, 5)
-            runner_px = round(curr_px * 0.65, 5)
-            badge = "🌊 SWING SHORT"
-            reasons = [f"Gain 90d: +{r.get('gain_90d', 0)}%", f"Pullback: -{pb_pct}%", f"4H Breakdown: {r.get('h4_breakdown', 'YA')}"]
-        else:
-            sl_px = round(curr_px * 0.90, 5)
-            tp1_px = round(curr_px * 1.10, 5)
-            tp2_px = round(curr_px * 1.20, 5)
-            runner_px = round(curr_px * 1.35, 5)
-            badge = "🚀 SWING LONG"
-            reasons = [f"Diskon: -{pb_pct}%", f"Jarum Bawah: {r.get('wick_pct', 0)}%", f"Reclaim D1: {r.get('reclaim_d1', 'YA')}"]
-
-        from src.claude_crypto_engine import ClaudeCryptoEngine
-        sec_info = ClaudeCryptoEngine.get_coin_sector(coin)
-
-        return {
-            "coin": coin,
-            "side": side,
-            "stream": "SWING",
-            "badge": badge,
-            "score": round(score, 1),
-            "price": curr_px,
-            "sl_px": sl_px,
-            "sl_pct": sl_pct,
-            "tp1_px": tp1_px,
-            "tp1_pct": tp1_pct,
-            "tp2_px": tp2_px,
-            "tp2_pct": tp2_pct,
-            "runner_px": runner_px,
-            "runner_pct": runner_pct,
-            "rrr": 2.0,
-            "verdict": r.get("verdict", "SIAP SWING"),
-            "funding_1h": 0.0,
-            "squeeze_risk": r.get("squeeze_risk", "NORMAL"),
-            "sector": r.get("sector", sec_info["label"]),
-            "sector_badge": r.get("sector_badge", sec_info["badge"]),
-            "bms_score": r.get("bms_score"),
-            "drs_score": r.get("drs_score"),
-            "crash_gate": r.get("crash_gate"),
-            "phase": r.get("phase"),
-            "reasons": reasons,
-            "max_hold_hours": 72,
-            "timeframe": "Daily / 4H"
+            "timeframe": "15-Menit",
+            "ready": bool(r.get("ready", False)),
+            "engine_version": r.get("engine_version", ""),
+            "vetoes": r.get("vetoes", []) if isinstance(r.get("vetoes", []), list) else []
         }
 
     def _compute_alpha_score(self, cand: Dict, session_info: Dict) -> float:
@@ -494,15 +385,8 @@ class AutoHuntSniper:
 
         alpha = score * rrr_factor
 
-        # Session Factor
-        if cand["stream"] == "DAYTRADE":
-            if session_info.get("is_prime"):
-                alpha += 4.0
-            else:
-                alpha -= 8.0  # Penalty for Asian low-volume chop session
-        else:
-            # Swing setups are immune to intraday session chop
-            alpha += 2.0
+        # Session Factor (intraday)
+        alpha += 4.0 if session_info.get("is_prime") else -8.0
 
         # Funding rate alignment
         f_rate = cand.get("funding_1h", 0.0)
@@ -510,13 +394,5 @@ class AutoHuntSniper:
             alpha += 3.0  # Longs pay shorts (favorable yield)
         elif cand["side"] == "LONG" and f_rate < -0.005:
             alpha += 3.0  # Shorts pay longs & potential squeeze pump
-
-        # Claude_Crypto Phase Confluence Bonus (Hanya berlaku untuk SWING multi-hari, Intraday 15m dibebaskan)
-        if cand["stream"] == "SWING":
-            phase = str(cand.get("phase", ""))
-            if "P7 DISTRIBUSI" in phase and cand["side"] == "SHORT":
-                alpha += 2.0
-            elif "P3/P4 AKUMULASI" in phase and cand["side"] == "LONG":
-                alpha += 2.0
 
         return round(alpha, 1)

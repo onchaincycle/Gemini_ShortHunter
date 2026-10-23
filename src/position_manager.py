@@ -1,20 +1,13 @@
 """
-ShortHunter Auto-Pilot Position Manager (Dual-Stream):
-Monitors active Hyperliquid short positions and manages EACH position according to
-the strategy it was opened with (tag di src/position_tags.py), bukan profil global.
+INTRADAY — Mesin (dulu "daemon" ShortHunter Auto-Pilot) & Position Manager — INTRADAY SAJA (2026-10-23; stream SWING dihapus atas keputusan user).
 
-Stream 1 — 🌊 SWING (FIXED_PCT, multi-hari):
-  * Server SL +10% on-chain.
-  * Trimming 1: Close 50% at -10% drop & move server SL to Breakeven.
-  * Target 2  : Close 30% at -20% drop & trail server SL to +10% locked profit.
-  * Runner 3  : Close remaining 20% at -35% deep dump.
-  * Time-stop 72 jam.
-
-Stream 2 — ⚡ INTRADAY / DAYTRADE (R_MULTIPLE, 15m):
-  * Server SL teknis (pucuk jarum 15m + buffer, 2.8%-5.5%) on-chain.
+⚡ INTRADAY / DAYTRADE (R_MULTIPLE, 15m):
+  * Server SL teknis on-chain.
   * TP1 = 1.0R : Close 50% & geser SL ke BE (+buffer fee).
   * TP2 = 2.0R : Close sisa posisi.
   * Time-stop 6 jam (tanpa risiko overnight).
+Posisi lama berlabel non-intraday (mis. SWING) TIDAK dikelola lagi (hanya dilindungi SL on-chain) — tutup manual.
+Setiap siklus juga memperbarui trade kertas (mode PAPER, src/paper_trader.py).
 
 Layer keamanan:
   - Layer 1 (Server-side Trigger): Native Stop Market order di Hyperliquid (aman saat laptop mati).
@@ -53,6 +46,22 @@ PID_FILE = os.path.join(ROOT_DIR, "data", "autopilot.pid")
 # lewat menu [4]->[6]; dihapus saat dinyalakan lewat menu [4]->[5]. Selama ada, menu & watchdog TIDAK auto-start.
 HOLD_FILE = os.path.join(ROOT_DIR, "data", "daemon_hold.flag")
 LOG_FILE = os.path.join(ROOT_DIR, "logs", "autopilot.log")
+# VPS (2026-10-23): bila unit systemd ini terpasang (Linux), menu [4] menyalakan/menghentikan Mesin lewat systemd
+# (hidup lagi otomatis setelah crash/reboot, tidak ada proses ganda). Di Mac tetap proses latar biasa.
+SYSTEMD_UNIT = "intraday-mesin.service"
+
+
+def _systemd_unit_installed() -> bool:
+    return sys.platform.startswith("linux") and os.path.exists(
+        os.path.expanduser(f"~/.config/systemd/user/{SYSTEMD_UNIT}"))
+
+
+def _systemctl(*args) -> Tuple[bool, str]:
+    try:
+        p = subprocess.run(["systemctl", "--user", *args, SYSTEMD_UNIT], capture_output=True, text=True, timeout=30)
+        return p.returncode == 0, (p.stdout + p.stderr).strip()
+    except Exception as e:
+        return False, str(e)
 
 
 class PositionManager:
@@ -129,7 +138,6 @@ class PositionManager:
 
         # Re-base plan to the ACTUAL fill price.
         # - INTRADAY: SL adalah level teknikal absolut (pucuk jarum 15m untuk short, dasar jarum untuk long).
-        # - SWING   : SL adalah persentase tetap dari entry -> hitung ulang dari harga fill.
         sl_cand = float(tag_plan.get("sl_px") or 0.0)
         is_sl_valid = (sl_cand > entry) if side == "SHORT" else (sl_cand < entry and sl_cand > 0)
         if strategy == "DAYTRADE" and sl_cand and is_sl_valid:
@@ -139,9 +147,9 @@ class PositionManager:
 
         sl_px = self.trader.round_price(coin, plan["sl_px"])
         if not tag:
-            # Posisi tanpa tag (mis. dibuka manual di web) -> daftarkan sebagai SWING (paling aman)
+            # Posisi tanpa tag (mis. dibuka manual di web) -> daftarkan sebagai INTRADAY (satu-satunya stream)
             position_tags.tag_position(coin, strategy, plan, meta={"source": "AUTO_DETECTED_UNTAGGED", "side": side})
-            self.log_event(f"ℹ️ {coin} ({side}) terdeteksi tanpa tag strategi -> otomatis didaftarkan sebagai SWING.", strategy)
+            self.log_event(f"ℹ️ {coin} ({side}) terdeteksi tanpa tag strategi -> otomatis didaftarkan sebagai INTRADAY.", strategy)
         else:
             position_tags.tag_position(coin, strategy, plan, meta=tag.get("meta", {}))
 
@@ -188,7 +196,7 @@ class PositionManager:
         if not needs_reconcile:
             return state
 
-        strategy = tag_strat or state.get("strategy") or "SWING"
+        strategy = tag_strat or state.get("strategy") or "DAYTRADE"
         entry = float(state["entry_px"])
         tag_sl = float((tag.get("plan") or {}).get("sl_px") or state.get("initial_sl_px") or 0) or None
         plan = position_tags.build_plan(strategy, entry, sl_px=tag_sl, side=side)
@@ -274,7 +282,7 @@ class PositionManager:
                 lifecycle[coin] = self._backfill_strategy(coin, lifecycle[coin], side=pos_side)
 
             state = lifecycle[coin]
-            strategy = state.get("strategy", "SWING")
+            strategy = state.get("strategy", "DAYTRADE")
             side = state.get("side", pos_side)
             state["side"] = side
             entry_px = float(state["entry_px"])
@@ -456,7 +464,7 @@ class PositionManager:
             except Exception:
                 pass
         for c in to_delete:
-            strategy = lifecycle[c].get("strategy", "SWING")
+            strategy = lifecycle[c].get("strategy", "DAYTRADE")
             del lifecycle[c]
             position_tags.remove_tag(c)
             # Cancel any orphaned orders
@@ -487,7 +495,7 @@ class PositionManager:
             roe_pct=pos_info.get("roe_pct", 0.0),
             is_on_chain_sl=state.get("native_sl_active", True),
             event_note=note,
-            strategy=state.get("strategy", "SWING"),
+            strategy=state.get("strategy", "DAYTRADE"),
             plan=state,
         )
 
@@ -525,7 +533,7 @@ class PositionManager:
                 self.trader.set_stop_loss_trigger(coin, remaining, new_sl_px, side=side)
                 # Place TP2 on-chain if TP2 not yet reached
                 if not state.get("tp_20pct") and state.get("tp2_px"):
-                    strategy = state.get("strategy", "SWING")
+                    strategy = state.get("strategy", "DAYTRADE")
                     sz_dec = self.trader.get_asset_precision(coin)
                     initial_sz = float(state.get("initial_sz", remaining))
                     tp2_sz = remaining if strategy == "DAYTRADE" else (round(initial_sz * 0.30, sz_dec) if sz_dec > 0 else int(initial_sz * 0.30))
@@ -557,264 +565,7 @@ class PositionManager:
         return res.get("success", False)
 
     # ------------------------------------------------------------------
-    # STREAM 1: SWING
-    # ------------------------------------------------------------------
-    def _manage_swing(self, coin, state, pos_info, current_px, actions):
-        prof = get_profile("SWING")
-        entry_px = state["entry_px"]
-        initial_sz = state["initial_sz"]
-        side = state.get("side", "SHORT")
-        sz_dec = self.trader.get_asset_precision(coin)
-        fee_buf = prof.get("fee_roundtrip_pct", 0.09) / 100.0
-
-        if side == "LONG":
-            profit_pct = ((current_px - entry_px) / entry_px) * 100
-            adverse_pct = ((entry_px - current_px) / entry_px) * 100
-            early_be_hit = profit_pct >= prof.get("early_be_pct", 5.0)
-            tp1_hit = profit_pct >= prof["trim_pct"]
-            tp2_hit = profit_pct >= prof["tp2_pct"]
-            runner_hit = bool(prof.get("runner_pct") and profit_pct >= prof["runner_pct"])
-            sl_hit = current_px <= state["current_sl_px"]
-            be_px = self.trader.round_price(coin, entry_px * (1 + fee_buf))
-            trailing_sl_px = self.trader.round_price(coin, entry_px * (1 + prof["trim_pct"] / 100.0))
-        else:  # SHORT
-            profit_pct = ((entry_px - current_px) / entry_px) * 100
-            adverse_pct = ((current_px - entry_px) / entry_px) * 100
-            early_be_hit = profit_pct >= prof.get("early_be_pct", 5.0)
-            tp1_hit = profit_pct >= prof["trim_pct"]
-            tp2_hit = profit_pct >= prof["tp2_pct"]
-            runner_hit = bool(prof.get("runner_pct") and profit_pct >= prof["runner_pct"])
-            sl_hit = current_px >= state["current_sl_px"]
-            be_px = self.trader.round_price(coin, entry_px * (1 - fee_buf))
-            trailing_sl_px = self.trader.round_price(coin, entry_px * (1 - prof["trim_pct"] / 100.0))
-
-        max_hold = state.get("max_hold_hours", prof["max_hold_hours"])
-
-        # RULE 0: Time-stop 72 jam
-        if prof.get("time_exit_enabled") and self._age_hours(state) >= max_hold:
-            msg = f"⏰ SWING TIME-STOP {max_hold}J ({self._age_hours(state):.1f} jam): {coin} ({side}) ditutup. Gerak: {profit_pct:+.2f}%"
-            if self._close_full(coin, state, pos_info, current_px, f"SWING_TIME_STOP_{max_hold}H", msg, "TIME_EXIT", actions):
-                return
-
-        # RULE 0.1: AI Dead-Momentum Buster (Scenario 1 - Optimized)
-        # Evaluasi posisi stagnan / modal terkunci tanpa momentum
-        age_h = self._age_hours(state)
-        peak_profit_pct = float(state.get("peak_profit_pct", 0.0))
-        now_ts = time.time()
-        last_check_ts = float(state.get("last_stalemate_check_ts", 0.0))
-        swing_cooldown_sec = 4 * 3600  # Evaluasi ulang tiap 4 jam jika masih stagnan
-
-        # HARD GATEKEEPER 1: Anti-Clipping Rule (Jangan bunuh trade yang sedang/pernah untung sehat)
-        # Jika sedang profit >= +1.0% atau MFE pernah mencapai >= +1.5%, biarkan Trailing SL / TP bekerja
-        is_profit_protected = profit_pct >= 1.0 or peak_profit_pct >= 1.5 or state.get("early_be_shield") or state.get("trimmed_10pct")
-
-        # Trigger hanya jika: Umur >= 36 jam, pergerakan loyo (|move| <= 1.5%), cooldown terpenuhi, dan BUKAN posisi pemenang
-        if (age_h >= 36.0 and abs(profit_pct) <= 1.5 and
-                not is_profit_protected and
-                (now_ts - last_check_ts >= swing_cooldown_sec)):
-            state["last_stalemate_check_ts"] = now_ts
-            try:
-                from src.ai_engine import ai_advisor
-                market_info = {
-                    "current_px": current_px,
-                    "age_hours": age_h,
-                    "max_hold_hours": max_hold,
-                    "unrealized_pnl": state.get("unrealized_pnl", 0.0),
-                    "move_pct": profit_pct,
-                    "peak_profit_pct": peak_profit_pct,
-                    "funding_rate": float(state.get("funding_rate", 0.0)),
-                }
-                diag = ai_advisor.evaluate_position_stalemate(coin, state, market_info)
-                if diag.get("action") == "CLOSE_NOW" and diag.get("confidence", 0) >= 70:
-                    msg = (f"🧠 AI DEAD-MOMENTUM BUSTER: {coin} ({side}) jalan di tempat {age_h:.1f} jam (gerak {profit_pct:+.2f}%, MFE: {peak_profit_pct:+.2f}%). "
-                           f"Posisi ditutup dini untuk daur ulang modal! ({diag.get('reasoning')})")
-                    if self._close_full(coin, state, pos_info, current_px, "AI_STALEMATE_EXIT", msg, "AI_EXIT", actions):
-                        return
-                else:
-                    self.log_event(f"🧠 AI STALEMATE CHECK: {coin} ({side}) dipertahankan (AI: {diag.get('action')}, {diag.get('confidence')}%) - {diag.get('reasoning')}", "SWING")
-            except Exception as e:
-                self.log_event(f"Warning: Gagal evaluasi AI stalemate {coin}: {e}", "SWING")
-
-        # Track Peak Profit % (High-Water Mark) for Periodic On-Chain SL Ratcheting ([MEM-004])
-        peak_profit_pct = max(float(state.get("peak_profit_pct", 0.0)), profit_pct)
-        state["peak_profit_pct"] = round(peak_profit_pct, 2)
-        current_sz = float(pos_info.get("size", initial_sz))
-        cur_sl = float(state.get("current_sl_px", 0.0))
-
-        # Helper to verify swing SL only tightens (never widens) and sits safely on the stop side
-        def _is_better_sl(candidate_sl: float) -> bool:
-            if candidate_sl <= 0:
-                return False
-            if side == "LONG":
-                return (candidate_sl > cur_sl) and (candidate_sl < current_px * 0.996)
-            else:
-                return (cur_sl <= 0 or candidate_sl < cur_sl) and (candidate_sl > current_px * 1.004)
-
-        def _tighter_sl(a: float, b: float) -> float:
-            if b <= 0:
-                return a
-            if a <= 0:
-                return b
-            return max(a, b) if side == "LONG" else min(a, b)
-
-        # RULE 0.2: Periodic Step 1 — Half-Risk Cushion Compress (+2.2% move / +4.4% ROE -> compress SL from -10% to -5%)
-        half_risk_step = float(prof.get("half_risk_step_pct", 2.2))
-        if (profit_pct >= half_risk_step and not state.get("half_risk_shield")
-                and not state.get("early_be_shield") and not state.get("trimmed_10pct")):
-            half_sl_pct = float(prof.get("sl_pct", 10.0)) * 0.50  # 5.0%
-            half_sl_px = self.trader.round_price(
-                coin, entry_px * (1 - half_sl_pct / 100.0) if side == "LONG" else entry_px * (1 + half_sl_pct / 100.0)
-            )
-            if _is_better_sl(half_sl_px):
-                if self._move_sl_on_chain(coin, state, half_sl_px, current_sz):
-                    state["half_risk_shield"] = True
-                    state["current_sl_px"] = half_sl_px
-                    cur_sl = half_sl_px
-                    msg = (f"🛡️ SWING STEP-1 SL COMPRESS (+{profit_pct:.1f}% gerak / +{profit_pct*2:.1f}% ROE): "
-                           f"SL on-chain diperketat 50% ke ${half_sl_px} (-{half_sl_pct:.1f}%) untuk pangkas risiko separuh!")
-                    self.log_event(msg, "SWING")
-                    actions.append({"type": "SL_STEP_HALF_RISK", "coin": coin, "strategy": "SWING", "msg": msg})
-
-        # RULE 0.5: TIER-1 PROFIT LOCK (+4.0% gerak / +8.0% ROE) -> kunci min +1.5% NET (+3.0% ROE), bukan BE polos
-        tier1_net_pct = float(prof.get("tier1_lock_profit_pct", prof.get("tier1_lock_net_pct", 1.5)))
-        tier1_lock_pct = tier1_net_pct + fee_buf * 100.0  # + fee roundtrip agar hasil bersih tetap +1.5%
-        lev = float(prof.get("leverage", 2))
-        if early_be_hit and not state.get("early_be_shield") and not state.get("trimmed_10pct"):
-            tier1_px = self.trader.round_price(
-                coin, entry_px * (1 + tier1_lock_pct / 100.0) if side == "LONG" else entry_px * (1 - tier1_lock_pct / 100.0)
-            )
-            # Fallback ke BE+fee hanya jika harga sudah terlalu dekat ke level Tier-1 (gap / wick balik)
-            if _is_better_sl(tier1_px):
-                target_sl, locked_pct, tier1_ok = tier1_px, tier1_lock_pct, True
-            else:
-                target_sl, locked_pct, tier1_ok = be_px, fee_buf * 100.0, False
-            if _is_better_sl(target_sl) and self._move_sl_on_chain(coin, state, target_sl, current_sz):
-                state["early_be_shield"] = True
-                state["half_risk_shield"] = True
-                state["tier1_locked"] = tier1_ok
-                state["locked_profit_pct"] = round(locked_pct, 2)
-                state["current_sl_px"] = target_sl
-                cur_sl = target_sl
-                lock_label = (f"+{tier1_net_pct:.1f}% NET (+{tier1_net_pct * lev:.1f}% ROE)" if tier1_ok
-                              else "Breakeven+fee (fallback, harga terlalu dekat level Tier-1)")
-                msg = (f"🔒 SWING TIER-1 PROFIT LOCK (+{profit_pct:.1f}% gerak / +{profit_pct * lev:.1f}% ROE): "
-                       f"SL on-chain dikunci di {lock_label} (${target_sl})!")
-                self.log_event(msg, "SWING")
-                actions.append({"type": "TIER1_PROFIT_LOCK", "coin": coin, "strategy": "SWING", "msg": msg})
-
-        # RULE 1: Trimming 1 (±7.0% gerak / ±14% ROE) -> Trim 50% & Lock +2.0% Profit Cushion on-chain
-        if tp1_hit and not state.get("trimmed_10pct"):
-            trim_sz = initial_sz * 0.50
-            trim_sz = round(trim_sz, sz_dec) if sz_dec > 0 else int(trim_sz)
-            lock_pct = 0.020  # Lock +2.0% price move (+4.0% ROE) after TP1
-            tp1_lock_sl = self.trader.round_price(
-                coin, entry_px * (1 + lock_pct) if side == "LONG" else entry_px * (1 - lock_pct)
-            )
-            # Jangan pernah melonggarkan SL: jika trailing/tier-1 sudah lebih tinggi, pertahankan cur_sl
-            target_post_tp1_sl = _tighter_sl(tp1_lock_sl, cur_sl if (state.get("early_be_shield") or state.get("tier1_locked")) else be_px)
-            ok, remaining = self._partial_close_and_move_sl(coin, state, trim_sz, target_post_tp1_sl)
-            if ok:
-                state["trimmed_10pct"] = True
-                state["early_be_shield"] = True
-                state["periodic_sl_trailed"] = True
-                state["locked_profit_pct"] = max(float(state.get("locked_profit_pct", 0.0)), 2.0)
-                cur_sl = target_post_tp1_sl
-                msg = f"✂️ TRIMMING 1 SUKSES (+{profit_pct:.1f}% gerak): 50% posisi ({trim_sz} {coin} {side}) diamankan! SL dikunci di profit +{state.get('locked_profit_pct', 0.0):.2f}% (${target_post_tp1_sl})."
-                self.log_event(msg, "SWING")
-                self._ft_update(coin, state, pos_info, current_px, size=remaining, note=msg)
-                actions.append({"type": "TRIMMING_1", "coin": coin, "strategy": "SWING", "msg": msg})
-
-        # RULE 1.5: CONTINUOUS TRAILING ENGINE (HWM RATCHET)
-        # Aktif secara kontinu sejak Tier-1 trigger (>= +4.0% gerak / +1.5R) sebelum TP1 hingga mengawal Runner
-        continuous_enabled = bool(prof.get("continuous_trail_enabled", True))
-        trail_start_pct = float(prof.get("continuous_trail_start_pct", prof.get("early_be_pct", 4.0)))
-        hwm_ratio = float(prof.get("continuous_trail_ratio", prof.get("hwm_lock_ratio", 0.55)))
-        trail_step_pct = float(prof.get("continuous_trail_step_pct", 0.5))
-        tier1_floor_pct = float(prof.get("tier1_lock_profit_pct", prof.get("tier1_lock_net_pct", 1.5))) + fee_buf * 100.0
-
-        is_trail_active = (
-            continuous_enabled
-            and not state.get("runner_35pct")
-            and (peak_profit_pct >= trail_start_pct or state.get("tier1_locked") or state.get("early_be_shield"))
-        )
-
-        if is_trail_active:
-            # Mengunci rasio (55%) dari peak pergerakan harga, dibatasi ke bawah oleh minimum guaranteed floor (+1.5% net)
-            desired_lock_pct = round(max(tier1_floor_pct, peak_profit_pct * hwm_ratio), 2)
-            prev_lock_pct = float(state.get("locked_profit_pct", 0.0))
-
-            if (desired_lock_pct - prev_lock_pct) >= trail_step_pct or cur_sl <= 0:
-                ratchet_sl = self.trader.round_price(
-                    coin,
-                    entry_px * (1 + desired_lock_pct / 100.0) if side == "LONG" else entry_px * (1 - desired_lock_pct / 100.0)
-                )
-                if _is_better_sl(ratchet_sl):
-                    rem_sz = float(pos_info.get("size", state.get("remaining_sz", initial_sz)))
-                    if self._move_sl_on_chain(coin, state, ratchet_sl, rem_sz):
-                        state["early_be_shield"] = True
-                        state["tier1_locked"] = True
-                        state["periodic_sl_trailed"] = True
-                        state["continuous_trailed"] = True
-                        state["locked_profit_pct"] = desired_lock_pct
-                        state["current_sl_px"] = ratchet_sl
-                        cur_sl = ratchet_sl
-                        stage_label = "RUNNER" if state.get("tp_20pct") else ("POST-TP1" if state.get("trimmed_10pct") else "PRE-TP1")
-                        msg = (f"📈 SWING CONTINUOUS TRAIL [{stage_label}] (Peak +{peak_profit_pct:.1f}% gerak / MFE +{peak_profit_pct * lev:.1f}% ROE): "
-                               f"SL on-chain digeser mengunci +{desired_lock_pct:.2f}% profit (~+{desired_lock_pct * lev:.1f}% ROE) (${ratchet_sl})!")
-                        self.log_event(msg, "SWING")
-                        actions.append({"type": "CONTINUOUS_TRAILING_RATCHET", "coin": coin, "strategy": "SWING", "msg": msg})
-
-        # RULE 2: Target 2 (±18.0% gerak / ±36% ROE) dengan AI Runner Extender (Scenario 2)
-        if tp2_hit and not state.get("tp_20pct"):
-            runner_decision = {"action": "EXTEND_RUNNER", "confidence": 75, "reasoning": "Standard swing policy: biarkan sisa runner."}
-            try:
-                from src.ai_engine import ai_advisor
-                runner_decision = ai_advisor.evaluate_runner_extension(coin, state, current_px, {"profit_pct": profit_pct})
-            except Exception:
-                pass
-
-            if runner_decision.get("action") == "FULL_HARVEST" and runner_decision.get("confidence", 0) >= 75:
-                # AI mendeteksi momentum jenuh/exhaustion -> kunci 100% cuan
-                msg = (f"🎯🧠 AI RUNNER HARVEST (+{profit_pct:.1f}% gerak): Trend melemah/jenuh! "
-                       f"Sisa posisi {coin} ({side}) ditutup penuh mengamankan 100% cuan! ({runner_decision.get('reasoning')})")
-                if self._close_full(coin, state, pos_info, current_px, "AI_FULL_HARVEST_TP2", msg, "TARGET_2", actions):
-                    state["tp_20pct"] = True
-                    state["runner_35pct"] = True
-            else:
-                tp2_sz = initial_sz * 0.30
-                tp2_sz = round(tp2_sz, sz_dec) if sz_dec > 0 else int(tp2_sz)
-                tightness = runner_decision.get("trailing_sl_tightness", "STANDARD")
-                if tightness == "TIGHT":
-                    tight_pct = (prof["trim_pct"] + prof["tp2_pct"]) / 2.0  # di tengah trim1 & tp2
-                    trailing_sl_px = self.trader.round_price(coin, entry_px * (1 + tight_pct / 100.0) if side == "LONG" else entry_px * (1 - tight_pct / 100.0))
-                trailing_sl_px = _tighter_sl(trailing_sl_px, cur_sl)  # jangan turunkan SL hasil ratchet Tier-2
-                ok, remaining = self._partial_close_and_move_sl(coin, state, tp2_sz, trailing_sl_px)
-                if ok:
-                    state["tp_20pct"] = True
-                    state["periodic_sl_trailed"] = True
-                    state["locked_profit_pct"] = round(abs(trailing_sl_px - entry_px) / entry_px * 100.0, 2)
-                    msg = (f"🎯 TARGET 2 SUKSES (+{profit_pct:.1f}% gerak): 30% posisi ({tp2_sz} {coin} {side}) diamankan! "
-                           f"Trailing SL dikunci di profit (${trailing_sl_px}). Sisa runner dikawal! ({runner_decision.get('reasoning')})")
-                    self.log_event(msg, "SWING")
-                    self._ft_update(coin, state, pos_info, current_px, size=remaining, note=msg)
-                    actions.append({"type": "TARGET_2", "coin": coin, "strategy": "SWING", "msg": msg})
-
-        # RULE 3: Runner (±30.0% gerak / ±60% ROE)
-        elif runner_hit and not state.get("runner_35pct"):
-            msg = f"🚀 RUNNER SUKSES (+{profit_pct:.1f}% gerak): Sisa posisi {coin} ({side}) ditutup dengan profit maksimal!"
-            if self._close_full(coin, state, pos_info, current_px, "RUNNER_MAX_PROFIT", msg, "RUNNER", actions):
-                state["runner_35pct"] = True
-
-        # RULE 4: Local SL check (backup dari SL on-chain)
-        elif sl_hit:
-            is_be = state.get("trimmed_10pct", False) or state.get("early_be_shield", False)
-            msg = (f"🛡️ BREAKEVEN DEFENSE: Harga kembali ke batas proteksi (${state.get('current_sl_px', entry_px)}). Sisa {coin} ({side}) ditutup aman!"
-                   if is_be else f"🛑 STOP LOSS HIT (-{adverse_pct:.1f}%): Cut loss {coin} ({side}) otomatis dieksekusi.")
-            self._close_full(coin, state, pos_info, current_px,
-                             "BREAKEVEN_DEFENSE" if is_be else "STOP_LOSS_HIT", msg, "STOP_LOSS", actions)
-
-    # ------------------------------------------------------------------
-    # STREAM 2: INTRADAY / DAYTRADE
+    # STREAM INTRADAY / DAYTRADE (satu-satunya stream)
     # ------------------------------------------------------------------
     def _manage_intraday(self, coin, state, pos_info, current_px, actions):
         prof = get_profile("DAYTRADE")
@@ -1128,7 +879,7 @@ class PositionManager:
                         open_summary.append({
                             "coin": c,
                             "side": s.get("side", "SHORT"),
-                            "strategy": s.get("strategy", "SWING"),
+                            "strategy": s.get("strategy", "DAYTRADE"),
                             "entry_px": s.get("entry_px"),
                             "current_px": float(all_mids.get(c, 0.0)),
                             "roe_pct": s.get("roe_pct", 0.0),
@@ -1179,6 +930,17 @@ class PositionManager:
             except Exception as e:
                 self.log_event(f"Warning: Gagal eksekusi Macro Shock Defender: {e}")
 
+    def _update_paper_trades(self, actions_taken: List[Dict]):
+        try:
+            from src import paper_trader
+            if not paper_trader.open_trades():
+                return
+            for ev in paper_trader.update_paper_trades(self.trader.get_all_mids()):
+                self.log_event(ev["msg"], "DAYTRADE")
+                actions_taken.append(ev)
+        except Exception as e:
+            self.log_event(f"Warning: Gagal memperbarui trade kertas: {e}")
+
     def _run_autonomous_cycle_if_due(self, actions_taken: List[Dict]):
         """
         Scenario 5: Zero-Touch Autonomous Hunter & Closed-Loop Self-Evaluation.
@@ -1190,11 +952,11 @@ class PositionManager:
             res = auto_eng.run_autonomous_hunt_if_due(force=False)
             if res.get("executed"):
                 msg = res.get("msg", f"🚀 AUTO-OPEN {res.get('side')} {res.get('coin')}")
-                self.log_event(msg, res.get("strategy", "SWING"))
+                self.log_event(msg, res.get("strategy", "DAYTRADE"))
                 actions_taken.append({
                     "type": "AUTONOMOUS_OPEN_GRADE_A",
                     "coin": res.get("coin"),
-                    "strategy": res.get("strategy", "SWING"),
+                    "strategy": res.get("strategy", "DAYTRADE"),
                     "msg": msg
                 })
         except Exception as e:
@@ -1206,13 +968,16 @@ class PositionManager:
     def check_and_execute(self) -> List[Dict]:
         """
         Performs one check cycle across all monitored positions + Autonomous Hunter & Self-Evaluation.
-        Setiap posisi dikelola oleh stream strateginya sendiri (SWING / DAYTRADE).
+        Posisi intraday dikelola; posisi lama non-intraday hanya dilindungi SL on-chain. Trade kertas diperbarui.
         """
         now_ts = time.time()
         actions_taken = []
 
         # Scenario 4: Periodic 4-hour AI Market Regime Pulse Check
         self._audit_macro_pulse_if_needed(now_ts)
+
+        # Mode PAPER: perbarui trade kertas (SL/TP/time-stop) dari harga mid
+        self._update_paper_trades(actions_taken)
 
         lifecycle = self.sync_active_positions()
         if not lifecycle:
@@ -1259,8 +1024,11 @@ class PositionManager:
 
             if state.get("strategy") == "DAYTRADE":
                 self._manage_intraday(coin, state, pos_info, current_px, actions_taken)
-            else:
-                self._manage_swing(coin, state, pos_info, current_px, actions_taken)
+            elif not state.get("legacy_unmanaged_logged"):
+                # Stream SWING dihapus 2026-10-23: posisi lama tidak dikelola (hanya SL on-chain). Tutup manual.
+                state["legacy_unmanaged_logged"] = True
+                self.log_event(f"⚠️ {coin} ({side}) berlabel {state.get('strategy')} — stream ini sudah dihapus. "
+                               f"Hanya dilindungi SL on-chain; tutup manual dari menu [3].", state.get("strategy"))
 
             lifecycle[coin] = state
 
@@ -1366,7 +1134,7 @@ class PositionManager:
 
         for coin, s in lifecycle.items():
             side = s.get("side", "SHORT")
-            strat = s.get("strategy") or position_tags.get_strategy(coin) or "SWING"
+            strat = s.get("strategy") or position_tags.get_strategy(coin) or "DAYTRADE"
             entry = float(s.get("entry_px", 0.0))
             cur_px = float(s.get("last_px", entry))
             sz = float(s.get("remaining_sz") or s.get("initial_sz", 0.0))
@@ -1385,9 +1153,9 @@ class PositionManager:
             t2_done = s.get("tp_20pct", False)
             early_be = s.get("early_be_shield", False)
 
-            trim_p = float(s.get("tp1_pct", 7.0 if strat == "SWING" else 3.0))
-            tp2_p = float(s.get("tp2_pct", 18.0 if strat == "SWING" else 6.0))
-            sl_p = float(s.get("sl_pct", 10.0 if strat == "SWING" else 3.0))
+            trim_p = float(s.get("tp1_pct", 3.0))
+            tp2_p = float(s.get("tp2_pct", 6.0))
+            sl_p = float(s.get("sl_pct", 3.0))
 
             t1_target = float(s.get("tp1_px", 0.0))
             t2_target = float(s.get("tp2_px", 0.0))
@@ -1537,7 +1305,6 @@ class PositionManager:
         print("\n" + "=" * 65)
         print("    🛡️  SHORT & LONG HUNTER AUTO-PILOT POSITION GUARD")
         print("=" * 65)
-        print("🌊 SWING    : SL ±10% | Trim 50% @±10% (SL→BE) | 30% @±20% | Runner @±35% | Max 72j")
         print("⚡ INTRADAY : SL teknis 15m | TP1 1R (Trim 50%, SL→BE) | TP2 2R | Auto-close 6j")
         print("Server Trigger: Stop Market on-chain (aman jika laptop mati)")
         print("-" * 65)
@@ -1613,7 +1380,19 @@ class PositionManager:
             pass
         pid = PositionManager.is_daemon_running()
         if pid:
-            return {"success": True, "message": f"Auto-Pilot & Autonomous AI sudah berjalan (PID: {pid}).", "pid": pid}
+            return {"success": True, "message": f"Mesin sudah berjalan (PID: {pid}).", "pid": pid}
+
+        if _systemd_unit_installed():
+            ok, out = _systemctl("start")
+            for _ in range(20):
+                time.sleep(0.5)
+                pid = PositionManager.is_daemon_running()
+                if pid:
+                    break
+            if ok and pid:
+                return {"success": True, "message": f"Mesin dinyalakan via systemd 24/7 (PID: {pid}).", "pid": pid}
+            return {"success": False, "message": f"Gagal menyalakan Mesin via systemd: {out or 'PID belum muncul'} "
+                                                 f"(cek: journalctl --user -u {SYSTEMD_UNIT} -n 30)"}
 
         # Launch detached background process (wrapped with macOS caffeinate -i so system won't sleep unattended)
         python_bin = sys.executable
@@ -1636,7 +1415,7 @@ class PositionManager:
         time.sleep(0.3)
         actual_pid = PositionManager.is_daemon_running() or p.pid
 
-        return {"success": True, "message": f"Auto-Pilot & Autonomous AI berhasil dinyalakan 24/7! (PID: {actual_pid})", "pid": actual_pid}
+        return {"success": True, "message": f"Mesin berhasil dinyalakan 24/7 (PID: {actual_pid}).", "pid": actual_pid}
 
     @staticmethod
     def stop_daemon(hold: bool = True) -> Dict:
@@ -1646,11 +1425,21 @@ class PositionManager:
                     f.write(time.strftime("%Y-%m-%d %H:%M:%S"))
             except Exception:
                 pass
+        if _systemd_unit_installed():
+            ok, out = _systemctl("stop")
+            if os.path.exists(PID_FILE) and not PositionManager.is_daemon_running():
+                os.remove(PID_FILE)
+            if ok and not PositionManager.is_daemon_running():
+                return {"success": True, "message": "Mesin dihentikan (systemd)." + (" Ditahan: tidak hidup lagi saat reboot sampai dinyalakan dari menu." if hold else "")}
+            if not ok:
+                return {"success": False, "message": f"Gagal menghentikan Mesin via systemd: {out}"}
+            # proses Mesin di luar systemd (mis. dinyalakan manual) -> lanjut dihentikan lewat PID di bawah
+
         pid = PositionManager.is_daemon_running()
         if not pid:
             if os.path.exists(PID_FILE):
                 os.remove(PID_FILE)
-            return {"success": True, "message": "Auto-Pilot Background memang sedang tidak aktif."}
+            return {"success": True, "message": "Mesin memang sedang berhenti."}
 
         try:
             try:
@@ -1660,7 +1449,7 @@ class PositionManager:
             time.sleep(0.5)
             if os.path.exists(PID_FILE):
                 os.remove(PID_FILE)
-            return {"success": True, "message": f"Auto-Pilot Background (PID: {pid}) berhasil dihentikan."}
+            return {"success": True, "message": f"Mesin (PID: {pid}) berhasil dihentikan."}
         except Exception as e:
             return {"success": False, "message": f"Gagal menghentikan proses: {e}"}
 
@@ -1706,7 +1495,7 @@ if __name__ == "__main__":
             f.write(str(os.getpid()))
 
         pm = PositionManager()
-        pm.log_event(f"Auto-Pilot Background Daemon (Dual-Stream) dimulai (PID: {os.getpid()}).")
+        pm.log_event(f"Mesin INTRADAY dimulai (PID: {os.getpid()}, host: {os.uname().nodename}).")
         try:
             while True:
                 try:
@@ -1717,7 +1506,7 @@ if __name__ == "__main__":
                         pm.log_event("Waspada: Rate limit 429 dari Hyperliquid, istirahat 15 detik...")
                         time.sleep(15)
                     else:
-                        pm.log_event(f"Error pada loop daemon: {e}")
+                        pm.log_event(f"Error pada siklus Mesin: {e}")
                 # Intraday butuh reaksi lebih cepat (TP 1R hanya ~3%)
                 time.sleep(10 if pm.has_intraday_positions() else 25)
         finally:

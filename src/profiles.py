@@ -1,14 +1,8 @@
 """
-ShortHunter Strategy Profiles:
-Defines configuration profiles for:
-1. SWING_3D   : Multi-day trend reversal (-10% Trim, -20% TP, -35% Runner, 10% SL, Hold 2-4 days)
-2. DAYTRADE   : Intraday precision (TP1 1.0R / TP2 2.0R, SL teknis 2.8-5.5%, Auto-Close 6 jam)
-
-PENTING (Dual-Stream Architecture):
-- Profil "aktif" global HANYA dipakai sebagai default tampilan/menu.
-- Manajemen posisi (SL, trimming, time-stop) SELALU memakai strategi yang
-  di-tag pada masing-masing posisi (lihat src/position_tags.py), sehingga
-  posisi Swing tidak pernah ikut dikelola dengan aturan Intraday (dan sebaliknya).
+ShortHunter Strategy Profiles — INTRADAY SAJA (2026-10-23).
+Profil SWING multi-hari DIHAPUS atas keputusan user. Satu-satunya profil: DAYTRADE (intraday 15m).
+Label lama "SWING" pada posisi/jurnal historis tetap dikenali sebagai label (legacy), tetapi
+get_profile() selalu mengembalikan profil DAYTRADE dan tidak ada jalur untuk membuka posisi swing.
 """
 
 import os
@@ -19,45 +13,6 @@ ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PROFILE_CONFIG_FILE = os.path.join(ROOT_DIR, "data", "active_profile.json")
 
 PROFILES = {
-    "SWING": {
-        "key": "SWING",
-        "name": "Mode Swing 3 Hari (Macro Dump v2.0)",
-        "badge": "🌊 SWING",
-        "description": "Menangkap dump besar multi-hari (-20% s/d -35%) pada koin pucuk yang patah tren.",
-        # --- Screening ---
-        "timeframe": "1D / 4H / 1H",
-        "min_score": 75.0,
-        # --- Exit model: persentase tetap dari harga entry ---
-        "exit_model": "FIXED_PCT",
-        "sl_pct": 10.0,
-        "half_risk_step_pct": 2.2,  # Step 1 (+2.2% move / +4.4% ROE): Compress on-chain SL from -10% to -5.0%
-        "early_be_pct": 4.0,        # Step 2 (+4.0% move / +8.0% ROE): Early Trigger (+1.5R)
-        "tier1_lock_profit_pct": 1.5, # Tier-1 Lock: Kunci minimal +1.5% net profit (+3.0% ROE) alih-alih BE polos
-        "trim_pct": 7.0,            # Step 3 (+7.0% move / +14% ROE): Trim 50% + lock SL at +2.0% profit
-        "continuous_trail_enabled": True, # Continuous Trailing Engine
-        "continuous_trail_start_pct": 4.0, # Aktif sejak >= +4.0% move (+8.0% ROE / +1.5R)
-        "continuous_trail_ratio": 0.55,    # Kunci 55% dari peak move (HWM)
-        "continuous_trail_step_pct": 0.5,  # Ratchet on-chain per kenaikan peak >= +0.5% move
-        "periodic_trail_start_pct": 8.5,  # Legacy fallback
-        "hwm_lock_ratio": 0.55,
-        "tp2_pct": 18.0,            # TP2 at +18% price move (36% ROE)
-        "runner_pct": 30.0,         # Runner at +30% price move (60% ROE)
-        "max_hold_hours": 72,
-        "time_exit_enabled": True,  # 3-Day Cutoff to avoid Day-5 dead-cat bounce
-        "stalemate_hours": 72,
-        # --- Risk & portfolio ---
-        "leverage": 2,
-        "risk_pct": 2.5,            # % ekuitas yang dirisikokan per trade (Profil Agresif Terukur)
-        "max_concurrent": 5,        # maksimal 5 slot swing terbuka bersamaan
-        "max_concurrent_short": 3,  # batas slot swing short
-        "max_concurrent_long": 2,   # batas slot swing long
-        "max_daily_losses": None,   # swing tidak pakai circuit breaker harian
-        # --- Eksekusi & monitoring ---
-        "session_gate": False,
-        "poll_seconds": 25,
-        "fee_roundtrip_pct": 0.09,  # taker 0.045% x 2
-        "target_desc": "Half-Risk @ ±2.2% ➔ Tier-1 Lock (+1.5% net) @ ±4% ➔ Continuous Trailing (55% HWM) ➔ Trim 50% @ ±7% ➔ TP @ ±18% ➔ Runner @ ±30%"
-    },
     "DAYTRADE": {
         "key": "DAYTRADE",
         "name": "Mode Intraday Day-Trade (Precision v2.3)",
@@ -106,35 +61,28 @@ PROFILES = {
 }
 
 STRATEGY_ALIASES = {
-    "SWING": "SWING", "MULTIDAY": "SWING", "MULTI_DAY": "SWING",
     "DAYTRADE": "DAYTRADE", "INTRADAY": "DAYTRADE", "DAY": "DAYTRADE",
 }
+LEGACY_LABELS = {"SWING", "MULTIDAY", "MULTI_DAY"}   # label historis; tidak ada profilnya lagi
 
 
 def normalize_strategy(key: Optional[str]) -> str:
-    """Maps any alias (INTRADAY, DAYTRADE, MULTIDAY...) to a canonical profile key."""
+    """INTRADAY/DAYTRADE/kosong -> DAYTRADE. Label lama (SWING) dipertahankan sebagai 'SWING' = legacy (tidak dikelola)."""
     if not key:
+        return "DAYTRADE"
+    k = str(key).upper()
+    if k in LEGACY_LABELS:
         return "SWING"
-    return STRATEGY_ALIASES.get(str(key).upper(), "SWING")
+    return STRATEGY_ALIASES.get(k, "DAYTRADE")
 
 
-def get_profile(key: Optional[str]) -> Dict:
-    """Returns the profile for a given strategy key (defaults to SWING)."""
-    return PROFILES[normalize_strategy(key)]
+def get_profile(key: Optional[str] = None) -> Dict:
+    """Selalu profil DAYTRADE (satu-satunya stream)."""
+    return PROFILES["DAYTRADE"]
 
 
 def get_active_profile() -> Dict:
-    """Returns the currently active (default UI) profile dictionary."""
-    if os.path.exists(PROFILE_CONFIG_FILE):
-        try:
-            with open(PROFILE_CONFIG_FILE, "r") as f:
-                data = json.load(f)
-                key = data.get("active_key", "SWING")
-                if key in PROFILES:
-                    return PROFILES[key]
-        except Exception:
-            pass
-    return PROFILES["SWING"]
+    return PROFILES["DAYTRADE"]
 
 def set_active_profile(profile_key: str) -> Dict:
     """Sets and persists the active (default UI) profile."""

@@ -12,12 +12,15 @@ from hyperliquid.exchange import Exchange
 from hyperliquid.info import Info
 from hyperliquid.utils import constants
 
-# KUNCI ENTRY OTOMATIS (keputusan user 2026-10-23 20:53): bot TIDAK boleh membuka / menambah posisi sendiri.
-# Order pembuka posisi hanya lewat menu manual (manual=True). Sengaja konstanta di kode, BUKAN risk_overrides.json,
-# supaya tidak bisa dibuka diam-diam oleh agen/AI. Membuka kunci = keputusan user + ubah kode + tes.
-# Tidak memengaruhi penutupan posisi, SL/TP on-chain, atau pembatalan order (semua tetap jalan).
-AUTO_ENTRY_LOCKED = True
-AUTO_ENTRY_LOCKED_MSG = "AUTO_ENTRY_LOCKED: order pembuka otomatis diblokir; buka posisi hanya manual dari menu."
+# GERBANG ENTRY OTOMATIS (2026-10-23): order pembuka tanpa manual=True hanya boleh bila saklar mode = LIVE
+# (src/trading_mode.py, diubah user lewat menu [4]). Order manual dari menu (manual=True) selalu boleh.
+# Tidak memengaruhi penutupan posisi, SL/TP on-chain, atau pembatalan order.
+AUTO_ENTRY_LOCKED_MSG = "AUTO_ENTRY_LOCKED: mode trading bukan LIVE; bot tidak boleh membuka posisi sendiri (buka manual dari menu)."
+
+
+def auto_entry_blocked() -> bool:
+    from src import trading_mode
+    return not trading_mode.auto_entry_allowed()
 
 load_dotenv()
 
@@ -85,11 +88,20 @@ class HyperliquidTrader:
             return self._meta_cache or {}
 
     def is_configured(self) -> bool:
+        """True bila kunci rahasia ada -> boleh MENGIRIM order."""
         return bool(self.account_address and self.secret_key and len(self.secret_key) >= 64)
+
+    def can_read(self) -> bool:
+        """True bila alamat wallet ada -> saldo & posisi bisa DIBACA (data publik, tanpa kunci).
+        Dipakai mode PAPER di VPS tanpa kunci (2026-10-23). Semua fungsi order tetap mewajibkan is_configured()."""
+        return bool(self.account_address)
+
+    def is_read_only(self) -> bool:
+        return self.can_read() and not self.is_configured()
 
     def get_account_state(self, force_refresh: bool = False) -> Dict:
         """Returns account equity, free collateral, spot balance, and open positions with 6s TTL caching."""
-        if not self.is_configured():
+        if not self.can_read():
             return {"configured": False, "equity": 0.0, "available": 0.0, "positions": []}
 
         import time
@@ -126,14 +138,7 @@ class HyperliquidTrader:
             spot_external_invested = 0.0
             spot_external_value = 0.0
             spot_holdings_count = 0
-            try:
-                from src.spot_macro_vault import SpotMacroVault
-                audit = SpotMacroVault.get_spot_portfolio_audit()
-                spot_external_invested = float(audit.get("total_invested", 0.0))
-                spot_external_value = float(audit.get("total_current_value", 0.0) or spot_external_invested)
-                spot_holdings_count = len(audit.get("holdings", []))
-            except Exception:
-                pass
+            # Spot Vault dihapus 2026-10-23 (intraday saja) -> tidak ada aset spot eksternal yang dihitung
 
             grand_total_equity = round(hl_equity + spot_external_value, 2)
 
@@ -218,7 +223,7 @@ class HyperliquidTrader:
                       sl_pct: float = 10.0,
                       tp_pct: float = 20.0,
                       sl_px: Optional[float] = None,
-                      strategy: str = "SWING",
+                      strategy: str = "DAYTRADE",
                       manual: bool = False) -> Dict:
         """
         Executes a Short Position on Hyperliquid:
@@ -227,7 +232,7 @@ class HyperliquidTrader:
         3. Sets Stop-Loss trigger order at +sl_pct (atau di harga absolut `sl_px`, mis. pucuk jarum 15m).
         4. Returns target levels sesuai model exit strategi (SWING: % tetap, DAYTRADE: kelipatan R).
         """
-        if AUTO_ENTRY_LOCKED and not manual:
+        if not manual and auto_entry_blocked():
             return {"success": False, "error": AUTO_ENTRY_LOCKED_MSG}
         if not self.is_configured():
             return {"success": False, "error": "Hyperliquid API keys not configured in .env"}
@@ -645,7 +650,7 @@ class HyperliquidTrader:
                      sl_pct: float = 10.0,
                      tp_pct: float = 20.0,
                      sl_px: Optional[float] = None,
-                     strategy: str = "SWING",
+                     strategy: str = "DAYTRADE",
                      manual: bool = False) -> Dict:
         """
         Executes a LONG position on Hyperliquid:
@@ -654,7 +659,7 @@ class HyperliquidTrader:
         3. Sets native Stop-Loss trigger order at -sl_pct (or absolute technical level sl_px).
         4. Returns target levels according to strategy exit model.
         """
-        if AUTO_ENTRY_LOCKED and not manual:
+        if not manual and auto_entry_blocked():
             return {"success": False, "error": AUTO_ENTRY_LOCKED_MSG}
         if not self.is_configured():
             return {"success": False, "error": "Hyperliquid API keys not configured in .env"}

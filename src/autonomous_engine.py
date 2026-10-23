@@ -29,7 +29,8 @@ ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
 
-from src.trader import HyperliquidTrader, AUTO_ENTRY_LOCKED, AUTO_ENTRY_LOCKED_MSG
+from src.trader import HyperliquidTrader
+from src import trading_mode
 from src.forward_test import ForwardTestManager
 from src.profiles import get_profile
 from src import position_tags
@@ -235,7 +236,7 @@ class AutonomousEngine:
             if slot_weight == 0.5:
                 half_slot_coins.append(f"{c} (${m_used:.2f} = 0.5 slot)")
 
-            strat = lc.get("strategy") or position_tags.get_strategy(c) or "SWING"
+            strat = "DAYTRADE"  # intraday saja (2026-10-23)
             active_coins.append(c)
             effective_active_slots += slot_weight
             if strat == "DAYTRADE":
@@ -460,13 +461,11 @@ class AutonomousEngine:
 
         # Quadrant breakdown
         quadrants = {
-            "SWING_SHORT": {"trades": 0, "wins": 0, "pnl": 0.0},
-            "SWING_LONG": {"trades": 0, "wins": 0, "pnl": 0.0},
             "DAYTRADE_SHORT": {"trades": 0, "wins": 0, "pnl": 0.0},
             "DAYTRADE_LONG": {"trades": 0, "wins": 0, "pnl": 0.0},
         }
         for t in closed_trades:
-            st = "DAYTRADE" if t.get("strategy") == "DAYTRADE" else "SWING"
+            st = "DAYTRADE"
             sd = t.get("side", "SHORT")
             q_key = f"{st}_{sd}"
             pnl = float(t.get("realized_pnl") or t.get("final_pnl_usd", 0.0))
@@ -495,7 +494,6 @@ class AutonomousEngine:
             try:
                 from src.adaptive_weights import run_calibration
                 cal_dt = run_calibration("DAYTRADE")
-                cal_sw = run_calibration("SWING")
                 state["last_calibrated_trade_count"] = total_closed
                 weight_cal_note = f"Auto-Kalibrasi Bobot Selesai: {cal_dt.get('calibration_rationale', 'Updated')[:80]}"
             except Exception as e:
@@ -556,266 +554,21 @@ class AutonomousEngine:
     # ------------------------------------------------------------------
     # 2.5 AUTONOMOUS WALK-FORWARD BACKTEST & FORWARD-TEST VALIDATOR
     # ------------------------------------------------------------------
-    def run_periodic_backtest_and_forward_validation(
-        self,
-        mode: str = "FULL",
-        trigger_reason: str = "WEEKLY_SCHEDULE",
-        auto_apply: bool = True
-    ) -> Dict:
-        """
-        Autonomous Dual-Tier Walk-Forward Backtest & Live Forward-Test Validation Loop:
-        - Tier 1 (FORWARD_AUDIT — Every 24 Hours):
-            Evaluates Live Forward-Test Scorecard (Win Rate, Profit Factor, Expectancy, MFE/MAE, Avg R)
-            for both SWING and DAYTRADE streams and detects Strategy Drift against Backtest benchmarks.
-        - Tier 2 (FULL WALK-FORWARD BACKTEST — Every 7 Days, or Early-Trigger at 3 Days on Drift):
-            1. Runs Swing Daily/4H threshold optimization grid ([72, 75, 78, 80, 82]) on DuckDB read-only snapshot.
-            2. Runs Intraday 15m session & volume-climax validation grid on 15m candle cache.
-            3. Compares Backtest Expectation vs Live Forward-Test Realization (Reality Gap).
-            4. Auto-calibrates Thermostat score thresholds & adaptive indicator weights within safe guardrails.
-        """
-        now_ts = time.time()
-        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        state = self.load_state()
-        prev_rep = state.get("last_validation_report") or {}
+    def run_periodic_backtest_and_forward_validation(self, mode: str = "FULL", trigger_reason: str = "MANUAL", **kwargs) -> Dict:
+        """DINONAKTIFKAN 2026-10-23: backtest berkala lama menguji logika SWING & intraday v1 (sudah dihapus/diganti)
+        dan memicu kalibrasi diri otomatis. Riset & uji kini di research_v2/. Paper mode = forward-test v3."""
+        return {"success": False, "disabled": True,
+                "reason": "Backtest berkala dinonaktifkan (swing dihapus; intraday v3 diuji lewat mode PAPER / research_v2)."}
 
-        # 1. Live Forward-Test Scorecard & Drift Detection (Always runs in both FORWARD_AUDIT and FULL modes)
-        journal = self.ft.load_journal()
-        ft_stats = self.ft.stream_stats(journal)
-        sw_ft = ft_stats.get("SWING", {})
-        dt_ft = ft_stats.get("DAYTRADE", {})
-
-        # Evaluate Forward-Test Drift
-        drift_alerts = []
-        drift_level = "ON_TRACK"
-        drift_badge = "🟢 ON-TRACK (Sesuai Ekspektasi Backtest)"
-
-        if int(sw_ft.get("closed", 0)) >= 3:
-            if float(sw_ft.get("win_rate", 0.0)) < 45.0 or float(sw_ft.get("profit_factor", 1.0)) < 1.0:
-                drift_alerts.append(
-                    f"SWING Forward-Test WR {sw_ft['win_rate']}% (PF {sw_ft['profit_factor']}) di bawah benchmark backtest (WR >= 55%)."
-                )
-        if int(dt_ft.get("closed", 0)) >= 3:
-            if float(dt_ft.get("win_rate", 0.0)) < 45.0 or float(dt_ft.get("profit_factor", 1.0)) < 1.0:
-                drift_alerts.append(
-                    f"INTRADAY Forward-Test WR {dt_ft['win_rate']}% (PF {dt_ft['profit_factor']}) di bawah benchmark backtest (WR >= 50%)."
-                )
-
-        if drift_alerts:
-            drift_level = "DRIFT_ALERT"
-            drift_badge = f"🔴 DRIFT DETECTED ({'; '.join(drift_alerts)})"
-        elif (int(sw_ft.get("closed", 0)) + int(dt_ft.get("closed", 0))) < 3:
-            drift_level = "COLLECTING_SAMPLE"
-            drift_badge = "🟡 COLLECTING DATA (Sampel Forward-Test Live masih dikumpulkan, mengacu pada Backtest)"
-
-        # Escalate FORWARD_AUDIT -> FULL if DRIFT_ALERT and at least 3 days (72h) passed since last backtest
-        last_bt_ts = float(state.get("last_backtest_ts", 0.0))
-        if mode == "FORWARD_AUDIT" and drift_level == "DRIFT_ALERT" and (now_ts - last_bt_ts) >= (3 * 86400):
-            mode = "FULL"
-            trigger_reason = "EARLY_DRIFT_TRIGGER_3D"
-
-        swing_bt_summary = prev_rep.get("swing_backtest") or {}
-        intraday_bt_summary = prev_rep.get("intraday_backtest") or {}
-        tuning_applied = []
-
-        # 2. Full Walk-Forward Historical Backtest (Swing Daily/4H + Intraday 15m)
-        if mode == "FULL" or not swing_bt_summary or not intraday_bt_summary:
-            # 2A. Swing Daily/4H Threshold Grid Backtest (Read-Only DuckDB Snapshot)
-            try:
-                from src.database import Database
-                from src.backtester import ShortBacktester
-                prof_sw = get_profile("SWING")
-                db_ro = Database(read_only=True)
-                try:
-                    bt = ShortBacktester(db_ro)
-                    candidate_thresholds = [72, 75, 78, 80, 82]
-                    best_sw_th = float(state["thermostat"].get("min_score_swing", 78.0))
-                    best_sw_metric = -1.0
-                    best_sw_res = None
-                    grid_rows = []
-
-                    for th in candidate_thresholds:
-                        r = bt.run_backtest(
-                            min_score=float(th),
-                            min_90d_gain=90.0,
-                            stop_loss_pct=float(prof_sw.get("sl_pct", 10.0)),
-                            trim_pct=float(prof_sw.get("trim_pct", 7.0)),
-                            take_profit_pct=float(prof_sw.get("tp2_pct", 18.0)),
-                            runner_tp_pct=float(prof_sw.get("runner_pct", 30.0)),
-                            max_hold_days=max(1, int(prof_sw.get("max_hold_hours", 72)) // 24),
-                            use_trimming=True
-                        )
-                        t_cnt = int(r.get("total_trades", 0))
-                        wr = float(r.get("win_rate", 0.0))
-                        sr = float(r.get("safe_rate", 0.0))
-                        pf = min(25.0, float(r.get("profit_factor", 0.0)))
-                        net_ret = float(r.get("net_return_pct", 0.0))
-                        grid_rows.append({
-                            "threshold": th,
-                            "trades": t_cnt,
-                            "win_rate": wr,
-                            "safe_rate": sr,
-                            "profit_factor": round(float(r.get("profit_factor", 0.0)), 2),
-                            "net_return_pct": net_ret
-                        })
-                        # Prefer threshold >= 75 with at least 4 trades that maximizes PF * SafeRate
-                        if th >= 75 and t_cnt >= 4:
-                            score_metric = (pf * (sr / 100.0)) + (net_ret * 0.02)
-                            if score_metric > best_sw_metric:
-                                best_sw_metric = score_metric
-                                best_sw_th = float(th)
-                                best_sw_res = r
-
-                    if best_sw_res is None and grid_rows:
-                        # Fallback to threshold 78
-                        for g in grid_rows:
-                            if g["threshold"] == 78:
-                                best_sw_res = g
-                                break
-                        if best_sw_res is None:
-                            best_sw_res = grid_rows[0]
-
-                    swing_bt_summary = {
-                        "evaluated_at": now_str,
-                        "optimal_min_score": best_sw_th,
-                        "total_trades": int(best_sw_res.get("total_trades", best_sw_res.get("trades", 0))),
-                        "win_rate_pct": float(best_sw_res.get("win_rate", 0.0)),
-                        "safe_rate_pct": float(best_sw_res.get("safe_rate", 0.0)),
-                        "profit_factor": round(float(best_sw_res.get("profit_factor", 0.0)), 2),
-                        "net_return_pct": float(best_sw_res.get("net_return_pct", 0.0)),
-                        "threshold_grid": grid_rows
-                    }
-                finally:
-                    db_ro.close()
-            except Exception as e:
-                swing_bt_summary = {"error": str(e), "optimal_min_score": 78.0}
-
-            # 2B. Intraday 15m Walk-Forward Backtest (Calibrated SL 2.5-4.5%, TP1 1R, TP2 2R, 6h)
-            try:
-                from src.daytrade_engine import IntradayDaytradeEngine
-                dt_eng = IntradayDaytradeEngine()
-                data_map = dt_eng.load_or_fetch_15m_cache()
-                r_std = dt_eng.run_intraday_backtest(
-                    session_filter="LONDON_NY", tp1_r=1.0, tp2_r=2.0,
-                    max_hold_hours=6, min_sl_pct=2.5, max_sl_pct=4.5,
-                    require_vol_climax=True, data_map=data_map
-                )
-                r_noclx = dt_eng.run_intraday_backtest(
-                    session_filter="LONDON_NY", tp1_r=1.0, tp2_r=2.0,
-                    max_hold_hours=6, min_sl_pct=2.5, max_sl_pct=4.5,
-                    require_vol_climax=False, data_map=data_map
-                )
-                r_gold = dt_eng.run_intraday_backtest(
-                    session_filter="GOLDEN_OVERLAP", tp1_r=1.0, tp2_r=2.0,
-                    max_hold_hours=6, min_sl_pct=2.5, max_sl_pct=4.5,
-                    require_vol_climax=False, data_map=data_map
-                )
-                # Choose best intraday config & recommended min_score_intraday
-                best_dt_res = r_std if float(r_std.get("profit_factor", 0)) >= float(r_noclx.get("profit_factor", 0)) else r_noclx
-                opt_dt_score = 75.0
-                if drift_level == "DRIFT_ALERT" and int(dt_ft.get("closed", 0)) >= 3 and float(dt_ft.get("win_rate", 50.0)) < 45.0:
-                    opt_dt_score = 78.0  # Tighten Intraday threshold if live forward-test shows low WR
-
-                intraday_bt_summary = {
-                    "evaluated_at": now_str,
-                    "optimal_min_score": opt_dt_score,
-                    "best_session_mode": "LONDON_NY + Vol Climax" if best_dt_res is r_std else "LONDON_NY Standard",
-                    "total_trades": int(best_dt_res.get("total_trades", 0)),
-                    "win_rate_pct": float(best_dt_res.get("win_rate", 0.0)),
-                    "safe_rate_pct": float(best_dt_res.get("safe_rate", 0.0)),
-                    "profit_factor": float(best_dt_res.get("profit_factor", 0.0)),
-                    "avg_r": float(best_dt_res.get("avg_r", 0.0)),
-                    "net_return_pct": float(best_dt_res.get("net_return_pct", 0.0)),
-                    "avg_hold_hours": float(best_dt_res.get("avg_hours", 0.0)),
-                    "golden_overlap_pf": float(r_gold.get("profit_factor", 0.0))
-                }
-            except Exception as e:
-                intraday_bt_summary = {"error": str(e), "optimal_min_score": 75.0}
-
-            state["last_backtest_ts"] = now_ts
-            state["last_backtest_time"] = now_str
-
-            # 3. Closed-Loop Parameter Auto-Calibration (Bounded within Safe Guardrails)
-            if auto_apply and state["thermostat"].get("mode") not in ("CIRCUIT_BREAKER", "DEFENSIVE_SHIELD"):
-                opt_sw = float(swing_bt_summary.get("optimal_min_score", 78.0))
-                opt_dt = float(intraday_bt_summary.get("optimal_min_score", 75.0))
-                # Clamp to safe institutional bounds [75.0, 82.0] for Swing, [72.0, 80.0] for Intraday
-                new_sw_score = max(75.0, min(82.0, opt_sw))
-                new_dt_score = max(72.0, min(80.0, opt_dt))
-
-                old_sw = float(state["thermostat"].get("min_score_swing", 78.0))
-                old_dt = float(state["thermostat"].get("min_score_intraday", 75.0))
-                if new_sw_score != old_sw:
-                    state["thermostat"]["min_score_swing"] = new_sw_score
-                    state["thermostat"]["base_min_score_swing"] = new_sw_score
-                    tuning_applied.append(f"min_score_swing: {old_sw:.1f} -> {new_sw_score:.1f}")
-                if new_dt_score != old_dt:
-                    state["thermostat"]["min_score_intraday"] = new_dt_score
-                    state["thermostat"]["base_min_score_intraday"] = new_dt_score
-                    tuning_applied.append(f"min_score_intraday: {old_dt:.1f} -> {new_dt_score:.1f}")
-
-            # Also run Adaptive Screener Weight Calibration
-            try:
-                from src.adaptive_weights import run_calibration
-                run_calibration("SWING")
-                run_calibration("DAYTRADE")
-                tuning_applied.append("Adaptive Indicator Weights Recalibrated")
-            except Exception:
-                pass
-
-        state["last_forward_audit_ts"] = now_ts
-        state["last_forward_audit_time"] = now_str
-        state["stats"]["total_quant_validations"] = int(state["stats"].get("total_quant_validations", 0)) + 1
-
-        validation_report = {
-            "validated_at": now_str,
-            "mode": mode,
-            "trigger_reason": trigger_reason,
-            "schedule_policy": "Forward-Test Audit: Tiap 24 Jam (Harian) | Full Walk-Forward Backtest: Tiap 7 Hari (Mingguan) + Early-Trigger 3 Hari jika Drift",
-            "drift_level": drift_level,
-            "drift_badge": drift_badge,
-            "forward_test_live": {
-                "SWING": sw_ft,
-                "DAYTRADE": dt_ft
-            },
-            "swing_backtest": swing_bt_summary,
-            "intraday_backtest": intraday_bt_summary,
-            "tuning_applied": tuning_applied if tuning_applied else ["Parameter optimal sudah sinkron (tidak ada perubahan ekstrem)"]
-        }
-
-        state["last_validation_report"] = validation_report
-        self.save_state(state)
-
-        # Persist standalone quant validation report JSON for dashboard & War Room inspection
-        try:
-            rep_path = os.path.join(ROOT_DIR, "data", "quant_validation_report.json")
-            tmp_p = rep_path + ".tmp"
-            with open(tmp_p, "w") as f:
-                json.dump(validation_report, f, indent=2)
-            os.replace(tmp_p, rep_path)
-        except Exception:
-            pass
-
-        sw_pf = swing_bt_summary.get("profit_factor", "-")
-        dt_pf = intraday_bt_summary.get("profit_factor", "-")
-        self.log_telemetry(
-            category="QUANT_VALID",
-            action=f"Validasi {mode} ({trigger_reason})",
-            detail=f"BT Swing PF:{sw_pf} (WR:{swing_bt_summary.get('win_rate_pct','-')}%) | BT Intraday PF:{dt_pf} (WR:{intraday_bt_summary.get('win_rate_pct','-')}%) | Status: {drift_level}",
-            equity=float(self.trader.get_account_state().get("equity", 0.0))
-        )
-        return validation_report
-
-    # ------------------------------------------------------------------
-    # 3. AUTONOMOUS HUNTER & STRICT GRADE-A SNIPER EXECUTION
-    # ------------------------------------------------------------------
     def run_autonomous_hunt_if_due(self, force: bool = False) -> Dict:
         """
         Checks if autonomous hunting is due (every 30 mins or when forced).
         Only scans & calls Gemini if capital governor confirms open slot & free margin > 15% reserve!
         Strictly opens positions ONLY when Score >= Threshold AND AI Gatekeeper = APPROVED + Grade A/A+.
         """
-        if AUTO_ENTRY_LOCKED:  # kunci entry otomatis (2026-10-23): tidak scan, tidak panggil AI, tidak order
-            return {"executed": False, "status": "AUTO_ENTRY_LOCKED", "reason": AUTO_ENTRY_LOCKED_MSG}
+        mode = trading_mode.get_mode()   # Entry Otomatis (user): OFF / PAPER / LIVE (menu [4])
+        if mode == "OFF":
+            return {"executed": False, "status": "MODE_OFF", "reason": "Entry Otomatis = OFF"}
         state = self.load_state()
         now_ts = time.time()
 
@@ -830,16 +583,6 @@ class AutonomousEngine:
         eval_interval_sec = int(state.get("self_eval_interval_hours", 6)) * 3600
         if (now_ts - float(state.get("last_eval_ts", 0.0))) >= eval_interval_sec:
             self.run_self_evaluation(trigger_reason="PERIODIC_6H")
-            state = self.load_state()
-
-        # Check Periodic Walk-Forward Backtest (Every 7 Days) & Daily Forward-Test Audit (Every 24 Hours)
-        bt_interval_sec = int(state.get("backtest_interval_days", 7)) * 86400
-        ft_interval_sec = int(state.get("forward_audit_interval_hours", 24)) * 3600
-        if (now_ts - float(state.get("last_backtest_ts", 0.0))) >= bt_interval_sec:
-            self.run_periodic_backtest_and_forward_validation(mode="FULL", trigger_reason="WEEKLY_7D_WALK_FORWARD")
-            state = self.load_state()
-        elif (now_ts - float(state.get("last_forward_audit_ts", 0.0))) >= ft_interval_sec:
-            self.run_periodic_backtest_and_forward_validation(mode="FORWARD_AUDIT", trigger_reason="DAILY_24H_FORWARD_AUDIT")
             state = self.load_state()
 
         hunt_interval_sec = int(state.get("hunt_interval_minutes", 30)) * 60
@@ -888,11 +631,6 @@ class AutonomousEngine:
         try:
             dl = DataDownloader(db)
             dl.sync_snapshot_only()
-            # Refresh daily/4h candles if last hunt was > 2 hours ago
-            try:
-                dl.sync_all(min_vol_usd=500_000.0, days_history=95, sync_4h=True)
-            except Exception:
-                pass
             sniper = AutoHuntSniper(db, self.trader)
             hunt_res = sniper.run_hunt_cycle()
         finally:
@@ -900,7 +638,7 @@ class AutonomousEngine:
 
         leaderboard = hunt_res.get("leaderboard", [])
         if not leaderboard:
-            msg = "Scan 4 Kuadran selesai: Belum ada kandidat yang lolos kriteria teknikal."
+            msg = "Scan intraday selesai: belum ada kandidat yang lolos kriteria teknikal."
             state = self.load_state()
             state["last_hunt_status"] = msg
             self.save_state(state)
@@ -909,7 +647,6 @@ class AutonomousEngine:
 
         # 2. Evaluate Leaderboard with Strict Quantitative Threshold & Grade-A Gate
         min_score_dt = float(thermo.get("min_score_intraday", 75.0))
-        min_score_sw = float(thermo.get("min_score_swing", 78.0))
         min_conf = int(thermo.get("min_ai_confidence", 75))
         allowed_grades = [g.upper() for g in thermo.get("required_grades", ["A", "A+"])]
 
@@ -922,17 +659,20 @@ class AutonomousEngine:
             side = cand["side"]
             strat = cand["stream"]
             score = float(cand["score"])
-            req_score = min_score_dt if strat == "DAYTRADE" else min_score_sw
+            req_score = min_score_dt
+            if strat != "DAYTRADE":
+                skip_logs.append(f"{coin}: stream {strat} tidak didukung (intraday saja)")
+                continue
+            if not cand.get("ready", False):
+                skip_logs.append(f"{coin}: gerbang wajib v3 belum lengkap ({'; '.join(cand.get('vetoes', [])[:2]) or 'tren/penolakan/BOS/volume'})")
+                continue
 
             # Check quantitative score threshold
             if score < req_score:
                 skip_logs.append(f"{coin} ({strat}): Skor {score:.1f} < Threshold {req_score:.1f}")
                 continue
 
-            # Check Swing vs Intraday sub-slot quota (using Capital-Weighted Effective Slots)
-            if strat == "SWING" and gov.get("effective_swing_slots", gov["swing_count"]) >= gov["max_swing"]:
-                skip_logs.append(f"{coin} (SWING): Kuota Swing efektif penuh ({gov.get('effective_swing_slots')}/{gov['max_swing']})")
-                continue
+            # Kuota slot intraday (capital-weighted)
             if strat == "DAYTRADE" and gov.get("effective_intraday_slots", gov["intraday_count"]) >= gov["max_intraday"]:
                 skip_logs.append(f"{coin} (DAYTRADE): Kuota Intraday efektif penuh ({gov.get('effective_intraday_slots')}/{gov['max_intraday']})")
                 continue
@@ -1001,28 +741,43 @@ class AutonomousEngine:
         grade = str(selected_audit.get("conviction_grade", "A")).upper()
         conf = int(selected_audit.get("confidence_score", 80))
 
-        # Apply Grade A / A+ Idle-Capital Recycler Target Margin ($32 - $40 at $200 equity)
-        gov_target_margin = (
-            gov.get("recommended_grade_a_plus_margin", gov["slot_base_margin"])
-            if grade == "A+" else gov.get("recommended_grade_a_margin", gov["slot_base_margin"])
-        )
-        audit_margin = float(selected_audit.get("final_margin", gov["slot_base_margin"])) * float(thermo.get("sizing_mult", 1.0))
-        rec_margin = max(audit_margin, float(gov_target_margin))
+        # 2026-10-23 (v3): ukuran posisi berbasis RISIKO (kerangka risiko berlapis: 0,5–1% ekuitas per trade).
+        # notional = ekuitas x risiko% / SL% ; margin = notional / leverage; tetap dibatasi governor & cadangan.
+        from src import risk_config
+        rp = risk_config.get().get("intraday_risk", {})
+        risk_pct = float(rp.get("risk_per_trade_pct", 1.0))
+        if grade != "A+":
+            risk_pct = min(risk_pct, float(rp.get("risk_per_trade_pct_grade_a", 0.75)))
+        risk_pct *= float(thermo.get("sizing_mult", 1.0))
+        risk_notional = equity * (risk_pct / 100.0) / max(sl_pct / 100.0, 1e-6)
+        risk_margin = risk_notional / max(lev, 1)
 
-        # Apply Claude_Crypto Sector Sizing Multiplier (0.85x for Meme/High-Beta, 1.05x for Structural L1/DeFi)
-        sec_mult = float(sec_info.get("sizing_mult", 1.0))
-        rec_margin = rec_margin * sec_mult
-
-        # Clamp strictly to governor [min_order_margin, max_order_margin] and Free Margin above 15% Reserve!
-        order_margin = max(gov["min_order_margin"], min(rec_margin, gov["max_order_margin"], gov["free_above_reserve"]))
+        # Clamp ke governor [min_order_margin, max_order_margin] dan margin bebas di atas cadangan
+        order_margin = min(risk_margin, gov["max_order_margin"], gov["free_above_reserve"])
         order_margin = round(order_margin, 2)
+        min_margin_usd = float(rp.get("min_order_margin_usd", 5.0))
 
-        if order_margin < gov["min_order_margin"] or (available - order_margin) < gov["reserve_usd"]:
-            msg = f"Margin tidak cukup mempertahankan cadangan {gov['reserve_pct']}% (${gov['reserve_usd']:.2f}) untuk {coin}."
+        if order_margin < min_margin_usd or (available - order_margin) < gov["reserve_usd"]:
+            msg = f"Margin tidak cukup (risiko {risk_pct:.2f}% -> ${order_margin:.2f}) / cadangan {gov['reserve_pct']}% (${gov['reserve_usd']:.2f}) untuk {coin}."
             state = self.load_state()
             state["last_hunt_status"] = msg
             self.save_state(state)
             return {"executed": False, "status": "RESERVE_GUARD_STOP", "reason": msg}
+
+        # 3b. MODE PAPER: catat trade kertas, TIDAK ada order ke bursa
+        if mode != "LIVE":
+            from src import paper_trader
+            ptrade = paper_trader.open_paper_trade(selected_cand, selected_audit, margin_usd=order_margin, leverage=lev,
+                                                   risk_pct=risk_pct, equity=equity)
+            msg = (f"📝 PAPER OPEN: {side} {coin} @ {ptrade['entry_px']} | SL {ptrade['sl_px']} | TP1 {ptrade['tp1_px']} | "
+                   f"TP2 {ptrade['tp2_px']} | Grade {grade} ({conf}/100) | Margin kertas ${order_margin:.2f} ({lev}x)")
+            state = self.load_state()
+            state["last_entry_ts"] = now_ts
+            state["last_entry_coin"] = f"PAPER {side} {coin}"
+            state["last_hunt_status"] = msg
+            self.save_state(state)
+            self.log_telemetry("PAPER", f"PAPER OPEN {side} {coin}", msg, coin=coin, grade=grade, equity=equity, free_margin=available)
+            return {"executed": True, "paper": True, "coin": coin, "side": side, "strategy": strat, "margin": order_margin, "msg": msg}
 
         # 4. Execute Autonomous Order on Hyperliquid L1 with Native SL & TP1
         notional_usd = round(order_margin * lev, 2)
@@ -1097,8 +852,8 @@ class AutonomousEngine:
           4. Free margin above 15% Reserve is sufficient to cover the top-up delta (`topup_margin >= $6.00`).
           5. Automatically re-syncs on-chain Stop-Loss and TP1 trigger orders to the new combined position size!
         """
-        if AUTO_ENTRY_LOCKED:  # top-up/scale-in otomatis = menambah posisi -> diblokir
-            execute_topup = False
+        # 2026-10-23: top-up / scale-in otomatis DIHAPUS untuk intraday (menambah risiko pada posisi berjalan)
+        execute_topup = False
         from src.position_manager import PositionManager
         from src.hyperliquid_client import HyperliquidClient
 
@@ -1204,7 +959,7 @@ class AutonomousEngine:
                 })
                 continue
 
-            if execute_topup and not AUTO_ENTRY_LOCKED:
+            if execute_topup:
                 add_notional = round(topup_margin * lev, 2)
                 sz_dec = self.trader.get_asset_precision(coin)
                 raw_add_sz = add_notional / cur_px if cur_px > 0 else 0
@@ -1283,7 +1038,7 @@ class AutonomousEngine:
         eval_rep = state.get("last_eval_report") or {}
 
         pid = PositionManager.is_daemon_running()
-        daemon_badge = f"🟢 AKTIF 24/7 (PID: {pid})" if pid else "🛑 DAEMON MATI (Perlu Dinyalakan)"
+        daemon_badge = f"🟢 BERJALAN 24/7 (PID: {pid})" if pid else "🛑 MESIN BERHENTI (Perlu Dinyalakan)"
         auto_mode_badge = "🟢 ZERO-TOUCH AKTIF (Auto-Hunt + Self-Eval + Position Guard)" if state.get("enabled", True) else "⏸️ PAUSED (Hanya Mengawal Posisi Aktif)"
 
         now_ts = time.time()
@@ -1311,7 +1066,7 @@ class AutonomousEngine:
         lines.append("=" * 80)
         lines.append("      🤖 PUSAT KOMANDO & PEMANTAUAN AI OTONOM (MULTI-AGENT COMMITTEE)      ")
         lines.append("=" * 80)
-        lines.append(f"  • Status Daemon Background : {daemon_badge}")
+        lines.append(f"  • Status Mesin             : {daemon_badge}")
         lines.append(f"  • Mode AI Mandiri          : {auto_mode_badge}")
         lines.append(f"  • Arsitektur Komite Agent  : 🎯 Sniper vs ⚖️ Prosecutor vs 👨‍⚖️ CRO Judge + 3 Live Tools")
         lines.append(f"  • Memori Episodik & DevSec : 🧠 {mem_rules_count} Aturan Mandiri Aktif  |  {guardian_badge}")
@@ -1408,7 +1163,7 @@ class AutonomousEngine:
             if tunings:
                 lines.append(f"  • Kalibrasi Mandiri        : {', '.join(tunings)}")
         else:
-            lines.append("  • Belum ada rapor Walk-Forward Backtest. Akan otomatis dieksekusi pada siklus daemon berikutnya.")
+            lines.append("  • Belum ada rapor Walk-Forward Backtest. Akan otomatis dieksekusi pada siklus Mesin berikutnya.")
         lines.append("-" * 80)
 
         # Section 4: Telemetry & Execution Statistics

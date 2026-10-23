@@ -47,7 +47,7 @@ def _save(tags: Dict):
         for coin, val in tags.items():
             trade_db.save_position_tag(
                 coin=coin,
-                strategy=val.get("strategy", "SWING"),
+                strategy=val.get("strategy", "DAYTRADE"),
                 plan=val.get("plan"),
                 meta=val.get("meta")
             )
@@ -174,9 +174,9 @@ def get_tag(coin: str) -> Optional[Dict]:
 
 
 def get_strategy(coin: str) -> str:
-    """Returns the canonical strategy of a coin (untagged -> SWING)."""
+    """Returns the canonical strategy of a coin (untagged -> DAYTRADE; label lama SWING tetap 'SWING' = legacy)."""
     t = get_tag(coin)
-    return normalize_strategy(t.get("strategy")) if t else "SWING"
+    return normalize_strategy(t.get("strategy")) if t else "DAYTRADE"
 
 
 def all_tags() -> Dict:

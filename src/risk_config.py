@@ -23,7 +23,7 @@ DEFAULTS: Dict[str, Any] = {
     "slot_plan": {
         "equity_tiers": [[120.0, 5], [260.0, 6], [420.0, 7]],   # ekuitas < batas -> jumlah slot
         "above_tiers_base": 5, "above_tiers_per_usd": 110.0, "max_positions_cap": 10,
-        "swing_share": 0.65, "min_swing": 3, "min_intraday": 2,
+        "swing_share": 0.0, "min_swing": 0, "min_intraday": 2,   # 2026-10-23: intraday saja (dulu 0.65 / 3)
         "min_slot_margin_floor": 12.0, "min_slot_margin_ratio": 0.80,
         "max_slot_margin_floor": 18.0, "max_slot_margin_ratio": 1.45,
         "dust_equity_pct": 0.025, "dust_min_usd": 3.0, "dust_max_usd": 8.0,
@@ -32,7 +32,13 @@ DEFAULTS: Dict[str, Any] = {
                               "min_slot_margin": 10.5, "max_slot_margin": 17.5, "dust_threshold_usd": 3.0,
                               "runner_exempt_margin_usd": 6.0},
     },
-    # autonomous_engine.get_live_governor_snapshot
+    # 2026-10-23 (intraday v3): ukuran posisi berbasis risiko (kerangka risiko berlapis 0,5–1% per trade)
+    "intraday_risk": {
+        "risk_per_trade_pct": 1.0,           # Grade A+
+        "risk_per_trade_pct_grade_a": 0.75,  # Grade A
+        "min_order_margin_usd": 5.0,
+    },
+        # autonomous_engine.get_live_governor_snapshot
     "governor": {
         "half_slot_ratio": 0.60,          # posisi < 60% slot_base_margin dihitung 0,5 slot
         "elastic_swing_borrow": 1,        # swing boleh pinjam 1 slot bila intraday kosong (total saja)
