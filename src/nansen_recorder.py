@@ -35,7 +35,7 @@ KEYCHAIN_SERVICE = "scr-nansen"
 STORAGE_DIR = Path(__file__).resolve().parent.parent / "data"
 DB_PATH = STORAGE_DIR / "nansen_recorder.duckdb"
 
-MIN_CREDITS = 5000
+MIN_CREDITS = 10000  # 2026-10-24: sama dengan src/nansen_ledger.py (cadangan 10rb untuk SCR)
 REQUEST_TIMEOUT_S = 90       # netflow can take >30s
 MAX_RETRIES = 1              # one retry on timeout / 429 / 5xx
 DB_LOCK_RETRIES = 12         # tunggu bila file sedang dibuka proses lain

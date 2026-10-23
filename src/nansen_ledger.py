@@ -14,7 +14,7 @@ from typing import Optional
 
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LEDGER_DB = os.path.join(ROOT_DIR, "data", "nansen_ledger.db")
-MIN_CREDITS = 5000  # di bawah ini, panggilan baru ditolak
+MIN_CREDITS = 10000  # 2026-10-24: kredit Nansen sekali beli & dipakai bersama SCR -> INTRADAY berhenti di 10.000 (10rb terakhir = cadangan SCR, berhenti di 2.000)
 
 
 class _ClosingConnection(sqlite3.Connection):
