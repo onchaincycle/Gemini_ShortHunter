@@ -1,5 +1,5 @@
 {
-  "synced_at": "2026-10-23 05:59:52",
+  "synced_at": "2026-10-23 08:59:51",
   "project": "Gemini_ShortHunter",
   "active_backlog": [
     {
@@ -174,22 +174,21 @@
     }
   ],
   "live_tools_state": {
-    "thermostat_mode": "\ud83d\udfe1 DEFENSIVE SHIELD (Mode Waspada)",
-    "reserve_pct": 25.0,
-    "last_hunt_time": "2026-10-23 05:49:58",
+    "thermostat_mode": "\ud83d\udfe2 OPTIMAL (Standard Disiplin)",
+    "reserve_pct": 15.0,
+    "last_hunt_time": "2026-10-23 08:30:40",
     "last_hunt_status": "Skip Scan (Hemat Token): Mode Otonom dibekukan (Menunggu penutupan posisi aktif)",
     "active_positions": [
-      "SHORT TIA (SWING, PnL: $+1.70)",
-      "LONG DOGE (SWING, PnL: $-3.71)",
-      "LONG HYPE (SWING, PnL: $-10.20)"
+      "LONG DOGE (SWING, PnL: $-3.18)",
+      "LONG HYPE (SWING, PnL: $-8.79)"
     ],
     "episodic_rules": [
-      "[MEM-020] (DAYTRADE/SHORT): Pastikan target profit pada posisi short dikunci secara disiplin saat kondisi pasar mendukung.",
       "[MEM-021] (SWING/LONG): Pastikan toleransi MAE hingga 5 persen diakomodasi dengan ukuran posisi yang tepat pada swing ZEC.",
       "[MEM-022] (DAYTRADE/SHORT): Hindari membuka posisi short pada PYTH ketika MAE mencapai lebih dari 1 persen tanpa konfirmasi tren turun yang kuat.",
       "[MEM-023] (DAYTRADE/SHORT): Pertahankan disiplin eksekusi target take profit pada perdagangan intraday ketika tren harga mendukung.",
       "[MEM-024] (SWING/LONG): Amankan profit parsial jika MFE mendekati 4% pada swing trade WIF untuk menghindari pullback penuh ke area stop loss.",
-      "[MEM-025] (SWING/LONG): Waspadai volatilitas berlawanan pada POL (SWING); wajib cek orderbook wall sebelum entry ulang."
+      "[MEM-025] (SWING/LONG): Waspadai volatilitas berlawanan pada POL (SWING); wajib cek orderbook wall sebelum entry ulang.",
+      "[MEM-026] (SWING/SHORT): Ambil sebagian profit saat MFE mendekati 10% pada swing short sebelum terkena batas waktu time stop."
     ]
   },
   "antigravity_messages": [

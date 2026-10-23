@@ -43,6 +43,8 @@ DB_LOCK_WAIT_S = 5
 
 DEFAULT_CHAINS = ["ethereum", "solana", "base", "bnb", "arbitrum"]
 PERP_MIN_USD = 5000
+PERP_LOOKBACK_H = 3          # 2026-10-23: jendela perp per putaran (timer tiap jam -> tumpang tindih 2 jam, duplikat dibuang PK)
+PERP_MAX_PAGES = 20          # batas halaman perp per putaran (5 kredit/halaman); tercapai = peringatan (mungkin terpotong)
 DEX_MIN_USD = 1000
 PAGE_SIZE = 1000
 NETFLOW_PAGE_SIZE = 100      # top-N per sort direction
@@ -496,13 +498,16 @@ class JobReport:
 class NansenRecorder:
     def __init__(self, client: NansenClient, store: Store, test_limit: Optional[int] = None,
                  chains: Optional[List[str]] = None, max_pages: int = 1,
-                 min_credits: int = MIN_CREDITS):
+                 min_credits: int = MIN_CREDITS, perp_lookback_hours: int = PERP_LOOKBACK_H,
+                 perp_max_pages: int = PERP_MAX_PAGES):
         self.client = client
         self.store = store
         self.test_limit = test_limit
         self.chains = [normalize_chain(c) for c in (chains or DEFAULT_CHAINS)]
         self.max_pages = 1 if test_limit else max(1, max_pages)
         self.min_credits = min_credits
+        self.perp_lookback_hours = min(max(int(perp_lookback_hours), 1), 168)
+        self.perp_max_pages = max(1, int(perp_max_pages))
         self.run_id = ("test-" if test_limit else "") + \
             utc_now().strftime("%Y%m%dT%H%M%S") + "-" + uuid.uuid4().hex[:6]
         self.snapshot_ts = utc_now()
@@ -567,13 +572,30 @@ class NansenRecorder:
 
     # -- jobs ---------------------------------------------------------------
     def record_perp(self) -> JobReport:
+        """Ambil SELURUH perp trade smart money dalam jendela `lookback_hours` (paginasi sampai halaman pendek).
+        2026-10-23: sebelumnya hanya 1 halaman tanpa lookback -> tiap putaran tepat 1000 baris = data terpotong."""
         rep = JobReport("perp")
-        items = self._paged(
-            "smart-money/perp-trades",
-            {"filters": {"value_usd": {"min": PERP_MIN_USD}},
-             "order_by": [{"field": "block_timestamp", "direction": "DESC"}]},
-            self._per_page(PAGE_SIZE), "smart-money/perp-trades", rep,
-        )
+        per_page = self._per_page(PAGE_SIZE)
+        pages = 1 if self.test_limit else self.perp_max_pages
+        items: List[Dict[str, Any]] = []
+        complete = False
+        for page in range(1, pages + 1):
+            body = {"lookback_hours": self.perp_lookback_hours,
+                    "filters": {"value_usd": {"min": PERP_MIN_USD}},
+                    "order_by": [{"field": "block_timestamp", "direction": "DESC"}],
+                    "pagination": {"page": page, "per_page": per_page}}
+            name = "smart-money/perp-trades" if page == 1 else f"smart-money/perp-trades#p{page}"
+            res = self._call("smart-money/perp-trades", body, name)
+            rep.calls += 1
+            if res.error:
+                rep.errors.append(f"{name}: {res.error}")
+                break
+            items.extend(res.data)
+            if len(res.data) < per_page:
+                complete = True
+                break
+        if not complete and not self.test_limit and not rep.errors:
+            rep.errors.append(f"perp: batas {pages} halaman tercapai — jendela {self.perp_lookback_hours} jam mungkin terpotong")
         seen = utc_now()
         rows = [r for r in (parse_perp_trade(it, seen) for it in items)
                 if r and (r["value_usd"] or 0) >= PERP_MIN_USD]
@@ -667,6 +689,10 @@ def build_parser() -> argparse.ArgumentParser:
                    help="comma-separated chains for netflow/dex/holdings")
     p.add_argument("--max-pages", type=int, default=1,
                    help="pages per endpoint (each page costs credits)")
+    p.add_argument("--perp-lookback-hours", type=int, default=PERP_LOOKBACK_H,
+                   help="jendela perp-trades per putaran, 1-168 jam")
+    p.add_argument("--perp-max-pages", type=int, default=PERP_MAX_PAGES,
+                   help="batas halaman perp-trades per putaran (paginasi sampai habis)")
     p.add_argument("--db", default=str(DB_PATH), help="DuckDB path")
     return p
 
@@ -696,6 +722,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         NansenClient(api_key), store, test_limit=test_limit,
         chains=[c.strip() for c in args.chains.split(",") if c.strip()],
         max_pages=args.max_pages,
+        perp_lookback_hours=args.perp_lookback_hours, perp_max_pages=args.perp_max_pages,
     )
     print(f"[Nansen] run_id={rec.run_id} jobs={jobs} test_limit={test_limit} db={store.db_path}")
     reports, aborted = rec.run(jobs)
