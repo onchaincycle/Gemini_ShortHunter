@@ -4,6 +4,8 @@ Bot trading kripto otonom di Hyperliquid (perpetual + spot). Empat stream: **Int
 
 > Dokumen ini diperbarui 2026-10-22. Sebelum mengubah kode live, baca **`ROADMAP_INTEGRASI.md`** dan **`CLAUDE.md`**.
 > ShortHunter adalah **satu-satunya** sistem yang boleh mengirim order ke akun Hyperliquid ini (ImpulseHunter dibatalkan).
+>
+> **Serah terima 2026-10-24:** operasi bot LIVE di VPS, aturan wajib & insiden → **`HANDOFF_INTRADAY.md`**; riset v2, bank data VPS, sinkron, kotak tugas & SSD dirangkum di **`HANDOVER.md`** (keadaan, jadwal, tugas tertunda, aturan keamanan). Kotak tugas: `ops/README.md`. Kamus data: `KAMUS_DATA.md`.
 
 ## Menjalankan
 
@@ -36,6 +38,9 @@ Cek proses: `ps aux | grep -v grep | grep daemon-loop` → normal 2 baris (caffe
 | Scan 4 kuadran & batas slot per arah | `src/auto_hunter.py` |
 | Screener swing short / swing long | `src/screener.py`, `src/long_screener.py` |
 | Engine intraday 15 menit | `src/daytrade_engine.py` (short), `src/daytrade_long_engine.py` (long) |
+| Engine evaluasi logika intraday & veto siklus | `src/intraday_core.py` (Market Cycle VETO, orderflow D1) |
+| Engine siklus pasar mandiri & Wyckoff BMS | `src/cycle_engine.py` (Macro Halving BTC, Base Maturity P1-P7) |
+| Buku bayangan forward paper testing | `src/shadow_book.py` (Early BE +0.50R lock, paper journal) |
 | Gate propensity (heuristik bobot manual, **bukan ML**) | `src/propensity_gate.py` |
 | Jembatan SCR v10 (sektor, BMS/DRS/fase) | `src/claude_crypto_engine.py`, `src/spot_macro_vault.py`, `src/spot_strategy_engine.py` |
 | Smart money Nansen | `src/nansen_client.py` |

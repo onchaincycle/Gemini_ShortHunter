@@ -92,7 +92,8 @@ def _atr(df: pd.DataFrame, n: int = 14) -> pd.Series:
 
 def evaluate(df_15m: pd.DataFrame, side: str, coin: str = "", funding_1h_pct: float = 0.0,
              change_24h_pct: float = 0.0, btc_ctx: Optional[Dict] = None, now_ms: Optional[int] = None,
-             session: Optional[Dict] = None, params: Optional[Dict] = None) -> Dict:
+             session: Optional[Dict] = None, params: Optional[Dict] = None,
+             cycle_ctx: Optional[Dict] = None) -> Dict:
     P = dict(PARAMS, **(params or {}))
     side = side.upper()
     is_long = side == "LONG"
@@ -197,6 +198,45 @@ def evaluate(df_15m: pd.DataFrame, side: str, coin: str = "", funding_1h_pct: fl
     # 9. Funding
     funding_veto = (funding_1h_pct > P["funding_veto_long"]) if is_long else (funding_1h_pct < P["funding_veto_short"])
 
+    # 9.5. Evaluasi Siklus Pasar & Rezim Koin (Jalur B / Siklus)
+    cycle_ctx = cycle_ctx or {}
+    coin_phase = cycle_ctx.get("coin_phase")
+    futures_verdict = cycle_ctx.get("futures_verdict")
+    is_base = cycle_ctx.get("is_base")
+    market_regime = cycle_ctx.get("regime")
+
+    if is_base is None and futures_verdict is None:
+        try:
+            import sqlite3
+            from src.cycle_engine import DB_PATH
+            with sqlite3.connect(DB_PATH, timeout=2.0) as conn:
+                cur = conn.cursor()
+                cur.execute("SELECT coin_phase, futures_verdict FROM coin_cycle_scores WHERE coin = ?", (coin,))
+                row = cur.fetchone()
+                if row:
+                    coin_phase, futures_verdict = row[0], row[1]
+                    if futures_verdict == "FUTURES_VETO_BASE":
+                        is_base = True
+        except Exception:
+            pass
+
+    if is_base is None and len(d) >= 50:
+        c_series = d["close"].astype(float)
+        w = min(len(c_series), 2880)
+        ma_w = c_series.rolling(w, min_periods=min(w // 4, 30)).mean().iloc[-1]
+        std_w = c_series.rolling(w, min_periods=min(w // 4, 30)).std().iloc[-1]
+        bw = (4.0 * std_w) / (ma_w + 1e-12) if ma_w > 0 else 0.5
+        h_w = d["high"].rolling(w, min_periods=min(w // 4, 30)).max().iloc[-1]
+        l_w = d["low"].rolling(w, min_periods=min(w // 4, 30)).min().iloc[-1]
+        rng_w = (h_w - l_w) / (l_w + 1e-12) if l_w > 0 else 1.0
+        if bw < 0.18 or rng_w < 0.25:
+            is_base = True
+            coin_phase = coin_phase or "P2"
+            futures_verdict = "FUTURES_VETO_BASE"
+            market_regime = "base"
+        else:
+            market_regime = "trend" if bw > 0.35 else "chop"
+
     # 10. Skor
     sess = session or get_market_session()
     score, reasons = 0.0, []
@@ -233,6 +273,8 @@ def evaluate(df_15m: pd.DataFrame, side: str, coin: str = "", funding_1h_pct: fl
     vetoes = []
     if not btc_ok:
         vetoes.append(f"BTC {btc_chg:+.1f}%/4j melawan arah")
+    if is_base:
+        vetoes.append(f"Market Cycle VETO: {coin} di fase dasar base {coin_phase or 'P2'} ({futures_verdict or 'FUTURES_VETO_BASE'})")
     if sl_too_wide:
         vetoes.append(f"SL struktural terlalu lebar ({raw_sl_pct:.1f}% > {P['sl_max_pct']}%)")
     if sl_invalid:

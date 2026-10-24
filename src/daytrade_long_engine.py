@@ -55,6 +55,10 @@ class IntradayLongEngine:
                 r["signal_id"] = f"DTL_{r.get('coin')}_{now_ms}"
             from src.trade_db import trade_db
             trade_db.log_signals(records)
+            from src.shadow_book import shadow_book
+            for r in records:
+                if r.get("score", 0) >= 70 or r.get("ready"):
+                    shadow_book.register_signal(r)
         except Exception as e:
             print(f"[!] Gagal mencatat sinyal DAYTRADE_LONG: {e}")
         return df_res

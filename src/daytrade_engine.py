@@ -52,6 +52,10 @@ class IntradayDaytradeEngine:
                 r["symbol"] = r.get("coin")
             from src.trade_db import trade_db
             trade_db.log_signals(records)
+            from src.shadow_book import shadow_book
+            for r in records:
+                if r.get("score", 0) >= 70 or r.get("ready"):
+                    shadow_book.register_signal(r)
         except Exception:
             pass
         return df_res
